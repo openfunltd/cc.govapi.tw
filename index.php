@@ -8,6 +8,14 @@ MiniEngine::dispatch(function($uri) {
     }
     $_SERVER['CCAPI_COUNCIL_CODE'] = $cc_code;
 
+    if ($uri === '/swagger') {
+        return ['swagger', 'ui'];
+    }
+
+    if ($uri === '/swagger.yaml') {
+        return ['swagger', 'index'];
+    }
+
     $param = CCAPI_Helper::getApiType($uri);
     if ($param) {
         return $param;
