@@ -90,9 +90,8 @@ class CCAPI_Type
      */
     public static function getFieldMap()
     {
-        return new StdClass;
+        return [];
     }
-
     /**
      * 指定哪些 field 可以支援 filter 和 aggregation，以及對應的 field name
      */

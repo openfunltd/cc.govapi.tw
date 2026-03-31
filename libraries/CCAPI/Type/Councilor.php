@@ -34,7 +34,7 @@ class CCAPI_Type_Councilor extends CCAPI_Type
 
     public static function getFieldMap()
     {
-        return (object)[
+        return [
             'cc_code'       => '議會代碼',
             'term'          => '屆',
             'name'          => '姓名',
