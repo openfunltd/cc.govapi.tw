@@ -17,6 +17,7 @@
         地方議會開放資料 API，讓地方議會資料透明易存取。<br>
         使用 <code>{城市代碼}.cc.govapi.tw</code> 存取特定縣市議會資料，或 <code>all.cc.govapi.tw</code> 進行跨議會查詢。
       </p>
+      <a href="/swagger" class="btn btn-outline-secondary btn-sm mb-3">📄 Swagger API 文件</a><br>
       <?php if ($this->cc_code === 'all'): ?>
         <div class="d-inline-flex align-items-center gap-2 badge rounded-pill fs-6 px-3 py-2 bg-primary text-white">
           <span>🌐</span> 目前瀏覽：全國版
