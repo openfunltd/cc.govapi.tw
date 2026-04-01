@@ -11,15 +11,24 @@
 <body class="bg-light">
 <main role="main">
   <div class="container" style="max-width: 1120px;">
-    <div class="pt-5 pb-4 text-center">
+    <div class="pt-5 pb-3 text-center">
       <h1 class="display-4 fw-semibold">CCAPI</h1>
       <p class="lead">
         地方議會開放資料 API，讓地方議會資料透明易存取。<br>
         使用 <code>{城市代碼}.cc.govapi.tw</code> 存取特定縣市議會資料，或 <code>all.cc.govapi.tw</code> 進行跨議會查詢。
       </p>
+      <?php if ($this->cc_code === 'all'): ?>
+        <div class="d-inline-flex align-items-center gap-2 badge rounded-pill fs-6 px-3 py-2 bg-primary text-white">
+          <span>🌐</span> 目前瀏覽：全國版
+        </div>
+      <?php else: ?>
+        <div class="d-inline-flex align-items-center gap-2 badge rounded-pill fs-6 px-3 py-2 bg-success text-white">
+          <span>🏛</span> 目前瀏覽：<?= htmlspecialchars($this->council_name) ?>
+        </div>
+      <?php endif; ?>
     </div>
 
-    <div class="row pb-5">
+    <div class="row py-4">
       <div class="col-md-8">
         <h2 class="fs-4 mb-3">API 使用範例</h2>
         <table class="table table-hover table-light">
@@ -52,14 +61,36 @@
 
       <div class="col-md-4">
         <h2 class="fs-4 mb-3">支援議會</h2>
-        <ul class="list-group">
-          <?php foreach ($councils as $code => $name): ?>
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-              <?= htmlspecialchars($name) ?>
-              <span class="badge bg-secondary"><?= htmlspecialchars($code) ?></span>
-            </li>
+        <?php if ($this->councils_error): ?>
+          <div class="alert alert-warning small">無法載入議會資料：<?= htmlspecialchars($this->councils_error) ?></div>
+        <?php elseif (empty($this->councils)): ?>
+          <div class="alert alert-secondary small">目前資料庫尚無議會資料。</div>
+        <?php else: ?>
+        <div class="list-group" style="max-height: 420px; overflow-y: auto;">
+          <?php
+            $all_api_base = 'https://all' . $this->domain_postfix;
+            $is_all_active = ($this->cc_code === 'all');
+          ?>
+          <a href="<?= htmlspecialchars($all_api_base) ?>"
+             class="list-group-item list-group-item-action d-flex justify-content-between align-items-center<?= $is_all_active ? ' active' : '' ?>">
+            <span>🌐 全國（跨議會查詢）</span>
+            <code class="small<?= $is_all_active ? ' text-white' : '' ?>">all</code>
+          </a>
+          <?php foreach ($this->councils as $council): ?>
+            <?php
+              $code = $council->{'議會代碼'} ?? '';
+              $name = $council->{'議會名稱'} ?? $code;
+              $api_base = 'https://' . $code . $this->domain_postfix;
+              $is_active = ($this->cc_code === $code);
+            ?>
+            <a href="<?= htmlspecialchars($api_base) ?>"
+               class="list-group-item list-group-item-action d-flex justify-content-between align-items-center<?= $is_active ? ' active' : '' ?>">
+              <span><?= htmlspecialchars($name) ?></span>
+              <code class="small<?= $is_active ? ' text-white' : '' ?>"><?= htmlspecialchars($code) ?></code>
+            </a>
           <?php endforeach; ?>
-        </ul>
+        </div>
+        <?php endif; ?>
       </div>
     </div>
 
