@@ -1,5 +1,48 @@
 # cc.govapi.tw 實作計劃
 
+## 目前進度（2026-03-31）
+
+### 已完成
+
+#### Phase 1 — 骨架 ✅
+- 複製共用基礎檔案：`mini-engine.php`, `libraries/Elastic.php`, `libraries/OpenFunAPIHelper.php`, `libraries/MiniEngineHelper.php`, `.htaccess`
+- `init.inc.php`（載入 `/srv/config/cc.govapi.tw.inc.php`）
+- `config.sample.inc.php`（含 `ELASTIC_*` 與 `CCAPI_DOMAIN_POSTFIX` 環境變數）
+- `libraries/CCAPI/Council.php`（35 個議會代碼：21 現行 + 14 已廢止；subdomain 解析邏輯）
+- `libraries/CCAPI/Helper.php`（`LYAPI_Helper` → `CCAPI_Helper`）
+- `libraries/CCAPI/Type.php`（`LYAPI_Type` → `CCAPI_Type`；修正 `getFieldMap()` 預設回傳 `[]` 而非 `new StdClass`）
+
+#### Phase 2 — 核心路由與 cc_code 注入 ✅
+- `index.php`（subdomain 解析 → `$_SERVER['CCAPI_COUNCIL_CODE']`；未知 subdomain → 404）
+- `libraries/CCAPI/SearchAction.php`（`getCollections` 注入 `cc_code` filter；`getItem` 驗證跨議會存取）
+- `controllers/ApiController.php`（帶 `cc_code` 呼叫 SearchAction）
+
+#### Phase 3 — 第一個資料型別：Councilor ✅
+- `libraries/CCAPI/Type/Councilor.php`（15 個欄位；composite ID `cc_code/term/name`；filter 支援議會代碼、屆、姓名、性別、黨籍、選區名稱）
+
+#### Phase 4 — IndexController 與 view ✅
+- `controllers/IndexController.php`（`indexAction` + `unknownCouncilAction` 回傳 404 JSON）
+- `controllers/ErrorController.php`
+- `views/index/index.php`（簡介頁 + 議會列表 + API 使用範例）
+
+#### Phase 5 — 議會（Council）型別與匯入腳本 ✅
+- `scripts/import-council.php`（讀取 `議會.csv`，含 UTF-8 BOM 處理，寫入 `ccv1_council` index；支援 `--reset` 重建）
+- `libraries/CCAPI/Type/Council.php`（10 個欄位含 `is_active`；`/councils` endpoint）
+  - `all.cc.govapi.tw/councils` → 全部議會
+  - `tpe.cc.govapi.tw/councils` → 只回傳 tpe 議會
+
+#### Phase 6 — Swagger ✅
+- `controllers/SwaggerController.php`（自動掃描 `CCAPI/Type/*.php` 產生 OpenAPI 3.0 YAML）
+- `views/swagger/ui.php`（Swagger UI HTML）
+- `public/swagger-ui/`（靜態資源）
+- 路由：`GET /swagger` → UI；`GET /swagger.yaml` → YAML
+
+### 已知 Bug 修正紀錄
+- `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
+- `scripts/import-council.php` CSV 第一欄 header 因 UTF-8 BOM（`\xEF\xBB\xBF`）導致 `Undefined array key "代碼"`，已修正
+
+---
+
 ## 目標
 
 建立地方議會開放 API（cc.govapi.tw），讓地方議會資料透明易存取。
