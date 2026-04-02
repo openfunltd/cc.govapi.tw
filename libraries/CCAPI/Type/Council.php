@@ -31,6 +31,7 @@ class CCAPI_Type_Council extends CCAPI_Type
             'wikipedia_url' => '維基條目',
             'wikidata_id'   => 'Wikidata',
             'is_active'     => '現存',
+            'latest_term'   => '最新屆期代碼',
         ];
     }
 

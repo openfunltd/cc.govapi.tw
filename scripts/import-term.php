@@ -55,16 +55,21 @@ if ($bom !== "\xEF\xBB\xBF") {
 $headers = fgetcsv($fh);
 
 $count = 0;
+// 同步追蹤每個議會的最新屆次（屆次最大值）
+$latest_term_map = []; // cc_code => ['term' => int, 'doc_id' => string]
+
 while (($row = fgetcsv($fh)) !== false) {
     if (count($row) < count($headers)) {
         continue;
     }
     $record = array_combine($headers, $row);
 
-    $doc_id = $record['代碼'];
+    $doc_id  = $record['代碼'];
+    $cc_code = $record['議會代碼'];
+    $term    = intval($record['屆次']);
     $doc = [
-        'cc_code'    => $record['議會代碼'],
-        'term'       => intval($record['屆次']),
+        'cc_code'    => $cc_code,
+        'term'       => $term,
         'is_current' => ($record['現任'] === 'Y'),
     ];
     if ($record['就職日'] !== '') {
@@ -79,8 +84,29 @@ while (($row = fgetcsv($fh)) !== false) {
 
     Elastic::dbBulkInsert('term', $doc_id, $doc);
     $count++;
+
+    // 記錄該議會目前看到的最大屆次
+    if (!isset($latest_term_map[$cc_code]) || $term > $latest_term_map[$cc_code]['term']) {
+        $latest_term_map[$cc_code] = ['term' => $term, 'doc_id' => $doc_id];
+    }
 }
 fclose($fh);
 
 Elastic::dbBulkCommit('term');
 error_log("Done. Imported {$count} terms.");
+
+// 更新各議會 council 文件，寫入 latest_term（最新屆次的代碼，例：tpe-13）
+$updated = 0;
+foreach ($latest_term_map as $cc_code => $info) {
+    try {
+        Elastic::dbQuery(
+            '/{prefix}council/_update/' . rawurlencode($cc_code),
+            'POST',
+            json_encode(['doc' => ['latest_term' => $info['doc_id']]])
+        );
+        $updated++;
+    } catch (Exception $e) {
+        error_log("Update council [{$cc_code}] failed: " . $e->getMessage());
+    }
+}
+error_log("Done. Updated latest_term for {$updated} councils.");
