@@ -1,6 +1,6 @@
 # cc.govapi.tw 實作計劃
 
-## 目前進度（2026-03-31）
+## 目前進度（2026-04-02）
 
 ### 已完成
 
@@ -27,7 +27,7 @@
 
 #### Phase 5 — 議會（Council）型別與匯入腳本 ✅
 - `scripts/import-council.php`（讀取 `議會.csv`，含 UTF-8 BOM 處理，寫入 `ccv1_council` index；支援 `--reset` 重建）
-- `libraries/CCAPI/Type/Council.php`（10 個欄位含 `is_active`；`/councils` endpoint）
+- `libraries/CCAPI/Type/Council.php`（11 個欄位含 `is_active`、`latest_term`；`/councils` endpoint）
   - `all.cc.govapi.tw/councils` → 全部議會
   - `tpe.cc.govapi.tw/councils` → 只回傳 tpe 議會
 
@@ -37,9 +37,35 @@
 - `public/swagger-ui/`（靜態資源）
 - 路由：`GET /swagger` → UI；`GET /swagger.yaml` → YAML
 
+#### Phase 7 — 首頁改善 ✅
+- `index.php`：裸網域 `cc.govapi.tw` 301 轉址至 `all.cc.govapi.tw`
+- `views/index/index.php`：
+  - 議會列表改從 ES `ccv1_council` 動態載入，附 API 連結（subdomain）
+  - 凸顯目前瀏覽的議會或全國版（badge pill + list-group active 樣式）
+  - 議會列表加 max-height + 捲軸
+  - 新增 Swagger 文件連結按鈕
+
+#### Phase 8 — 屆期（Term）型別與匯入腳本 ✅
+- `屆.csv`：各議會屆期來源資料（284 筆）
+- `scripts/import-term.php`（讀取 `屆.csv`，寫入 `ccv1_term` index；支援 `--reset`）
+  - 匯入完成後自動更新各議會 `council.latest_term`（最新屆次代碼，例：`tpe-14`）
+- `libraries/CCAPI/Type/Term.php`（6 個欄位；composite ID `cc_code/term`；filter 支援議會代碼、屆次、現任）
+
+#### Phase 9 — DataCC 資料瀏覽器 ✅（`datacc.openfun.app/`）
+從 `dataly-v2` 架構移植，針對 cc.govapi.tw API 呈現資料。
+
+- **子網域對應**：`tpe.datacc.openfun.app` → `CCAPI_HOST=tpe.cc.govapi.tw`；裸網域 → 301 轉址 `all`
+- **支援型別**：
+  - `councilor`（議員）：議會代碼、屆、姓名、黨籍、選區名稱、性別
+  - `term`（屆期）：議會代碼、屆次、就職日、任期屆滿日、現任
+  - `council`（議會）：議會代碼、議會名稱、議會類別、現存、最新屆期代碼
+- **功能**：DataTables server-side 分頁／搜尋／篩選／agg；各型別 data tab 自訂詳情頁
+- **側邊欄**：議會切換下拉選單（21 個現行議會 + 全國），切換保留目前頁面路徑
+
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
 - `scripts/import-council.php` CSV 第一欄 header 因 UTF-8 BOM（`\xEF\xBB\xBF`）導致 `Undefined array key "代碼"`，已修正
+- MiniEngine view 變數存取方式：`$this->xxx`（非裸變數 `$xxx`）
 
 ---
 
