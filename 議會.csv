@@ -9,6 +9,7 @@ tao-1952,桃園縣議會,縣（市）議會,10003,TW-TAO,1952-01-21,2014-12-25,h
 ila,宜蘭縣議會,縣（市）議會,10002,TW-ILA,1951-02-14,,https://zh.wikipedia.org/wiki/宜蘭縣議會,Q15909148
 hsq,新竹縣議會,縣（市）議會,10004,TW-HSQ,1950,,https://zh.wikipedia.org/wiki/新竹縣議會,Q11084065
 hsz,新竹市議會,縣（市）議會,10018,TW-HSZ,1982-07-01,,https://zh.wikipedia.org/wiki/新竹市議會,Q11084017
+kee,基隆市議會,縣（市）議會,10017,TW-KEE,1951-10-24,,https://zh.wikipedia.org/wiki/基隆市議會,Q10930444
 mia,苗栗縣議會,縣（市）議會,10005,TW-MIA,1950,,https://zh.wikipedia.org/wiki/苗栗縣議會,Q15904162
 cha,彰化縣議會,縣（市）議會,10007,TW-CHA,1950,,https://zh.wikipedia.org/wiki/彰化縣議會,Q11070079
 nan,南投縣議會,縣（市）議會,10008,TW-NAN,1950,,https://zh.wikipedia.org/wiki/南投縣議會,Q10907927
@@ -21,14 +22,14 @@ hua,花蓮縣議會,縣（市）議會,10015,TW-HUA,1950,,https://zh.wikipedia.o
 pen,澎湖縣議會,縣（市）議會,10016,TW-PEN,1950,,https://zh.wikipedia.org/wiki/澎湖縣議會,Q15915051
 kin,金門縣議會,縣（市）議會,09020,TW-KIN,1994,,https://zh.wikipedia.org/wiki/金門縣議會,Q15914537
 lie,連江縣議會,縣（市）議會,09007,TW-LIE,1994,,https://zh.wikipedia.org/wiki/連江縣議會,Q15919452
-tpq,臺北縣議會,縣（市）議會,10017,TW-TPQ,1951-01-04,2010-12-25,https://zh.wikipedia.org/wiki/臺北縣議會,Q98556646
+tpq,臺北縣議會,縣（市）議會,10001,TW-TPQ,1951-01-04,2010-12-25,https://zh.wikipedia.org/wiki/臺北縣議會,Q98556646
 khq,高雄縣議會,縣（市）議會,10012,TW-KHQ,1951-01-11,2010-12-25,https://zh.wikipedia.org/wiki/高雄縣議會,
 txq,臺中縣議會,縣（市）議會,10006,TW-TXQ,1951-02-14,2010-12-25,https://zh.wikipedia.org/wiki/臺中縣議會,
 tnq,臺南縣議會,縣（市）議會,10011,TW-TNQ,1950-02-12,2010-12-25,https://zh.wikipedia.org/wiki/臺南縣議會,Q106577043
-tpe-1950,臺北（省轄）市議會,縣（市）議會,63000,TW-TPE,1950-04-24,1967-07-01,https://zh.wikipedia.org/wiki/臺北市議會,
-txg-1950,臺中（省轄）市議會,縣（市）議會,66000,TW-TXG,1950,2010-12-25,https://zh.wikipedia.org/wiki/臺中市議會,
-tnn-1950,臺南（省轄）市議會,縣（市）議會,67000,TW-TNN,1950-10-18,2010-12-25,https://zh.wikipedia.org/wiki/臺南市議會,
-khh-1951,高雄市議會（省轄市）,縣（市）議會,64000,TW-KHH,1951-01-11,1979-07-01,https://zh.wikipedia.org/wiki/高雄市議會,
+tpe-1950,臺北（省轄）市議會,縣（市）議會,,TW-TPE,1950-04-24,1967-07-01,https://zh.wikipedia.org/wiki/臺北市議會,
+txg-1950,臺中（省轄）市議會,縣（市）議會,10019,TW-TXG,1950,2010-12-25,https://zh.wikipedia.org/wiki/臺中市議會,
+tnn-1950,臺南（省轄）市議會,縣（市）議會,10021,TW-TNN,1950-10-18,2010-12-25,https://zh.wikipedia.org/wiki/臺南市議會,
+khh-1951,高雄市議會（省轄市）,縣（市）議會,,TW-KHH,1951-01-11,1979-07-01,https://zh.wikipedia.org/wiki/高雄市議會,
 khh-1981,高雄市議會（直轄市）,直轄市議會,64000,TW-KHH,1981-12-25,2010-12-25,https://zh.wikipedia.org/wiki/高雄市議會,
 tpe-1967,臺北（直轄）市臨時市議會,直轄市議會,63000,TW-TPE,1967-07-01,1969-12-25,https://zh.wikipedia.org/wiki/臺北市議會,
 khh-1979,高雄市臨時市議會,直轄市議會,64000,TW-KHH,1979-07-01,1981-12-25,https://zh.wikipedia.org/wiki/高雄市議會,
