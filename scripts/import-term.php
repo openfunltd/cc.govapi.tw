@@ -13,12 +13,13 @@ $reset = in_array('--reset', $argv ?? []);
 
 $index_mapping = [
     'properties' => [
-        'cc_code'    => ['type' => 'keyword'],
-        'term'       => ['type' => 'integer'],
-        'start_date' => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
-        'end_date'   => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
-        'is_current' => ['type' => 'boolean'],
-        'note'       => ['type' => 'text'],
+        'cc_code'     => ['type' => 'keyword'],
+        'term'        => ['type' => 'integer'],
+        'election_date' => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+        'start_date'  => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+        'end_date'    => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+        'is_current'  => ['type' => 'boolean'],
+        'note'        => ['type' => 'text'],
     ],
 ];
 
@@ -72,6 +73,9 @@ while (($row = fgetcsv($fh)) !== false) {
         'term'       => $term,
         'is_current' => ($record['現任'] === 'Y'),
     ];
+    if ($record['投票日'] !== '') {
+        $doc['election_date'] = $record['投票日'];
+    }
     if ($record['就職日'] !== '') {
         $doc['start_date'] = $record['就職日'];
     }

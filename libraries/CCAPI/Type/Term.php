@@ -30,12 +30,13 @@ class CCAPI_Type_Term extends CCAPI_Type
     public static function getFieldMap()
     {
         return [
-            'cc_code'    => '議會代碼',
-            'term'       => '屆次',
-            'start_date' => '就職日',
-            'end_date'   => '任期屆滿日',
-            'is_current' => '現任',
-            'note'       => '備註',
+            'cc_code'       => '議會代碼',
+            'term'          => '屆次',
+            'election_date' => '投票日',
+            'start_date'    => '就職日',
+            'end_date'      => '任期屆滿日',
+            'is_current'    => '現任',
+            'note'          => '備註',
         ];
     }
 
