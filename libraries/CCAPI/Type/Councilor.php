@@ -37,13 +37,16 @@ class CCAPI_Type_Councilor extends CCAPI_Type
         return [
             'cc_code'       => '議會代碼',
             'term'          => '屆',
+            'term_code'     => '屆代碼',
             'name'          => '姓名',
+            'title'         => '職稱',
             'gender'        => '性別',
             'party'         => '黨籍',
             'constituency'  => '選區名稱',
             'onboard_date'  => '就任日',
             'leave_date'    => '離職日',
             'leave_reason'  => '離職原因',
+            'education'     => '學歷',
             'pic_url'       => '照片位址',
             'bio'           => '簡歷',
             'tel'           => '電話',
@@ -66,9 +69,19 @@ class CCAPI_Type_Councilor extends CCAPI_Type
                 'description' => '屆期（例: 13）',
                 'type' => 'integer',
             ],
+            '屆代碼' => [
+                'es_field' => 'term_code',
+                'description' => '屆代碼（例: tpe-14）',
+                'type' => 'string',
+            ],
             '姓名' => [
                 'es_field' => 'name.keyword',
                 'description' => '議員姓名',
+                'type' => 'string',
+            ],
+            '職稱' => [
+                'es_field' => 'title',
+                'description' => '職稱（例: 議長、副議長、議員）',
                 'type' => 'string',
             ],
             '性別' => [
