@@ -8,8 +8,8 @@ class CCAPI_Type_Councilor extends CCAPI_Type
     }
 
     /**
-     * ES Document ID 慣例：{cc_code}-{term}-{name}
-     * Composite ID 路徑：/{cc_code}/{term}/{name}
+     * ES Document ID：{議會代碼}-{屆次}-{姓名}（例：tpe-14-王大明）
+     * 路徑：/{cc_code}/{term}/{name}
      */
     public static function getIdFieldsInfo()
     {
@@ -19,7 +19,7 @@ class CCAPI_Type_Councilor extends CCAPI_Type
                 'type' => 'string',
                 'example' => 'tpe',
             ],
-            '屆' => [
+            '屆次' => [
                 'path_name' => 'term',
                 'type' => 'integer',
                 'example' => 13,
@@ -34,70 +34,56 @@ class CCAPI_Type_Councilor extends CCAPI_Type
 
     public static function getFieldMap()
     {
-        return [
-            'cc_code'       => '議會代碼',
-            'term'          => '屆',
-            'term_code'     => '屆代碼',
-            'name'          => '姓名',
-            'title'         => '職稱',
-            'gender'        => '性別',
-            'party'         => '黨籍',
-            'constituency'  => '選區名稱',
-            'onboard_date'  => '就任日',
-            'leave_date'    => '離職日',
-            'leave_reason'  => '離職原因',
-            'education'     => '學歷',
-            'pic_url'       => '照片位址',
-            'bio'           => '簡歷',
-            'tel'           => '電話',
-            'addr'          => '通訊處',
-            'email'         => '電子信箱',
-            'website'       => '個人網站',
-        ];
+        return [];
     }
 
     public static function getFilterFieldsInfo(): array
     {
         return [
             '議會代碼' => [
-                'es_field' => 'cc_code',
+                'es_field' => '議會代碼',
                 'description' => '議會代碼（例: tpe）',
                 'type' => 'string',
             ],
-            '屆' => [
-                'es_field' => 'term',
+            '屆次' => [
+                'es_field' => '屆次',
                 'description' => '屆期（例: 13）',
                 'type' => 'integer',
             ],
             '屆代碼' => [
-                'es_field' => 'term_code',
+                'es_field' => '屆代碼',
                 'description' => '屆代碼（例: tpe-14）',
                 'type' => 'string',
             ],
             '姓名' => [
-                'es_field' => 'name.keyword',
+                'es_field' => '姓名.keyword',
                 'description' => '議員姓名',
                 'type' => 'string',
             ],
             '職稱' => [
-                'es_field' => 'title',
+                'es_field' => '職稱',
                 'description' => '職稱（例: 議長、副議長、議員）',
                 'type' => 'string',
             ],
             '性別' => [
-                'es_field' => 'gender',
+                'es_field' => '性別',
                 'description' => '性別',
                 'type' => 'string',
                 'enum' => ['男', '女'],
             ],
             '黨籍' => [
-                'es_field' => 'party.keyword',
+                'es_field' => '黨籍.keyword',
                 'description' => '政黨名稱',
                 'type' => 'string',
             ],
-            '選區名稱' => [
-                'es_field' => 'constituency.keyword',
-                'description' => '選區名稱',
+            '區域' => [
+                'es_field' => '區域.keyword',
+                'description' => '選區／區域名稱',
+                'type' => 'string',
+            ],
+            '身分別' => [
+                'es_field' => '身分別',
+                'description' => '身分別',
                 'type' => 'string',
             ],
         ];
@@ -105,12 +91,12 @@ class CCAPI_Type_Councilor extends CCAPI_Type
 
     public static function queryFields()
     {
-        return ['姓名', '黨籍', '選區名稱', '簡歷'];
+        return ['姓名', '黨籍', '區域', '簡歷'];
     }
 
     public static function sortFields()
     {
-        return ['屆>', '姓名<'];
+        return ['屆次>', '姓名<'];
     }
 
     public static function defaultLimit()

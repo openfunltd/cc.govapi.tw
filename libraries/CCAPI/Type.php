@@ -30,6 +30,14 @@ class CCAPI_Type
         return '';
     }
 
+    /**
+     * 取得用於子網域議會篩選的 ES 欄位名稱（預設 '議會代碼'，council 可覆寫為 '代碼'）
+     */
+    public static function getCCCodeField()
+    {
+        return '議會代碼';
+    }
+
 
     /**
      * 取得 filter 參數的欄位資訊，包含 es_field, description, type, enum 等等

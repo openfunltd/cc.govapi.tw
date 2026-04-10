@@ -7,10 +7,18 @@ class CCAPI_Type_Council extends CCAPI_Type
         return '議會';
     }
 
+    /**
+     * council 的 ES 議會代碼欄位名稱為 '代碼'（來自議會.csv 主鍵欄）
+     */
+    public static function getCCCodeField()
+    {
+        return '代碼';
+    }
+
     public static function getIdFieldsInfo()
     {
         return [
-            '議會代碼' => [
+            '代碼' => [
                 'path_name' => 'cc_code',
                 'type' => 'string',
                 'example' => 'tpe',
@@ -20,42 +28,30 @@ class CCAPI_Type_Council extends CCAPI_Type
 
     public static function getFieldMap()
     {
-        return [
-            'cc_code'       => '議會代碼',
-            'name'          => '議會名稱',
-            'type'          => '議會類別',
-            'moi_code'      => '內政部行政區代碼',
-            'iso_code'      => 'ISO碼',
-            'start_date'    => '生效日期',
-            'end_date'      => '廢止日期',
-            'wikipedia_url' => '維基條目',
-            'wikidata_id'   => 'Wikidata',
-            'is_active'     => '現存',
-            'latest_term'   => '最新屆期代碼',
-        ];
+        return [];
     }
 
     public static function getFilterFieldsInfo(): array
     {
         return [
-            '議會代碼' => [
-                'es_field' => 'cc_code',
+            '代碼' => [
+                'es_field' => '代碼',
                 'description' => '議會代碼（例: tpe）',
                 'type' => 'string',
             ],
             '議會類別' => [
-                'es_field' => 'type',
+                'es_field' => '議會類別',
                 'description' => '議會類別',
                 'type' => 'string',
                 'enum' => ['直轄市議會', '縣（市）議會'],
             ],
             '現存' => [
-                'es_field' => 'is_active',
+                'es_field' => '現存',
                 'description' => '是否為現存議會（true/false）',
                 'type' => 'boolean',
             ],
             'ISO碼' => [
-                'es_field' => 'iso_code',
+                'es_field' => 'ISO碼',
                 'description' => 'ISO 3166-2 代碼（例: TW-TPE）',
                 'type' => 'string',
             ],

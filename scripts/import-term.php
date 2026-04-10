@@ -5,6 +5,9 @@
  * 用法：
  *   php scripts/import-term.php            # 匯入資料（upsert）
  *   php scripts/import-term.php --reset    # 先刪除 index 再重建並匯入
+ *
+ * 來源欄位：代碼, 議會代碼, 屆次, 投票日, 就職日, 任期屆滿日, 現任, 備註
+ * ES 欄位名稱與來源一致（現任 Y/'' 轉為 boolean）
  */
 
 include(__DIR__ . '/../init.inc.php');
@@ -13,15 +16,18 @@ $reset = in_array('--reset', $argv ?? []);
 
 $index_mapping = [
     'properties' => [
-        'cc_code'     => ['type' => 'keyword'],
-        'term'        => ['type' => 'integer'],
-        'election_date' => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
-        'start_date'  => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
-        'end_date'    => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
-        'is_current'  => ['type' => 'boolean'],
-        'note'        => ['type' => 'text'],
+        '代碼'       => ['type' => 'keyword'],
+        '議會代碼'   => ['type' => 'keyword'],
+        '屆次'       => ['type' => 'integer'],
+        '投票日'     => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+        '就職日'     => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+        '任期屆滿日' => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+        '現任'       => ['type' => 'boolean'],
+        '備註'       => ['type' => 'text'],
     ],
 ];
+
+$known_source_columns = ['代碼', '議會代碼', '屆次', '投票日', '就職日', '任期屆滿日', '現任', '備註'];
 
 if ($reset) {
     try {
@@ -39,15 +45,14 @@ if ($reset) {
     }
 }
 
-$csv_path = __DIR__ . '/../屆.csv';
-
+$csv_path = getenv('IMPORT_TERM_CSV') ?: (__DIR__ . '/../屆.csv');
 $fh = fopen($csv_path, 'r');
 if (!$fh) {
     error_log("Cannot open {$csv_path}");
     exit(1);
 }
 
-// 跳過 UTF-8 BOM（EF BB BF）
+// 跳過 UTF-8 BOM
 $bom = fread($fh, 3);
 if ($bom !== "\xEF\xBB\xBF") {
     rewind($fh);
@@ -55,9 +60,17 @@ if ($bom !== "\xEF\xBB\xBF") {
 
 $headers = fgetcsv($fh);
 
+// 檢查未知欄位
+$unknown = array_diff($headers, $known_source_columns);
+if ($unknown) {
+    error_log("ERROR: 來源檔案有未定義的欄位，請先在 index_mapping 補上對應設定再匯入：" . implode(', ', $unknown));
+    fclose($fh);
+    exit(1);
+}
+
+$date_fields = ['投票日', '就職日', '任期屆滿日'];
 $count = 0;
-// 同步追蹤每個議會的最新屆次（屆次最大值）
-$latest_term_map = []; // cc_code => ['term' => int, 'doc_id' => string]
+$latest_term_map = []; // cc_code => ['屆次' => int, 'doc_id' => string]
 
 while (($row = fgetcsv($fh)) !== false) {
     if (count($row) < count($headers)) {
@@ -65,33 +78,31 @@ while (($row = fgetcsv($fh)) !== false) {
     }
     $record = array_combine($headers, $row);
 
-    $doc_id  = $record['代碼'];
-    $cc_code = $record['議會代碼'];
-    $term    = intval($record['屆次']);
+    $doc_id   = $record['代碼'];
+    $cc_code  = $record['議會代碼'];
+    $term_int = intval($record['屆次']);
+
     $doc = [
-        'cc_code'    => $cc_code,
-        'term'       => $term,
-        'is_current' => ($record['現任'] === 'Y'),
+        '代碼'     => $doc_id,
+        '議會代碼' => $cc_code,
+        '屆次'     => $term_int,
+        '現任'     => ($record['現任'] === 'Y'),
     ];
-    if ($record['投票日'] !== '') {
-        $doc['election_date'] = $record['投票日'];
-    }
-    if ($record['就職日'] !== '') {
-        $doc['start_date'] = $record['就職日'];
-    }
-    if ($record['任期屆滿日'] !== '') {
-        $doc['end_date'] = $record['任期屆滿日'];
+
+    foreach ($date_fields as $f) {
+        if ($record[$f] !== '') {
+            $doc[$f] = $record[$f];
+        }
     }
     if ($record['備註'] !== '') {
-        $doc['note'] = $record['備註'];
+        $doc['備註'] = $record['備註'];
     }
 
     Elastic::dbBulkInsert('term', $doc_id, $doc);
     $count++;
 
-    // 記錄該議會目前看到的最大屆次
-    if (!isset($latest_term_map[$cc_code]) || $term > $latest_term_map[$cc_code]['term']) {
-        $latest_term_map[$cc_code] = ['term' => $term, 'doc_id' => $doc_id];
+    if (!isset($latest_term_map[$cc_code]) || $term_int > $latest_term_map[$cc_code]['屆次']) {
+        $latest_term_map[$cc_code] = ['屆次' => $term_int, 'doc_id' => $doc_id];
     }
 }
 fclose($fh);
@@ -99,18 +110,18 @@ fclose($fh);
 Elastic::dbBulkCommit('term');
 error_log("Done. Imported {$count} terms.");
 
-// 更新各議會 council 文件，寫入 latest_term（最新屆次的代碼，例：tpe-13）
+// 更新各議會 council 文件，寫入最新屆期代碼
 $updated = 0;
 foreach ($latest_term_map as $cc_code => $info) {
     try {
         Elastic::dbQuery(
             '/{prefix}council/_update/' . rawurlencode($cc_code),
             'POST',
-            json_encode(['doc' => ['latest_term' => $info['doc_id']]])
+            json_encode(['doc' => ['最新屆期代碼' => $info['doc_id']]])
         );
         $updated++;
     } catch (Exception $e) {
         error_log("Update council [{$cc_code}] failed: " . $e->getMessage());
     }
 }
-error_log("Done. Updated latest_term for {$updated} councils.");
+error_log("Done. Updated 最新屆期代碼 for {$updated} councils.");

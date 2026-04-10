@@ -8,7 +8,7 @@ class CCAPI_Type_Term extends CCAPI_Type
     }
 
     /**
-     * ES Document ID：{cc_code}-{term}（例：tpe-13）
+     * ES Document ID：{議會代碼}-{屆次}（例：tpe-13）
      * 路徑：/term/{cc_code}/{term}
      */
     public static function getIdFieldsInfo()
@@ -29,32 +29,24 @@ class CCAPI_Type_Term extends CCAPI_Type
 
     public static function getFieldMap()
     {
-        return [
-            'cc_code'       => '議會代碼',
-            'term'          => '屆次',
-            'election_date' => '投票日',
-            'start_date'    => '就職日',
-            'end_date'      => '任期屆滿日',
-            'is_current'    => '現任',
-            'note'          => '備註',
-        ];
+        return [];
     }
 
     public static function getFilterFieldsInfo(): array
     {
         return [
             '議會代碼' => [
-                'es_field' => 'cc_code',
+                'es_field' => '議會代碼',
                 'description' => '議會代碼（例: tpe）',
                 'type' => 'string',
             ],
             '屆次' => [
-                'es_field' => 'term',
+                'es_field' => '屆次',
                 'description' => '屆次（例: 13）',
                 'type' => 'integer',
             ],
             '現任' => [
-                'es_field' => 'is_current',
+                'es_field' => '現任',
                 'description' => '是否為現任屆期（true/false）',
                 'type' => 'boolean',
             ],

@@ -7,7 +7,9 @@
  *   php scripts/import-councilor.php --reset    # 先刪除 index 再重建並匯入
  *
  * 來源：議員.jsonl（每行一筆 JSON）
- * Doc ID 格式：{cc_code}-{term}-{name}（例：tpe-14-王大明）
+ * 所有來源欄位直接沿用原始名稱匯入 ES
+ * 衍生欄位：屆次（整數，從屆代碼解析，供排序用）
+ * Doc ID：{議會代碼}-{屆次}-{姓名}
  */
 
 include(__DIR__ . '/../init.inc.php');
@@ -16,26 +18,39 @@ $reset = in_array('--reset', $argv ?? []);
 
 $index_mapping = [
     'properties' => [
-        'cc_code'       => ['type' => 'keyword'],
-        'term'          => ['type' => 'integer'],
-        'term_code'     => ['type' => 'keyword'],
-        'name'          => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
-        'title'         => ['type' => 'keyword'],
-        'gender'        => ['type' => 'keyword'],
-        'party'         => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
-        'constituency'  => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
-        'onboard_date'  => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
-        'leave_date'    => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
-        'leave_reason'  => ['type' => 'keyword'],
-        'education'     => ['type' => 'text'],
-        'pic_url'       => ['type' => 'keyword', 'index' => false],
-        'bio'           => ['type' => 'text'],
-        'tel'           => ['type' => 'keyword', 'index' => false],
-        'addr'          => ['type' => 'keyword', 'index' => false],
-        'email'         => ['type' => 'keyword', 'index' => false],
-        'website'       => ['type' => 'keyword', 'index' => false],
+        // 來源欄位（原始名稱）
+        '代碼'     => ['type' => 'keyword'],
+        '人物代碼' => ['type' => 'keyword'],
+        '參選代碼' => ['type' => 'keyword'],
+        '選舉代碼' => ['type' => 'keyword'],
+        '年份'     => ['type' => 'keyword'],
+        '姓名'     => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        '區域'     => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        '單位'     => ['type' => 'keyword'],
+        '職稱'     => ['type' => 'keyword'],
+        '黨籍'     => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        '選舉屆次' => ['type' => 'text'],
+        '學歷'     => ['type' => 'text'],
+        '簡歷'     => ['type' => 'text'],
+        '辦公地址' => ['type' => 'keyword', 'index' => false],
+        '聯絡電話' => ['type' => 'keyword', 'index' => false],
+        '電子信箱' => ['type' => 'keyword', 'index' => false],
+        '身分別'   => ['type' => 'keyword'],
+        '照片'     => ['type' => 'keyword', 'index' => false],
+        '議會代碼' => ['type' => 'keyword'],
+        '屆代碼'   => ['type' => 'keyword'],
+        '性別'     => ['type' => 'keyword'],
+        '出生日期' => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+        '出生地'   => ['type' => 'keyword'],
+        '參選政黨' => ['type' => 'keyword'],
+        '參選學歷' => ['type' => 'keyword'],
+        // 衍生欄位
+        '屆次'     => ['type' => 'integer'],
     ],
 ];
+
+// 已知的來源欄位（不含衍生欄位 屆次）
+$known_source_keys = array_diff(array_keys($index_mapping['properties']), ['屆次']);
 
 if ($reset) {
     try {
@@ -53,14 +68,14 @@ if ($reset) {
     }
 }
 
-$jsonl_path = __DIR__ . '/../議員.jsonl';
+$jsonl_path = getenv('IMPORT_COUNCILOR_JSONL') ?: (__DIR__ . '/../議員.jsonl');
 $fh = fopen($jsonl_path, 'r');
 if (!$fh) {
     error_log("Cannot open {$jsonl_path}");
     exit(1);
 }
 
-// 跳過 UTF-8 BOM（EF BB BF）
+// 跳過 UTF-8 BOM
 $bom = fread($fh, 3);
 if ($bom !== "\xEF\xBB\xBF") {
     rewind($fh);
@@ -68,6 +83,8 @@ if ($bom !== "\xEF\xBB\xBF") {
 
 $count = 0;
 $skip  = 0;
+$headers_checked = false;
+
 while (($line = fgets($fh)) !== false) {
     $line = trim($line);
     if ($line === '') {
@@ -80,6 +97,17 @@ while (($line = fgets($fh)) !== false) {
         continue;
     }
 
+    // 第一筆資料時檢查是否有未知欄位
+    if (!$headers_checked) {
+        $headers_checked = true;
+        $unknown = array_diff(array_keys($record), $known_source_keys);
+        if ($unknown) {
+            error_log("ERROR: 來源檔案有未定義的欄位，請先在 index_mapping 補上對應設定再匯入：" . implode(', ', $unknown));
+            fclose($fh);
+            exit(1);
+        }
+    }
+
     $cc_code   = $record['議會代碼'] ?? '';
     $term_code = $record['屆代碼']   ?? '';
     $name      = $record['姓名']     ?? '';
@@ -89,35 +117,21 @@ while (($line = fgets($fh)) !== false) {
         continue;
     }
 
-    // 從 屆代碼 取 term 整數（最後一個 '-' 後的數字）
-    $term = intval(substr($term_code, strrpos($term_code, '-') + 1));
+    // 從屆代碼取 term 整數（最後一個 '-' 後的數字）
+    $term_int = intval(substr($term_code, strrpos($term_code, '-') + 1));
 
-    $doc_id = "{$cc_code}-{$term}-{$name}";
+    $doc_id = "{$cc_code}-{$term_int}-{$name}";
+    $doc = ['屆次' => $term_int];
 
-    $doc = [
-        'cc_code'   => $cc_code,
-        'term'      => $term,
-        'term_code' => $term_code,
-        'name'      => $name,
-    ];
-
-    // 選填欄位（空字串不寫入）
-    $optional = [
-        'title'    => '職稱',
-        'party'    => '黨籍',
-        'constituency' => '區域',
-        'education' => '學歷',
-        'bio'      => '簡歷',
-        'pic_url'  => '照片',
-        'tel'      => '聯絡電話',
-        'addr'     => '辦公地址',
-        'email'    => '電子信箱',
-    ];
-    foreach ($optional as $es_field => $json_key) {
-        $v = $record[$json_key] ?? '';
-        if ($v !== '') {
-            $doc[$es_field] = $v;
+    foreach ($record as $key => $val) {
+        if ($val === '' || $val === null) continue;
+        if ($key === '出生日期') {
+            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $val)) {
+                $doc[$key] = $val;
+            }
+            continue;
         }
+        $doc[$key] = $val;
     }
 
     Elastic::dbBulkInsert('councilor', $doc_id, $doc);

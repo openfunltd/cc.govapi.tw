@@ -56,8 +56,9 @@ class CCAPI_SearchAction
 
         // 注入議會代碼 filter（'all' 不加 filter）
         if ($cc_code && !CCAPI_Council::isAll($cc_code)) {
+            $cc_field = CCAPI_Type::run($type, 'getCCCodeField');
             $cmd->query->bool->must[] = (object)[
-                'term' => (object)['cc_code' => $cc_code],
+                'term' => (object)[$cc_field => $cc_code],
             ];
         }
 
@@ -280,7 +281,8 @@ class CCAPI_SearchAction
         }
         // 驗證 cc_code 避免跨議會資料洩漏
         if ($cc_code && !CCAPI_Council::isAll($cc_code)) {
-            if (($obj->_source->cc_code ?? null) !== $cc_code) {
+            $cc_field = CCAPI_Type::run($type, 'getCCCodeField');
+            if (($obj->_source->{$cc_field} ?? null) !== $cc_code) {
                 $records = new StdClass;
                 $records->error = true;
                 $records->message = '找不到資料';
