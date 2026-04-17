@@ -17,8 +17,25 @@ class CCAPI_Helper
         }
         $type_underscore = array_shift($url_terms);
 
-        // 去掉結尾 s 的型式（TODO: 之後需要處理不規則複數）
-        $type_underscore_singular = substr($type_underscore, -1) == 's' ? substr($type_underscore, 0, -1) : $type_underscore;
+        // 去掉結尾 s 的型式，優先嘗試直接匹配（如 completeness → Completeness.php），
+        // 再嘗試去 es（如 completenesses → Completeness），最後去一個 s
+        $type_pascal_direct = self::ucfirst($type_underscore);
+        if (file_exists(__DIR__ . "/Type/{$type_pascal_direct}.php")) {
+            // 直接匹配，不需要去掉結尾的 s（例：completeness、status 等）
+            $type_underscore_singular = $type_underscore;
+        } elseif (substr($type_underscore, -2) == 'es') {
+            $singular_es = substr($type_underscore, 0, -2);
+            $type_pascal_es = self::ucfirst($singular_es);
+            if (file_exists(__DIR__ . "/Type/{$type_pascal_es}.php")) {
+                $type_underscore_singular = $singular_es;
+            } else {
+                $type_underscore_singular = substr($type_underscore, 0, -1);
+            }
+        } elseif (substr($type_underscore, -1) == 's') {
+            $type_underscore_singular = substr($type_underscore, 0, -1);
+        } else {
+            $type_underscore_singular = $type_underscore;
+        }
 
         // 檔名是大駝峰
         $type_pascal = self::ucfirst($type_underscore_singular);
