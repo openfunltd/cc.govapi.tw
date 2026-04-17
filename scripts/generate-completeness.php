@@ -190,6 +190,8 @@ foreach ($councils as $cc => $council) {
     $term_docs = [];
     $councilor_total = 0;
     $session_total = 0;
+    $councilor_terms_with_data = 0;
+    $session_terms_with_data = 0;
 
     foreach ($terms as $t) {
         $term_no = $t['屆次'];
@@ -201,6 +203,8 @@ foreach ($councils as $cc => $council) {
 
         $councilor_total += $c_count;
         $session_total   += $s_count;
+        if ($c_count > 0) $councilor_terms_with_data++;
+        if ($s_count > 0) $session_terms_with_data++;
 
         $session_term_info = array_merge($t, ['latest_end' => $s_info['latest_end']]);
 
@@ -216,10 +220,15 @@ foreach ($councils as $cc => $council) {
         ];
     }
 
-    // 整體 councilor/session 狀態：看最新屆
-    $latest_doc = $term_docs[0] ?? null;
-    $councilor_type_status = $latest_doc ? $latest_doc['councilor_status'] : 'missing';
-    $session_type_status   = $latest_doc ? $latest_doc['session_status']   : 'missing';
+    $total_terms = count($terms);
+
+    // 整體 councilor/session 狀態：依有資料屆數佔比
+    $councilor_type_status = ($total_terms === 0 || $councilor_terms_with_data === 0)
+        ? 'missing'
+        : ($councilor_terms_with_data === $total_terms ? 'ok' : 'incomplete');
+    $session_type_status = ($total_terms === 0 || $session_terms_with_data === 0)
+        ? 'missing'
+        : ($session_terms_with_data === $total_terms ? 'ok' : 'incomplete');
 
     $doc = [
         '代碼'       => $cc,
@@ -227,9 +236,19 @@ foreach ($councils as $cc => $council) {
         '議會類別'   => $council['議會類別'],
         '現存'       => (bool)$council['現存'],
         'types' => [
-            'term'      => ['total' => count($terms),   'status' => $term_type_status],
-            'councilor' => ['total' => $councilor_total, 'status' => $councilor_type_status],
-            'session'   => ['total' => $session_total,   'status' => $session_type_status],
+            'term'      => ['total' => $total_terms, 'status' => $term_type_status],
+            'councilor' => [
+                'total'           => $councilor_total,
+                'terms_with_data' => $councilor_terms_with_data,
+                'total_terms'     => $total_terms,
+                'status'          => $councilor_type_status,
+            ],
+            'session' => [
+                'total'           => $session_total,
+                'terms_with_data' => $session_terms_with_data,
+                'total_terms'     => $total_terms,
+                'status'          => $session_type_status,
+            ],
         ],
         'terms'      => $term_docs,
         'updated_at' => $today_str,
