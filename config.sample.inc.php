@@ -10,3 +10,4 @@ putenv('CCAPI_DOMAIN_POSTFIX=.cc.govapi.tw');  // 子網域後綴
 putenv('IMPORT_COUNCIL_CSV=');        // 議會.csv 路徑，預設 {project}/議會.csv
 putenv('IMPORT_TERM_CSV=');           // 屆.csv 路徑，預設 {project}/屆.csv
 putenv('IMPORT_COUNCILOR_JSONL=');    // 議員.jsonl 路徑，預設 {project}/議員.jsonl
+putenv('IMPORT_SESSION_CSV=');        // 會期.csv 路徑，預設 {project}/會期.csv
