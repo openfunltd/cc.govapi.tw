@@ -79,7 +79,7 @@
           </a>
           <?php foreach ($this->councils as $council): ?>
             <?php
-              $code = $council->{'議會代碼'} ?? '';
+              $code = $council->{'代碼'} ?? '';
               $name = $council->{'議會名稱'} ?? $code;
               $api_base = 'https://' . $code . $this->domain_postfix;
               $is_active = ($this->cc_code === $code);
