@@ -18,6 +18,16 @@ MiniEngine::dispatch(function($uri) {
     }
     $_SERVER['CCAPI_COUNCIL_CODE'] = $cc_code;
 
+    // /viewer/* routing → viewer/collection controllers
+    if ($uri === '/viewer' || strpos($uri, '/viewer/') === 0) {
+        $viewer_uri = substr($uri, 7) ?: '/';
+        $parts = array_filter(explode('/', ltrim($viewer_uri, '/')), fn($s) => $s !== '');
+        $parts = array_values($parts);
+        $controller = $parts[0] ?? 'viewer';
+        $action = $parts[1] ?? 'index';
+        $params = array_map('urldecode', array_slice($parts, 2));
+        return [$controller ?: 'viewer', $action ?: 'index', $params];
+    }
     if ($uri === '/swagger') {
         return ['swagger', 'ui'];
     }

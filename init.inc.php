@@ -13,3 +13,8 @@ set_include_path(
     . PATH_SEPARATOR . __DIR__ . '/models'
 );
 MiniEngine::initEnv();
+
+function viewer_url($path = '')
+{
+    return '/viewer' . $path;
+}
