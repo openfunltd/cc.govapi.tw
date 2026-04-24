@@ -4,23 +4,8 @@ class IndexController extends MiniEngine_Controller
 {
     public function indexAction()
     {
-        $cc_code = $_SERVER['CCAPI_COUNCIL_CODE'] ?? 'all';
-        $this->view->cc_code = $cc_code;
-        $this->view->council_name = $cc_code === 'all'
-            ? '全國'
-            : (CCAPI_Council::getName($cc_code) ?? $cc_code);
-
-        $domain_postfix = getenv('CCAPI_DOMAIN_POSTFIX') ?: '.cc.govapi.tw';
-        $this->view->domain_postfix = $domain_postfix;
-
-        try {
-            $result = CCAPI_SearchAction::getCollections('council', '現存=true', 'all');
-            $this->view->councils = $result->councils ?? [];
-            $this->view->councils_error = null;
-        } catch (Exception $e) {
-            $this->view->councils = [];
-            $this->view->councils_error = $e->getMessage();
-        }
+        header('Location: /about', true, 302);
+        exit;
     }
 
     public function unknownCouncilAction()

@@ -22,6 +22,8 @@
         .sidebar-brand { background: rgba(0,0,0,.2) !important; }
         .sidebar-heading { color: rgba(255,255,255,.4) !important; }
         .sidebar hr { border-color: rgba(255,255,255,.15) !important; }
+        /* Fix navbar bg-dark overridden by SB Admin 2 */
+        nav.navbar.bg-dark { background-color: #212529 !important; }
         #sidebarToggle { background: rgba(255,255,255,.2) !important; }
         #sidebarToggle:hover { background: rgba(255,255,255,.3) !important; }
     </style>
@@ -47,33 +49,6 @@
                 <div class="sidebar-brand-text mx-3">資料瀏覽器</div>
             </a>
             <hr class="sidebar-divider my-0">
-
-            <!-- 議會切換 -->
-            <?php
-                $current_code = CouncilHelper::getCurrentCode();
-                $current_name = CouncilHelper::getName($current_code);
-            ?>
-            <li class="nav-item">
-                <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapseCouncil"
-                   aria-expanded="false" aria-controls="collapseCouncil">
-                    <i class="fas fa-fw fa-landmark"></i>
-                    <span class="text-truncate" style="max-width:130px; display:inline-block; vertical-align:middle;"><?= $this->escape($current_name) ?></span>
-                    <i class="fas fa-caret-down ml-1"></i>
-                </a>
-                <div id="collapseCouncil" class="collapse" aria-labelledby="headingCouncil" data-bs-parent="#accordionSidebar">
-                    <div class="bg-white py-2 collapse-inner rounded" style="max-height:300px;overflow-y:auto;">
-                        <h6 class="collapse-header">切換議會</h6>
-                        <?php foreach (CouncilHelper::getAll() as $code => $name): ?>
-                            <a class="collapse-item <?= $code === $current_code ? 'active' : '' ?>"
-                               href="<?= $this->escape(CouncilHelper::getSwitchUrl($code)) ?>">
-                                <?= $this->escape($name) ?>
-                            </a>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-            </li>
-
-            <hr class="sidebar-divider">
             <li class="nav-item <?= $this->if($this->type == 'dashboard', 'active') ?>">
                 <a class="nav-link" href="<?= viewer_url() ?>">
                     <i class="fas fa-fw fa-tachometer-alt"></i>
@@ -102,27 +77,6 @@
             <div class="text-center d-none d-md-inline">
                 <button class="rounded-circle border-0" id="sidebarToggle"></button>
             </div>
-
-            <hr class="sidebar-divider">
-            <div class="sidebar-heading">外部連結</div>
-            <li class="nav-item">
-                <a class="nav-link" href="/">
-                    <i class="fas fa-fw fa-home"></i>
-                    <span>CCAPI 首頁</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/about">
-                    <i class="fas fa-fw fa-book-open"></i>
-                    <span>說明文件</span>
-                </a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" href="/swagger" target="_blank">
-                    <i class="fas fa-fw fa-code"></i>
-                    <span>API 文件</span>
-                </a>
-            </li>
         </ul>
         <!-- End of Sidebar -->
 
