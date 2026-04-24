@@ -136,7 +136,7 @@
 議會（council）
  └── 委員會（committee）     ← 不綁屆，跨屆存續</pre>
       </div>
-      <p class="small text-body-secondary">未來計劃新增：場次（sitting）、開會日、會議紀錄等，請參考<a href="https://github.com/openfunltd/open-forest-research" target="_blank">研究文件</a>。</p>
+      <p class="small text-body-secondary">未來計劃新增：場次（sitting）、開會日、會議紀錄等。</p>
 
       <h5 class="mt-4">識別碼設計原則</h5>
       <p>每個實體都有一個自管的代碼（slug），格式如下：</p>
