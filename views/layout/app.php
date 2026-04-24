@@ -4,24 +4,47 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <title><?= $this->escape(getenv('APP_NAME') ?: 'DataCC 地方議會資料瀏覽') ?></title>
+    <title><?= $this->escape(getenv('APP_NAME') ?: 'CCAPI 資料瀏覽器') ?></title>
     <link rel="shortcut icon" href="/static/favicon.ico">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" integrity="sha512-Kc323vGBEqzTmouAECnVceyQqyqdsSiqLQISBL29aUW4U/M7pSPA/gEUZQqv1cwx4OnYxTxve5UMg5GT6L4JJg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-    <link href="https://fonts.googleapis.com/css?family=Nunito:200,200i,300,300i,400,400i,600,600i,700,700i,800,800i,900,900i" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" integrity="sha512-jnSuA4Ss2PkkikSOLtYs8BlYIeeIK1h99ty4YfvRPAlzr377vr3CXDb7sb7eEEBYjDtcYj+AjBH3FLv5uSJuXg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     <link href="/static/css/sb-admin-2.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/datatables.net-bs4/1.11.2/dataTables.bootstrap4.min.css" integrity="sha512-+RecGjm1x5bWxA/jwm9sqcn5EV0tNej3Xxq5HtIOLM9YM9VgI2LbhEDn099Xhxg6HuvrmsXR0J6JQxL7tLHFHw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        body { font-family: 'Noto Sans TC', sans-serif; }
+        /* Override SB Admin 2 sidebar with dark-neutral color */
+        .sidebar { background: #212529 !important; }
+        .sidebar .nav-item .nav-link { color: rgba(255,255,255,.8) !important; }
+        .sidebar .nav-item .nav-link:hover,
+        .sidebar .nav-item.active .nav-link { color: #fff !important; }
+        .sidebar .nav-item.active .nav-link { background: rgba(255,255,255,.1) !important; }
+        .sidebar-brand { background: rgba(0,0,0,.2) !important; }
+        .sidebar-heading { color: rgba(255,255,255,.4) !important; }
+        .sidebar hr { border-color: rgba(255,255,255,.15) !important; }
+        #sidebarToggle { background: rgba(255,255,255,.2) !important; }
+        #sidebarToggle:hover { background: rgba(255,255,255,.3) !important; }
+    </style>
     <?= $this->yield('head-load') ?>
 </head>
 <body id="page-top">
-    <div id="wrapper">
+
+<?php
+  $active = 'viewer';
+  $cc_code = CouncilHelper::getCurrentCode();
+  $council_name = CouncilHelper::getName($cc_code);
+  include(__DIR__ . '/../nav/top.php');
+?>
+
+<div id="wrapper">
 
         <!-- Sidebar -->
-        <ul class="navbar-nav bg-gradient-primary sidebar sidebar-dark accordion" id="accordionSidebar">
+        <ul class="navbar-nav sidebar sidebar-dark accordion" id="accordionSidebar">
             <a class="sidebar-brand d-flex align-items-center justify-content-center" href="<?= viewer_url() ?>">
                 <div class="sidebar-brand-icon">
-                    <i class="fas fa-city"></i>
+                    <i class="fas fa-database"></i>
                 </div>
-                <div class="sidebar-brand-text mx-3">DataCC</div>
+                <div class="sidebar-brand-text mx-3">資料瀏覽器</div>
             </a>
             <hr class="sidebar-divider my-0">
 
@@ -31,13 +54,13 @@
                 $current_name = CouncilHelper::getName($current_code);
             ?>
             <li class="nav-item">
-                <a class="nav-link collapsed" href="#" data-toggle="collapse" data-target="#collapseCouncil"
+                <a class="nav-link collapsed" href="#" data-bs-toggle="collapse" data-bs-target="#collapseCouncil"
                    aria-expanded="false" aria-controls="collapseCouncil">
                     <i class="fas fa-fw fa-landmark"></i>
                     <span class="text-truncate" style="max-width:130px; display:inline-block; vertical-align:middle;"><?= $this->escape($current_name) ?></span>
                     <i class="fas fa-caret-down ml-1"></i>
                 </a>
-                <div id="collapseCouncil" class="collapse" aria-labelledby="headingCouncil" data-parent="#accordionSidebar">
+                <div id="collapseCouncil" class="collapse" aria-labelledby="headingCouncil" data-bs-parent="#accordionSidebar">
                     <div class="bg-white py-2 collapse-inner rounded" style="max-height:300px;overflow-y:auto;">
                         <h6 class="collapse-header">切換議會</h6>
                         <?php foreach (CouncilHelper::getAll() as $code => $name): ?>
@@ -143,7 +166,7 @@
     </a>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js" integrity="sha512-v2CJ7UaYy4JwqLDIrZUI/4hqeoQieOmAZNXBeQyjo21dadnwR+8ZaIJVT8EE2iyI61OV8e6M8PP2/4hpQINQ/g==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.2/js/bootstrap.bundle.min.js" integrity="sha512-igl8WEUuas9k5dtnhKqyyld6TzzRjvMqLC79jkgT3z02FvJyHAuUtyemm/P/jYSne1xwFI06ezQxEwweaiV7VA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js" integrity="sha512-7Pi/otdlbbCR+LnW+F7PwFcSDJOuUJB3OxtEHbg4vSMvzvJjde4Po1v4BR9Gdc9aXNUNFVUY+SK51wWT8WF0Gg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.3/jquery.easing.min.js" integrity="sha512-ahmSZKApTDNd3gVuqL5TQ3MBTj8tL5p2tYV05Xxzcfu6/ecvt1A0j6tfudSGBVuteSoTRMqMljbfdU0g2eDNUA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="/static/js/sb-admin-2.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/datatables/1.10.21/js/jquery.dataTables.min.js" integrity="sha512-BkpSL20WETFylMrcirBahHfSnY++H2O1W+UnEEO4yNIl+jI2+zowyoGJpbtk6bx97fBXf++WJHSSK2MV4ghPcg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
