@@ -79,6 +79,27 @@
             <div class="text-center d-none d-md-inline">
                 <button class="rounded-circle border-0" id="sidebarToggle"></button>
             </div>
+
+            <hr class="sidebar-divider">
+            <div class="sidebar-heading">外部連結</div>
+            <li class="nav-item">
+                <a class="nav-link" href="/">
+                    <i class="fas fa-fw fa-home"></i>
+                    <span>CCAPI 首頁</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/about">
+                    <i class="fas fa-fw fa-book-open"></i>
+                    <span>說明文件</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/swagger" target="_blank">
+                    <i class="fas fa-fw fa-code"></i>
+                    <span>API 文件</span>
+                </a>
+            </li>
         </ul>
         <!-- End of Sidebar -->
 

@@ -9,15 +9,19 @@
   <title>CCAPI — 地方議會開放 API</title>
 </head>
 <body class="bg-light">
-<main role="main">
+<?php
+  $active = 'home';
+  $cc_code = $this->cc_code;
+  $council_name = $this->council_name;
+  include(__DIR__ . '/../nav/top.php');
+?><main role="main">
   <div class="container" style="max-width: 1120px;">
-    <div class="pt-5 pb-3 text-center">
+    <div class="pt-4 pb-3 text-center">
       <h1 class="display-4 fw-semibold">CCAPI</h1>
       <p class="lead">
         地方議會開放資料 API，讓地方議會資料透明易存取。<br>
         使用 <code>{城市代碼}.cc.govapi.tw</code> 存取特定縣市議會資料，或 <code>all.cc.govapi.tw</code> 進行跨議會查詢。
       </p>
-      <a href="/swagger" class="btn btn-outline-secondary btn-sm mb-3">📄 Swagger API 文件</a><br>
       <?php if ($this->cc_code === 'all'): ?>
         <div class="d-inline-flex align-items-center gap-2 badge rounded-pill fs-6 px-3 py-2 bg-primary text-white">
           <span>🌐</span> 目前瀏覽：全國版
