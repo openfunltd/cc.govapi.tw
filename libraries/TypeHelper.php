@@ -178,6 +178,34 @@ class TypeHelper
                     'data' => '場次資料',
                 ],
             ],
+            'transcript' => [
+                'name' => '逐字稿',
+                'icon' => 'fas fa-fw fa-file-alt',
+                'cols' => [
+                    'all' => [
+                        '議會代碼',
+                        '會期代碼',
+                        '來源分類',
+                        '檔案數',
+                        '字數',
+                    ],
+                    'single' => [
+                        '會期代碼',
+                        '來源分類',
+                        '檔案數',
+                        '字數',
+                    ],
+                ],
+                'default_aggs' => [
+                    'all' => [
+                        '議會代碼',
+                    ],
+                    'single' => [],
+                ],
+                'item_features' => [
+                    'data' => '逐字稿內容',
+                ],
+            ],
         ];
     }
 
