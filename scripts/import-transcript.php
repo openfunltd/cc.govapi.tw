@@ -12,7 +12,9 @@
  *   - 逐字稿索引.csv 的「檔案路徑」是相對路徑，實際文字檔放在 IMPORT_TRANSCRIPT_BASE_DIR 底下
  *     檔案格式為 .txt（純文字）或 .html（原始網頁，需去標籤取文字）
  *
- * 組裝規則：同一個代碼的多筆，依（委員會, 順序）排序後依序串接
+ * 組裝規則：同一個代碼的多筆，先依（來源分類, 委員會）分組（同一場次可能同時有大會
+ *           會議紀錄、各委員會審查會議事錄等不同來源，分開存放才能在前端各自分頁顯示），
+ *           組內再依順序排序後串接（同一份文件常拆成多頁/多檔）
  * 衍生欄位：議會代碼、屆、會期代碼 —— 優先查詢既有 sitting index（該筆場次匯入時已算好，
  *           避免重複實作字串解析），查不到才退回用代碼字串自行解析
  * Doc ID：{代碼}（跟場次代碼一致，一對一）
@@ -40,6 +42,8 @@ $index_mapping = [
         '來源分類'   => ['type' => 'keyword'],
         '檔案數'     => ['type' => 'integer'],
         '字數'       => ['type' => 'integer'],
+        // 分段內容（依來源分類/委員會分組），供前端分 tab 顯示
+        '分段'       => ['type' => 'nested', 'dynamic' => true],
         'updated_at' => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
     ],
 ];
@@ -147,35 +151,56 @@ $skipped_files = 0;
 $processed = 0;
 
 foreach ($groups as $code => $rows) {
-    usort($rows, function ($a, $b) {
-        $c = strcmp($a['委員會'], $b['委員會']);
-        if ($c !== 0) return $c;
-        return ((int)($a['順序'] ?: 0)) <=> ((int)($b['順序'] ?: 0));
-    });
+    // 先依（來源分類, 委員會）分組，組內再依順序排序
+    $by_group = [];   // "{來源分類}|{委員會}" => [row, ...]
+    foreach ($rows as $row) {
+        $group_key = ($row['來源分類'] ?: '') . '|' . ($row['委員會'] ?: '');
+        $by_group[$group_key][] = $row;
+    }
 
     $sections = [];
     $source_types = [];
     $file_count = 0;
+    $content_parts = [];
 
-    foreach ($rows as $row) {
-        $text = read_doc_file($base_dir, $row['檔案路徑']);
-        if ($text === null || $text === '') {
-            $skipped_files++;
-            continue;
+    foreach ($by_group as $group_rows) {
+        usort($group_rows, fn($a, $b) => ((int)($a['順序'] ?: 0)) <=> ((int)($b['順序'] ?: 0)));
+
+        $texts = [];
+        foreach ($group_rows as $row) {
+            $text = read_doc_file($base_dir, $row['檔案路徑']);
+            if ($text === null || $text === '') {
+                $skipped_files++;
+                continue;
+            }
+            $texts[] = $text;
+            $file_count++;
         }
-        $label = trim(($row['來源分類'] ?: '') . ($row['委員會'] ? "・{$row['委員會']}" : ''));
-        $sections[] = $label ? "【{$label}】\n{$text}" : $text;
-        if ($row['來源分類']) {
-            $source_types[$row['來源分類']] = true;
+        if (!$texts) {
+            continue;   // 這組所有檔案都讀不到，跳過這個分組
         }
-        $file_count++;
+
+        $section_content = implode("\n\n", $texts);
+        $source_type = $group_rows[0]['來源分類'] ?: '';
+        $committee = $group_rows[0]['委員會'] ?: '';
+        $label = trim($source_type . ($committee ? "・{$committee}" : '')) ?: '逐字稿';
+
+        $sections[] = [
+            '標籤' => $label,
+            '內容' => $section_content,
+            '字數' => mb_strlen($section_content),
+        ];
+        if ($source_type) {
+            $source_types[$source_type] = true;
+        }
+        $content_parts[] = $section_content;
     }
 
-    if (!$file_count) {
-        continue;   // 這個代碼所有檔案都讀不到，跳過
+    if (!$sections) {
+        continue;   // 這個代碼所有分組都讀不到檔案，跳過
     }
 
-    $content = implode("\n\n----\n\n", $sections);
+    $content = implode("\n\n----\n\n", $content_parts);
     $context = derive_sitting_context($code);
 
     $doc = [
@@ -187,6 +212,7 @@ foreach ($groups as $code => $rows) {
         '來源分類'   => array_keys($source_types),
         '檔案數'     => $file_count,
         '字數'       => mb_strlen($content),
+        '分段'       => $sections,
         'updated_at' => $today_str,
     ];
 

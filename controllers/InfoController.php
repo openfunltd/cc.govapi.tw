@@ -34,7 +34,9 @@ class InfoController extends MiniEngine_Controller
         }
 
         $term_no = (int)$term_no;
-        $tab = ($tab && array_key_exists($tab, $this->tabs)) ? $tab : 'councilors';
+        // 'transcript' 是從 sessions tab 連結進去的子頁面，不放進主要 tab 導覽列
+        $valid_tabs = array_merge(array_keys($this->tabs), ['transcript']);
+        $tab = ($tab && in_array($tab, $valid_tabs)) ? $tab : 'councilors';
 
         $this->view->term_no = $term_no;
         $this->view->tab = $tab;
@@ -51,6 +53,9 @@ class InfoController extends MiniEngine_Controller
                 break;
             case 'timeline':
                 $this->view->timeline_sessions = $this->loadTermSessions($cc_code, $term_no);
+                break;
+            case 'transcript':
+                $this->loadTranscriptTab($cc_code, $term_no, $sub_id);
                 break;
         }
     }
@@ -102,6 +107,7 @@ class InfoController extends MiniEngine_Controller
     protected function loadSessionsTab($cc_code, $term_no, $session_code)
     {
         $this->view->all_sessions = $this->loadTermSessions($cc_code, $term_no);
+        $this->view->sessions_with_transcript = $this->loadSessionsWithTranscript($term_no);
 
         if ($session_code) {
             $session_code = urldecode($session_code);
@@ -109,6 +115,7 @@ class InfoController extends MiniEngine_Controller
             $this->view->session_meta = $session->data ?? (object)['代碼' => $session_code, '會期名稱' => CCAPI_Type_Session::getFriendlyName($session_code)];
             $this->view->session_status = null;   // 指定歷史會期，不需要進行中/已結束標記
             $this->view->session_sittings = $this->loadSittingsForSession($session_code);
+            $this->view->sittings_with_transcript = $this->loadSittingsWithTranscript($session_code);
             return;
         }
 
@@ -117,6 +124,7 @@ class InfoController extends MiniEngine_Controller
         $this->view->session_meta = $meta;
         $this->view->session_status = $status;
         $this->view->session_sittings = $sittings;
+        $this->view->sittings_with_transcript = $meta ? $this->loadSittingsWithTranscript($meta->{'代碼'}) : [];
     }
 
     protected function findCurrentSessionInTerm($cc_code, $term_no)
@@ -156,5 +164,61 @@ class InfoController extends MiniEngine_Controller
             '該會期場次'
         );
         return $r->sittings ?? [];
+    }
+
+    /**
+     * 用一次聚合查詢拿到「本屆哪些會期代碼有逐字稿」，避免對每個會期各別查一次（N+1）
+     */
+    protected function loadSessionsWithTranscript($term_no)
+    {
+        $r = CCAPI::apiQuery(
+            '/transcripts?limit=0&' . urlencode('屆') . '=' . $term_no . '&agg=' . urlencode('會期代碼'),
+            '本屆哪些會期有逐字稿'
+        );
+        $codes = [];
+        foreach (($r->aggs[0]->buckets ?? []) as $b) {
+            $codes[$b->{'會期代碼'}] = true;
+        }
+        return $codes;
+    }
+
+    /**
+     * 用一次聚合查詢拿到「本會期哪些場次代碼有逐字稿」，避免對每個場次各別查一次（N+1）
+     */
+    protected function loadSittingsWithTranscript($session_code)
+    {
+        $r = CCAPI::apiQuery(
+            '/transcripts?limit=200&' . urlencode('會期代碼') . '=' . urlencode($session_code)
+                . '&output_fields=' . urlencode('代碼'),
+            '本會期哪些場次有逐字稿'
+        );
+        $codes = [];
+        foreach (($r->transcripts ?? []) as $t) {
+            $codes[$t->{'代碼'}] = true;
+        }
+        return $codes;
+    }
+
+    /**
+     * 逐字稿 tab：對應單一場次（sitting），不是整個會期——單一場次的逐字稿全文
+     * 大小是安全的（實測平均 20 萬字、單筆 47 萬 bytes），可以一次整份撈回來，
+     * 不需要像「整個會期全部場次」那樣分批載入（那樣做曾經把伺服器打爆過）。
+     * 同一場次若有多種來源（大會會議紀錄、各委員會審查會議事錄等），用匯入時
+     * 已經分好的「分段」陣列各自顯示一個 tab。
+     */
+    protected function loadTranscriptTab($cc_code, $term_no, $sitting_code)
+    {
+        if (!$sitting_code) {
+            $this->view->sitting_meta = null;
+            $this->view->transcript = null;
+            return;
+        }
+        $sitting_code = urldecode($sitting_code);
+
+        $sitting = CCAPI::apiQuery('/sitting/' . rawurlencode($sitting_code), '場次資料');
+        $this->view->sitting_meta = $sitting->data ?? (object)['代碼' => $sitting_code];
+
+        $transcript = CCAPI::apiQuery('/transcript/' . rawurlencode($sitting_code), '場次逐字稿');
+        $this->view->transcript = ($transcript->error ?? true) ? null : $transcript->data;
     }
 }
