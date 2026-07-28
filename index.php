@@ -28,6 +28,10 @@ MiniEngine::dispatch(function($uri) {
         $params = array_map('urldecode', array_slice($parts, 2));
         return [$controller ?: 'viewer', $action ?: 'index', $params];
     }
+    if ($uri === '/info') {
+        return ['info', 'index'];
+    }
+
     if ($uri === '/swagger') {
         return ['swagger', 'ui'];
     }

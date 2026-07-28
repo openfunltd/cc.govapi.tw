@@ -18,6 +18,11 @@ $_nav_path = strtok($_SERVER['REQUEST_URI'] ?? '/', '?');
   <div class="collapse navbar-collapse" id="ccapiNav">
     <ul class="navbar-nav me-auto">
       <li class="nav-item">
+        <a class="nav-link <?= $_nav_active === 'info' ? 'active' : '' ?>" href="/info">
+          🏛 議會資訊
+        </a>
+      </li>
+      <li class="nav-item">
         <a class="nav-link <?= $_nav_active === 'viewer' ? 'active' : '' ?>" href="/viewer">
           📊 資料瀏覽器
         </a>
