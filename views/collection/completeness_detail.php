@@ -31,9 +31,10 @@ function detail_cell($count, $status) {
         '屆'   => ['icon' => 'fas fa-calendar-alt', 'type' => 'term'],
         '議員' => ['icon' => 'fas fa-user-tie',      'type' => 'councilor'],
         '會期' => ['icon' => 'fas fa-calendar-week', 'type' => 'session'],
+        '場次' => ['icon' => 'fas fa-calendar-day',  'type' => 'sitting'],
     ];
     foreach ($summary as $label => $info):
-        $td = $types->{$info['type']};
+        $td = $types->{$info['type']} ?? (object)['status' => 'missing', 'total' => 0];
         $color = ($td->status === 'ok') ? 'success' : (($td->status === 'incomplete') ? 'warning' : 'danger');
     ?>
     <div class="col-md-4 mb-3">
@@ -74,6 +75,7 @@ function detail_cell($count, $status) {
                     <th class="text-center">任期屆滿日</th>
                     <th class="text-center">議員</th>
                     <th class="text-center">會期</th>
+                    <th class="text-center">場次</th>
                 </tr>
             </thead>
             <tbody>
@@ -84,6 +86,7 @@ function detail_cell($count, $status) {
                     <td class="text-center text-muted small"><?= htmlspecialchars($t->{'任期屆滿日'} ?? '進行中') ?></td>
                     <td class="text-center"><?= detail_cell($t->{'councilor_count'}, $t->{'councilor_status'}) ?></td>
                     <td class="text-center"><?= detail_cell($t->{'session_count'}, $t->{'session_status'}) ?></td>
+                    <td class="text-center"><?= detail_cell($t->{'sitting_count'} ?? 0, $t->{'sitting_status'} ?? 'missing') ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

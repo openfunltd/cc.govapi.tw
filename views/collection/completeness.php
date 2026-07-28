@@ -62,6 +62,7 @@ $defunct = array_filter($this->councils ?? [], fn($c) => !($c->{'現存'} ?? fal
                     <th class="text-center">屆</th>
                     <th class="text-center">議員</th>
                     <th class="text-center">會期</th>
+                    <th class="text-center">場次</th>
                 </tr>
             </thead>
             <tbody>
@@ -77,6 +78,7 @@ $defunct = array_filter($this->councils ?? [], fn($c) => !($c->{'現存'} ?? fal
                     <td class="text-center"><?= completeness_cell($types->term) ?></td>
                     <td class="text-center"><?= completeness_cell($types->councilor) ?></td>
                     <td class="text-center"><?= completeness_cell($types->session) ?></td>
+                    <td class="text-center"><?= completeness_cell($types->sitting ?? null) ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>
@@ -98,6 +100,7 @@ $defunct = array_filter($this->councils ?? [], fn($c) => !($c->{'現存'} ?? fal
                     <th class="text-center">屆</th>
                     <th class="text-center">議員</th>
                     <th class="text-center">會期</th>
+                    <th class="text-center">場次</th>
                 </tr>
             </thead>
             <tbody class="text-muted">
@@ -113,6 +116,7 @@ $defunct = array_filter($this->councils ?? [], fn($c) => !($c->{'現存'} ?? fal
                     <td class="text-center"><?= completeness_cell($types->term) ?></td>
                     <td class="text-center"><?= completeness_cell($types->councilor) ?></td>
                     <td class="text-center"><?= completeness_cell($types->session) ?></td>
+                    <td class="text-center"><?= completeness_cell($types->sitting ?? null) ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

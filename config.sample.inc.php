@@ -12,3 +12,4 @@ putenv('IMPORT_TERM_CSV=');           // 屆.csv 路徑，預設 {project}/屆.c
 putenv('IMPORT_COUNCILOR_JSONL=');    // 議員.jsonl 路徑，預設 {project}/議員.jsonl
 putenv('IMPORT_SESSION_CSV=');        // 會期.csv 路徑，預設 {project}/會期.csv
 putenv('IMPORT_COMMITTEE_CSV=');      // 委員會 data.csv 路徑，預設 {project}/data.csv
+putenv('IMPORT_SITTING_CSV=');        // 場次.csv 路徑，預設 {project}/場次.csv

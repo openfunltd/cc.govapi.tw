@@ -15,6 +15,7 @@
     .entity-card.session  { border-color: #0dcaf0; }
     .entity-card.councilor { border-color: #ffc107; }
     .entity-card.committee { border-color: #6f42c1; }
+    .entity-card.sitting { border-color: #fd7e14; }
     .relation-diagram { font-family: monospace; font-size: 0.9rem; background: #f8f9fa; border-radius: 8px; padding: 1.5rem; }
     .section-anchor { scroll-margin-top: 72px; }
     code { color: #d63384; }
@@ -132,11 +133,12 @@
  └── 屆（term）
       ├── 議員（councilor）
       └── 會期（session）
+            └── 場次（sitting）
 
 議會（council）
  └── 委員會（committee）     ← 不綁屆，跨屆存續</pre>
       </div>
-      <p class="small text-body-secondary">未來計劃新增：場次（sitting）、開會日、會議紀錄等。</p>
+      <p class="small text-body-secondary">未來計劃新增：開會日詳細議程樹、會議紀錄（逐字稿/PDF連結）等。</p>
 
       <h5 class="mt-4">識別碼設計原則</h5>
       <p>每個實體都有一個自管的代碼（slug），格式如下：</p>
@@ -148,6 +150,7 @@
           <tr><td>議會</td><td><code>{slug}</code></td><td><code>nwt</code></td></tr>
           <tr><td>屆</td><td><code>{slug}-{屆次}</code></td><td><code>nwt-4</code></td></tr>
           <tr><td>會期</td><td><code>{屆代碼}-{類別縮寫}{次別}</code></td><td><code>nwt-4-r1</code>（定期會第1次）<br><code>nwt-4-e2</code>（臨時會第2次）<br><code>nwt-4-i</code>（成立大會）</td></tr>
+          <tr><td>場次</td><td><code>{會期代碼}-{日期}{-am|-pm}</code></td><td><code>tpe-14-r7-20220408-am</code>（上午）<br><code>tpe-14-r7-20220408</code>（全天一筆）</td></tr>
           <tr><td>委員會</td><td><code>{議會代碼}-c{流水號}</code></td><td><code>tpe-c1</code></td></tr>
         </tbody>
       </table>
@@ -238,6 +241,34 @@
         </div>
       </div>
 
+      <!-- 場次 -->
+      <div class="card entity-card sitting mb-3">
+        <div class="card-body">
+          <h5 class="card-title">🗓️ 場次（sitting）</h5>
+          <p class="card-text small">每個會期裡逐日的排程，通常一天拆成上午/下午兩筆（少數全天一筆），是議事日程的最小顆粒度單位，可用來排出「議會下週在做什麼」的行事曆。</p>
+          <div class="row g-2">
+            <div class="col-md-6">
+              <p class="small mb-1 fw-semibold">主要欄位</p>
+              <ul class="small mb-0">
+                <li><code>日期</code>、<code>星期</code>、<code>時段</code></li>
+                <li><code>場次類別</code>：大會 / 委員會審查 / 分組審查 / 全體審查 / 停會</li>
+                <li><code>會次</code>：多數議會此欄目前尚無資料，非必然存在</li>
+                <li><code>議程說明</code>、<code>委員會名稱</code>、<code>停會原因</code></li>
+              </ul>
+            </div>
+            <div class="col-md-6">
+              <p class="small mb-1 fw-semibold">API 路徑</p>
+              <ul class="small mb-0">
+                <li><code>GET /sittings?會期代碼=nwt-4-r1</code> — 單一會期的場次</li>
+                <li><code>GET /sitting/tpe-14-r7-20220408-am</code> — 單一場次</li>
+              </ul>
+              <a href="/viewer/collection/list/sitting" class="btn btn-sm mt-2" style="border-color:#fd7e14;color:#fd7e14;border-width:1px;border-style:solid;background:transparent">瀏覽器查看 →</a>
+              <p class="small text-body-secondary mt-2 mb-0">各議會實際的場次資料覆蓋狀況，請見<a href="/viewer/collection/completeness">資料完整度</a>（依匯入結果即時計算，非固定數字）。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 議員 -->
       <div class="card entity-card councilor mb-3">
         <div class="card-body">
@@ -310,6 +341,7 @@
           <tr><td>屆</td><td>最新一屆的任期屆滿日未過（表示資料是最新的）</td></tr>
           <tr><td>議員</td><td>有議員資料的屆數 / 總屆數 = 100%</td></tr>
           <tr><td>會期</td><td>最後一筆會期結束日距今不超過 90 天</td></tr>
+          <tr><td>場次</td><td>有場次資料的屆數 / 總屆數 = 100%</td></tr>
         </tbody>
       </table>
       <a href="/viewer/collection/completeness" class="btn btn-outline-secondary btn-sm">查看完整度總覽 →</a>
