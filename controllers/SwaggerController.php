@@ -335,6 +335,7 @@ class SwaggerController extends MiniEngine_Controller
     {
         $host = $_SERVER['HTTP_HOST'] ?? 'all.cc.govapi.tw';
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $postfix = getenv('CCAPI_DOMAIN_POSTFIX') ?: '.cc.govapi.tw';
 
         $data = [
             'openapi' => '3.0.0',
@@ -345,7 +346,7 @@ class SwaggerController extends MiniEngine_Controller
             ],
             'servers' => [
                 ['url' => "{$scheme}://{$host}", 'description' => '目前主機'],
-                ['url' => "{$scheme}://all.cc.govapi.tw", 'description' => '全國查詢'],
+                ['url' => "{$scheme}://all{$postfix}", 'description' => '全國查詢'],
             ],
         ];
 
