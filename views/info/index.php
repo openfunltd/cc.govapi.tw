@@ -76,6 +76,19 @@
     <?= $this->partial('info/detail', $this) ?>
     <?php endif; ?>
 
+    <?php if (CCAPI::hasLog()): ?>
+    <div class="card shadow-sm my-4">
+      <div class="card-body">
+        <h2 class="h6 fw-semibold mb-2">本頁使用 API</h2>
+        <ul class="small mb-0 ps-3">
+          <?php foreach (CCAPI::getLogs() as $log): ?>
+          <li><a href="<?= htmlspecialchars($log[0]) ?>" target="_blank"><?= htmlspecialchars($log[1]) ?></a></li>
+          <?php endforeach; ?>
+        </ul>
+      </div>
+    </div>
+    <?php endif; ?>
+
   </div>
 </main>
 </body>
