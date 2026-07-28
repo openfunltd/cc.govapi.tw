@@ -28,8 +28,12 @@ MiniEngine::dispatch(function($uri) {
         $params = array_map('urldecode', array_slice($parts, 2));
         return [$controller ?: 'viewer', $action ?: 'index', $params];
     }
-    if ($uri === '/info') {
-        return ['info', 'index'];
+    // /info、/info/{屆}、/info/{屆}/{tab}、/info/{屆}/{tab}/{sub_id}
+    if ($uri === '/info' || strpos($uri, '/info/') === 0) {
+        $info_uri = substr($uri, 5) ?: '/';
+        $parts = array_values(array_filter(explode('/', ltrim($info_uri, '/')), fn($s) => $s !== ''));
+        $params = array_map('urldecode', $parts);
+        return ['info', 'index', $params];
     }
 
     if ($uri === '/swagger') {

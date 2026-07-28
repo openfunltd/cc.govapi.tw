@@ -165,21 +165,7 @@ function find_session_meta($session_code)
     return $r->hits->hits[0]->_source ?? null;
 }
 
-/**
- * 會期代碼格式為 {議會代碼}-{屆次}-{類別縮寫}{次別}（例：tpe-14-r8、nwt-4-e2、nwt-4-i），
- * 這是彙整腳本統一產生的命名規則（已核對全部 21 個有會期資料的議會、1965 筆代碼皆符合，
- * r=定期會、e=臨時會、i=成立大會 對應完全一致，非各縣市各自的格式，可放心解析）。
- * 用來在會期紀錄還沒建檔時，組出跟正式「會期名稱」同樣格式的友善名稱。
- */
-function friendly_session_name($session_code)
-{
-    if (!preg_match('/^[a-z]+-(\d+)-([a-z]+)(\d*)$/', $session_code, $m)) {
-        return '本次會期';
-    }
-    [, $term_no, $type_code, $no] = $m;
-    $type = ['r' => '定期會', 'e' => '臨時會', 'i' => '成立大會'][$type_code] ?? '會期';
-    return $no !== '' ? "第{$term_no}屆第{$no}次{$type}" : "第{$term_no}屆{$type}";
-}
+// 友善會期名稱解析（會期紀錄還沒建檔時使用）見 CCAPI_Type_Session::getFriendlyName()
 
 function find_sittings($session_code, $today_str, $mode, $size)
 {
@@ -251,7 +237,7 @@ foreach ($councils as $cc => $council) {
         // 友善顯示用名稱從會期代碼解析出屆次/類別/次別組成，跟正式會期名稱同樣格式
         $session_doc = [
             '代碼'     => $session_code,
-            '會期名稱' => $meta->{'會期名稱'} ?? friendly_session_name($session_code),
+            '會期名稱' => $meta->{'會期名稱'} ?? CCAPI_Type_Session::getFriendlyName($session_code),
             '會期類別' => $meta->{'會期類別'} ?? null,
             '次'       => $meta->{'次'} ?? null,
             '開始日期' => $meta->{'開始日期'} ?? null,
