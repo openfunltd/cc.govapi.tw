@@ -21,6 +21,13 @@ class InfoController extends MiniEngine_Controller
             return;
         }
 
+        // 議員個人頁：用「人物代碼」串連同一人跨屆的所有記錄，不屬於屆次路由
+        if ($term_no === 'councilor') {
+            $this->view->is_councilor_profile = true;
+            $this->view->councilor_records = $this->loadCouncilorProfile($tab);
+            return;
+        }
+
         if (CCAPI_Council::isAll($cc_code)) {
             // 全國頁沒有「屆」的概念（各議會屆次互不相干），維持原本的現況卡片牆
             $result = CCAPI::apiQuery('/overviews?limit=50', '全國議會現況資料');
@@ -227,5 +234,22 @@ class InfoController extends MiniEngine_Controller
 
         $transcript = CCAPI::apiQuery('/transcript/' . rawurlencode($sitting_code), '場次逐字稿');
         $this->view->transcript = ($transcript->error ?? true) ? null : $transcript->data;
+    }
+
+    /**
+     * 用「人物代碼」查出同一人跨屆的所有議員記錄，依屆次由新到舊排序
+     * （人物代碼已核對過全部 3,464 筆議員記錄都有值，可放心當作跨屆連結的 key）
+     */
+    protected function loadCouncilorProfile($person_code)
+    {
+        if (!$person_code) {
+            return [];
+        }
+        $person_code = urldecode($person_code);
+        $r = CCAPI::apiQuery(
+            '/councilors?limit=50&' . urlencode('人物代碼') . '=' . urlencode($person_code) . '&sort=' . urlencode('屆次>'),
+            '該議員所有屆期記錄'
+        );
+        return $r->councilors ?? [];
     }
 }

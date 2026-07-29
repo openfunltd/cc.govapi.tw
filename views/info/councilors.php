@@ -4,6 +4,7 @@
 <div class="row g-3 mb-4">
   <?php foreach ($this->councilors as $c): ?>
   <div class="col-6 col-md-3 col-lg-2">
+    <a href="/info/councilor/<?= urlencode($c->{'人物代碼'} ?? '') ?>" class="text-decoration-none text-reset">
     <div class="card councilor-card h-100 shadow-sm">
       <?php if ($c->{'照片'} ?? null): ?>
       <img src="<?= htmlspecialchars($c->{'照片'}) ?>" alt="" loading="lazy">
@@ -23,6 +24,7 @@
         </div>
       </div>
     </div>
+    </a>
   </div>
   <?php endforeach; ?>
 </div>

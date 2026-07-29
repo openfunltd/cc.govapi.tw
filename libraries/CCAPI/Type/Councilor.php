@@ -86,6 +86,11 @@ class CCAPI_Type_Councilor extends CCAPI_Type
                 'description' => '身分別',
                 'type' => 'string',
             ],
+            '人物代碼' => [
+                'es_field' => '人物代碼',
+                'description' => '同一人跨屆連任時共用的代碼，可用來查詢某人所有屆期的記錄',
+                'type' => 'string',
+            ],
         ];
     }
 
