@@ -22,9 +22,19 @@ class InfoController extends MiniEngine_Controller
         }
 
         // 議員個人頁：用「人物代碼」串連同一人跨屆的所有記錄，不屬於屆次路由
+        // /info/councilor/{人物代碼}（基本資料，預設）或 /info/councilor/{人物代碼}/speeches（發言記錄）
         if ($term_no === 'councilor') {
+            $person_code = $tab;
+            $profile_tab = ($sub_id === 'speeches') ? 'speeches' : 'profile';
             $this->view->is_councilor_profile = true;
-            $this->view->councilor_records = $this->loadCouncilorProfile($tab);
+            $this->view->profile_tab = $profile_tab;
+
+            $records = $this->loadCouncilorProfile($person_code);
+            $this->view->councilor_records = $records;
+
+            if ($profile_tab === 'speeches') {
+                $this->loadCouncilorSpeeches($records, $_GET['term'] ?? null);
+            }
             return;
         }
 
@@ -251,5 +261,130 @@ class InfoController extends MiniEngine_Controller
             '該議員所有屆期記錄'
         );
         return $r->councilors ?? [];
+    }
+
+    /**
+     * 已知複姓（涵蓋目前議員資料裡出現過的 歐陽/上官，其餘為常見複姓，預先納入避免
+     * 未來新當選議員剛好是複姓卻被切錯）
+     */
+    protected static $compoundSurnames = [
+        '歐陽', '上官', '司馬', '諸葛', '東方', '皇甫', '尉遲', '公孫', '令狐', '太史',
+        '端木', '獨孤', '軒轅', '長孫', '宇文', '慕容', '夏侯', '萬俟', '司徒', '司空',
+        '拓跋', '赫連', '澹台', '公羊', '濮陽',
+    ];
+
+    /**
+     * 逐字稿裡的說話者標記格式是「姓+職稱+名」（例：侯議員漢廷），不是「職稱+全名」。
+     * 這是關鍵字比對的 heuristic，不是精確的逐句發言記錄——之後逐字稿清整成一句一句後
+     * 會有更準確的做法。
+     *
+     * 兩種已知例外，會 fallback 成直接比對全名（不插入職稱）：
+     *   1. 複姓：單純「取第一個字當姓」會切錯（例：「歐陽龍」切成「歐」+「陽龍」）
+     *   2. 原住民族名／羅馬拼音名（例：「夷將．拔路兒Icyang • Parod」）：不符合
+     *      漢名「姓+名」的慣例，套用規則會產生垃圾查詢字串
+     */
+    protected function buildSpeakerPattern($name, $title)
+    {
+        $title = $title ?: '議員';
+
+        if (preg_match('/[a-zA-Z．·‧•]/u', $name)) {
+            return $name;
+        }
+
+        $surname_len = 1;
+        foreach (self::$compoundSurnames as $cs) {
+            if (mb_substr($name, 0, mb_strlen($cs)) === $cs) {
+                $surname_len = mb_strlen($cs);
+                break;
+            }
+        }
+        $surname = mb_substr($name, 0, $surname_len);
+        $given = mb_substr($name, $surname_len);
+        if ($given === '') {
+            return $name;
+        }
+        return $surname . $title . $given;
+    }
+
+    /**
+     * 發言記錄 tab：預設抓最新一屆（$records 已依屆次新到舊排序），可用 ?term= 指定
+     * 要看哪一屆（不同屆職稱可能不同，例如某屆是議員、某屆是議長，說話者標記也會不同）
+     */
+    protected function loadCouncilorSpeeches($records, $requested_term = null)
+    {
+        $this->view->speech_term = null;
+        $this->view->speech_pattern = null;
+        $this->view->speech_total = 0;
+        $this->view->speech_results = [];
+
+        if (!$records) {
+            return;
+        }
+
+        $record = $records[0];
+        if ($requested_term) {
+            foreach ($records as $r) {
+                if ((string)$r->{'屆次'} === (string)$requested_term) {
+                    $record = $r;
+                    break;
+                }
+            }
+        }
+
+        $term_no = $record->{'屆次'};
+        $pattern = $this->buildSpeakerPattern($record->{'姓名'}, $record->{'職稱'});
+        $this->view->speech_term = $term_no;
+        $this->view->speech_pattern = $pattern;
+
+        $r = CCAPI::apiQuery(
+            '/transcripts?limit=20&' . urlencode('屆') . '=' . $term_no . '&q=' . urlencode($pattern)
+                . '&sort=' . urlencode('日期>')
+                . '&output_fields=' . urlencode('代碼')
+                . '&output_fields=' . urlencode('會期代碼')
+                . '&output_fields=' . urlencode('日期'),
+            '該議員發言記錄（關鍵字比對，非精確逐句，依日期新到舊）'
+        );
+        $this->view->speech_total = $r->total ?? 0;
+
+        // 依會期分組，場次已經依日期新到舊排序，分組後第一次出現的會期自然就是最新的
+        $groups = [];
+        foreach (($r->transcripts ?? []) as $t) {
+            $session_code = $t->{'會期代碼'} ?? '';
+            if (!isset($groups[$session_code])) {
+                $groups[$session_code] = (object)[
+                    '會期代碼' => $session_code,
+                    '會期名稱' => CCAPI_Type_Session::getFriendlyName($session_code),
+                    'items' => [],
+                ];
+            }
+            $groups[$session_code]->items[] = $t;
+        }
+
+        // 補上每個場次的名稱（時段＋場次類別，委員會審查/分組審查時附上委員會名稱）；
+        // 每個會期只查一次該會期全部場次（loadSittingsForSession 已有），不逐筆查，避免 N+1
+        foreach ($groups as $group) {
+            $sittings_by_code = [];
+            foreach ($this->loadSittingsForSession($group->{'會期代碼'}) as $s) {
+                $sittings_by_code[$s->{'代碼'}] = $s;
+            }
+            foreach ($group->items as $item) {
+                $sitting = $sittings_by_code[$item->{'代碼'}] ?? null;
+                $item->{'場次名稱'} = $sitting ? $this->buildSittingLabel($sitting) : null;
+            }
+        }
+
+        $this->view->speech_groups = array_values($groups);
+    }
+
+    protected function buildSittingLabel($sitting)
+    {
+        $label = trim(implode(' ', array_filter([
+            $sitting->{'時段'} ?? null,
+            $sitting->{'場次類別'} ?? null,
+        ])));
+        if ($sitting->{'委員會名稱'} ?? null) {
+            $label .= ($label ? '・' : '') . $sitting->{'委員會名稱'};
+        }
+        return $label ?: null;
     }
 }
