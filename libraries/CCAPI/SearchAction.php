@@ -25,6 +25,31 @@ class CCAPI_SearchAction
         return $ret;
     }
 
+    /**
+     * 中文查詢沒有詞界，query_string 若直接把使用者輸入原封不動送進 ES，
+     * 預設的 OR/token 拆分邏輯很容易誤判（例如「廚餘」被拆成「廚」「餘」
+     * 兩個字各自比對，符合其中一個字就算命中）。
+     *
+     * 這裡把輸入依空白切成多個詞，每個詞加上雙引號強制做片語比對（詞內文字
+     * 需相鄰出現，不會被拆散比對），詞與詞之間用 AND 串起來：
+     *   廚餘        → "廚餘"
+     *   黃國昌 土地 → "黃國昌" AND "土地"
+     */
+    protected static function buildChineseQueryString($q)
+    {
+        $terms = preg_split('/\s+/u', trim($q));
+        $terms = array_filter($terms, fn($t) => $t !== '');
+        if (!$terms) {
+            return $q;
+        }
+        $quoted = array_map(function ($t) {
+            // 逸脫查詢字串裡的反斜線與雙引號，避免使用者輸入破壞 query_string 語法
+            $escaped = str_replace(['\\', '"'], ['\\\\', '\\"'], $t);
+            return '"' . $escaped . '"';
+        }, $terms);
+        return implode(' AND ', $quoted);
+    }
+
     protected static function setQueryString($query_string)
     {
         $query_string = trim($query_string, '&');
@@ -168,7 +193,7 @@ class CCAPI_SearchAction
             }, $query_fields);
             $cmd->query->bool->must[] = (object)[
                 'query_string' => (object)[
-                    'query' => self::getParam('q'),
+                    'query' => self::buildChineseQueryString(self::getParam('q')),
                     'fields' => $query_fields,
                 ],
             ];
