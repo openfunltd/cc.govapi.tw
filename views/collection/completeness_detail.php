@@ -32,6 +32,7 @@ function detail_cell($count, $status) {
         '議員' => ['icon' => 'fas fa-user-tie',      'type' => 'councilor'],
         '會期' => ['icon' => 'fas fa-calendar-week', 'type' => 'session'],
         '場次' => ['icon' => 'fas fa-calendar-day',  'type' => 'sitting'],
+        '逐字稿' => ['icon' => 'fas fa-file-alt',    'type' => 'transcript'],
     ];
     foreach ($summary as $label => $info):
         $td = $types->{$info['type']} ?? (object)['status' => 'missing', 'total' => 0];
@@ -76,6 +77,7 @@ function detail_cell($count, $status) {
                     <th class="text-center">議員</th>
                     <th class="text-center">會期</th>
                     <th class="text-center">場次</th>
+                    <th class="text-center">逐字稿</th>
                 </tr>
             </thead>
             <tbody>
@@ -87,6 +89,7 @@ function detail_cell($count, $status) {
                     <td class="text-center"><?= detail_cell($t->{'councilor_count'}, $t->{'councilor_status'}) ?></td>
                     <td class="text-center"><?= detail_cell($t->{'session_count'}, $t->{'session_status'}) ?></td>
                     <td class="text-center"><?= detail_cell($t->{'sitting_count'} ?? 0, $t->{'sitting_status'} ?? 'missing') ?></td>
+                    <td class="text-center"><?= detail_cell($t->{'transcript_count'} ?? 0, $t->{'transcript_status'} ?? 'missing') ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

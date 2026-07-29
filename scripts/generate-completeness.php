@@ -11,6 +11,10 @@
  *   屆  ：最新屆的任期屆滿日 >= 今天 → ok（資料有追上現任）
  *   會期：最後一筆會期結束日 >= (現任:今天 / 歷史:任期屆滿日) - 90天 → ok
  *   場次：該屆 sitting count > 0 → ok
+ *   逐字稿：該屆 transcript count > 0 → ok
+ *
+ * 逐字稿沒有資料一律算「缺」（missing），不區分「還沒收錄」跟「這個管道本來就
+ * 抓不到、逐字稿發布在別處」——維持跟其他三項同一套判斷邏輯，不特殊處理。
  */
 
 include(__DIR__ . '/../init.inc.php');
@@ -167,7 +171,35 @@ foreach ($sitting_agg->aggregations->by_council->buckets as $cb) {
 }
 error_log("Loaded sitting counts for " . count($sitting_counts) . " councils");
 
-// ── 6. 計算完整度並寫入 ES ──────────────────────────────────────────────────
+// ── 6. 逐字稿計數：terms agg by 議會代碼 → 屆 ──────────────────────────────
+
+$transcript_agg_query = [
+    'size' => 0,
+    'aggs' => [
+        'by_council' => [
+            'terms' => ['field' => '議會代碼', 'size' => 100],
+            'aggs' => [
+                'by_term' => [
+                    'terms' => ['field' => '屆', 'size' => 50],
+                ],
+            ],
+        ],
+    ],
+];
+$transcript_agg = Elastic::dbQuery('/{prefix}transcript/_search', 'POST',
+    json_encode($transcript_agg_query));
+
+// [cc_code][屆] = count
+$transcript_counts = [];
+foreach ($transcript_agg->aggregations->by_council->buckets as $cb) {
+    $cc = $cb->key;
+    foreach ($cb->by_term->buckets as $tb) {
+        $transcript_counts[$cc][(int)$tb->key] = (int)$tb->doc_count;
+    }
+}
+error_log("Loaded transcript counts for " . count($transcript_counts) . " councils");
+
+// ── 7. 計算完整度並寫入 ES ──────────────────────────────────────────────────
 
 function calc_status($count, $type, $term_info, $is_current, $gap_days = 90)
 {
@@ -215,14 +247,16 @@ foreach ($councils as $cc => $council) {
         $term_type_status = 'incomplete';
     }
 
-    // 每屆的議員/會期/場次計數
+    // 每屆的議員/會期/場次/逐字稿計數
     $term_docs = [];
     $councilor_total = 0;
     $session_total = 0;
     $sitting_total = 0;
+    $transcript_total = 0;
     $councilor_terms_with_data = 0;
     $session_terms_with_data = 0;
     $sitting_terms_with_data = 0;
+    $transcript_terms_with_data = 0;
 
     foreach ($terms as $t) {
         $term_no = $t['屆次'];
@@ -232,13 +266,16 @@ foreach ($councils as $cc => $council) {
         $s_info  = $session_data[$cc][$term_no] ?? ['count' => 0, 'latest_end' => null];
         $s_count = $s_info['count'];
         $st_count = $sitting_counts[$cc][$term_no] ?? 0;
+        $tr_count = $transcript_counts[$cc][$term_no] ?? 0;
 
-        $councilor_total += $c_count;
-        $session_total   += $s_count;
-        $sitting_total    += $st_count;
+        $councilor_total  += $c_count;
+        $session_total    += $s_count;
+        $sitting_total     += $st_count;
+        $transcript_total += $tr_count;
         if ($c_count > 0) $councilor_terms_with_data++;
         if ($s_count > 0) $session_terms_with_data++;
         if ($st_count > 0) $sitting_terms_with_data++;
+        if ($tr_count > 0) $transcript_terms_with_data++;
 
         $session_term_info = array_merge($t, ['latest_end' => $s_info['latest_end']]);
 
@@ -253,12 +290,14 @@ foreach ($councils as $cc => $council) {
             'session_status'    => calc_status($s_count, 'session', $session_term_info, $is_current, $session_gap_days),
             'sitting_count'     => $st_count,
             'sitting_status'    => calc_status($st_count, 'sitting', $t, $is_current, $session_gap_days),
+            'transcript_count'  => $tr_count,
+            'transcript_status' => calc_status($tr_count, 'transcript', $t, $is_current, $session_gap_days),
         ];
     }
 
     $total_terms = count($terms);
 
-    // 整體 councilor/session/sitting 狀態：依有資料屆數佔比
+    // 整體 councilor/session/sitting/transcript 狀態：依有資料屆數佔比
     $councilor_type_status = ($total_terms === 0 || $councilor_terms_with_data === 0)
         ? 'missing'
         : ($councilor_terms_with_data === $total_terms ? 'ok' : 'incomplete');
@@ -268,6 +307,9 @@ foreach ($councils as $cc => $council) {
     $sitting_type_status = ($total_terms === 0 || $sitting_terms_with_data === 0)
         ? 'missing'
         : ($sitting_terms_with_data === $total_terms ? 'ok' : 'incomplete');
+    $transcript_type_status = ($total_terms === 0 || $transcript_terms_with_data === 0)
+        ? 'missing'
+        : ($transcript_terms_with_data === $total_terms ? 'ok' : 'incomplete');
 
     $doc = [
         '代碼'       => $cc,
@@ -293,6 +335,12 @@ foreach ($councils as $cc => $council) {
                 'terms_with_data' => $sitting_terms_with_data,
                 'total_terms'     => $total_terms,
                 'status'          => $sitting_type_status,
+            ],
+            'transcript' => [
+                'total'           => $transcript_total,
+                'terms_with_data' => $transcript_terms_with_data,
+                'total_terms'     => $total_terms,
+                'status'          => $transcript_type_status,
             ],
         ],
         'terms'      => $term_docs,
