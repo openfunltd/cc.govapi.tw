@@ -44,6 +44,14 @@ MiniEngine::dispatch(function($uri) {
         return ['swagger', 'index'];
     }
 
+    if ($uri === '/skill.md') {
+        return ['swagger', 'skill'];
+    }
+
+    if ($uri === '/knowledge.md') {
+        return ['about', 'knowledge'];
+    }
+
     $param = CCAPI_Helper::getApiType($uri);
     if ($param) {
         return $param;

@@ -14,6 +14,13 @@ class SwaggerController extends MiniEngine_Controller
         //
     }
 
+    public function skillAction()
+    {
+        header('Content-Type: text/markdown; charset=utf-8');
+        echo $this->generateSkillMd();
+        return $this->noview();
+    }
+
     protected function pascal2Underscore(string $pascal): string
     {
         return strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $pascal));
@@ -302,6 +309,120 @@ class SwaggerController extends MiniEngine_Controller
         }
 
         return $schemas;
+    }
+
+    /**
+     * 產生給 AI Agent 讀的完整 API 說明（Markdown），內容從 CCAPI_Type/*.php
+     * 自動掃描產生，跟 swagger.yaml 用同一份 type 定義，兩者不會脫節。
+     */
+    protected function generateSkillMd(): string
+    {
+        $host = $_SERVER['HTTP_HOST'] ?? 'all.cc.govapi.tw';
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $postfix = getenv('CCAPI_DOMAIN_POSTFIX') ?: '.cc.govapi.tw';
+
+        $md = "# CCAPI — 地方議會開放 API\n\n";
+        $md .= "台灣地方議會（直轄市議會、縣（市）議會）的開放資料 API，涵蓋議會、屆期、議員、"
+             . "會期、場次、委員會、逐字稿等資料。所有回應皆為 JSON，欄位名稱使用繁體中文（UTF-8，未跳脫）。\n\n";
+        $md .= "> 這份文件只講 API 怎麼呼叫。呼叫前建議先讀 `{$scheme}://{$host}/knowledge.md`——"
+             . "裡面說明「議會」「議員」等詞在這個 API 裡的精確定義，避免用一般政治制度的既有知識"
+             . "（例如跟國會、其他國家的地方議會搞混）誤判資料意義。\n\n";
+
+        $md .= "## 存取方式：子網域決定查詢範圍\n\n";
+        $md .= "- `https://{議會代碼}{$postfix}` — 只查詢該議會的資料（自動加上議會代碼 filter，不需要自己帶）\n";
+        $md .= "- `https://all{$postfix}` — 跨議會查詢，不限單一議會\n";
+        $md .= "- 目前主機：`{$scheme}://{$host}`\n";
+        $md .= "- 未知的議會代碼子網域會回傳 HTTP 404\n";
+        $md .= "- CORS 全開（`Access-Control-Allow-Origin: *`），前端可直接呼叫\n\n";
+
+        $md .= "### 議會代碼清單\n\n";
+        foreach (CouncilHelper::getAll() as $code => $name) {
+            if ($code === 'all') {
+                continue;
+            }
+            $md .= "- `{$code}` — {$name}\n";
+        }
+        $md .= "\n";
+
+        $md .= "## 共用查詢參數（適用於下方所有型別的「列表」endpoint）\n\n";
+        $md .= "- `q={關鍵字}`：全文搜尋，可搜尋欄位見各型別「查詢欄位」。中文查詢會自動依空白斷詞，"
+             . "每個詞各自做片語比對後以 AND 串接——例如 `q=黃國昌 土地` 等同「內容同時包含『黃國昌』與『土地』」，"
+             . "不會被拆成單字各自比對。搜尋命中時，回傳資料會多一個 `{欄位}:highlight` 欄位（陣列），"
+             . "內容是命中前後文片段，比對到的詞會用 `<em>` 包起來。\n";
+        $md .= "- `{filter欄位}={值}`：依欄位篩選，同一欄位出現多次視為 OR（例：`黨籍=中國國民黨&黨籍=民主進步黨`）\n";
+        $md .= "- `{filter欄位}:{起},{訖}`：範圍篩選，用冒號＋逗號（不是 `=`），起訖任一端可留空表示不限"
+             . "（例：`日期:2024-01-01,2024-12-31`、`日期:2024-01-01,` 代表 2024-01-01 以後）\n";
+        $md .= "- `agg={filter欄位}`：依欄位分群統計筆數；可重複帶多個 `agg=`；同一個 `agg=` 裡用逗號可做多層分群"
+             . "（例：`agg=議會代碼,黨籍`）。回傳結果在 `aggs` 陣列裡，每個 bucket 有該欄位值與 `count`。\n";
+        $md .= "- `sort={filter欄位}<` 或 `>`：排序，`<` 升冪、`>` 降冪，可重複帶多個欄位\n";
+        $md .= "- `output_fields={欄位}`：限制回傳欄位，可重複帶；不帶則回傳全部欄位\n";
+        $md .= "- `page=`、`limit=`：分頁（`limit=0` 只回傳統計/aggs，不回傳實際資料列，適合只要 `agg=` 結果時用）\n\n";
+
+        $md .= "## 列表 API 回應格式\n\n";
+        $md .= "```\n{\n"
+             . "  \"total\": 總筆數,\n"
+             . "  \"total_page\": 總頁數,\n"
+             . "  \"page\": 目前頁數,\n"
+             . "  \"limit\": 每頁筆數,\n"
+             . "  \"id_fields\": [組成單筆 ID 的欄位名稱],\n"
+             . "  \"supported_filter_fields\": [這個型別支援的 filter 欄位],\n"
+             . "  \"{回傳key}\": [資料列, ...]\n"
+             . "}\n```\n\n";
+        $md .= "## 單筆 API 回應格式\n\n";
+        $md .= "找到：`{\"error\": false, \"data\": {...}}`；找不到：`{\"error\": true, \"message\": \"找不到資料\"}`（HTTP 200，用 `error` 欄位判斷，不是用 HTTP status）\n\n";
+
+        $md .= "## 型別一覽\n\n";
+
+        $auto_gen_files = MINI_ENGINE_ROOT . '/libraries/CCAPI/Type/*.php';
+        foreach (glob($auto_gen_files) as $f) {
+            $entity = basename($f, '.php');
+            $class_name = $this->getClassNameByEntity($entity);
+            if (!class_exists($class_name)) {
+                include_once $f;
+            }
+            $md .= $this->generateSkillSection($entity, $class_name);
+        }
+
+        return $md;
+    }
+
+    protected function generateSkillSection(string $entity, string $class_name): string
+    {
+        $subject = $class_name::getTypeSubject();
+        $resource_list = $class_name::getReturnKey();
+        $resource_item = strtolower($entity);
+        $id_fields_info = $class_name::getIdFieldsInfo();
+        $id_example = implode('/', array_map(fn($info) => (string)$info['example'], $id_fields_info));
+
+        $md = "### {$subject}（{$entity}）\n\n";
+        $md .= "- 列表：`GET /{$resource_list}`\n";
+        if ($id_fields_info) {
+            $md .= "- 單筆：`GET /{$resource_item}/{$id_example}`（ID 依序為："
+                 . implode('、', array_keys($id_fields_info)) . "）\n";
+        }
+
+        $query_fields = $class_name::queryFields();
+        if ($query_fields) {
+            $md .= "- 查詢欄位（`q=` 搜尋範圍）：" . implode('、', $query_fields) . "\n";
+        }
+
+        $filter_fields = $class_name::getFilterFieldsInfo();
+        if ($filter_fields) {
+            $md .= "- 篩選／排序／分群欄位：\n";
+            foreach ($filter_fields as $field => $info) {
+                $enum = !empty($info['enum']) ? '，可選值：' . implode('、', $info['enum']) : '';
+                $md .= "  - `{$field}`（{$info['type']}）：{$info['description']}{$enum}\n";
+            }
+        }
+
+        $sort_fields = $class_name::sortFields();
+        if ($sort_fields) {
+            $md .= "- 預設排序：" . implode('、', $sort_fields) . "\n";
+        }
+        $md .= "- 預設每頁筆數：{$class_name::defaultLimit()}\n";
+        $md .= "- 列表資料放在回應的 `{$resource_list}` 欄位\n\n";
+
+        return $md;
     }
 
     protected function parseToYaml($data, $indent = ''): string
