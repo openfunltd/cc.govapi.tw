@@ -42,13 +42,18 @@ function completeness_buckets($councils, $type_key) {
 }
 
 // Helper：單一議會的小徽章連結，帶 data-defunct 供 JS 切換顯示/隱藏
-function completeness_council_badge($c) {
+// $extra_text 可選，用來附加「共 N 屆」這類補充說明（目前只在場次/逐字稿的完整桶使用）
+function completeness_council_badge($c, $extra_text = null) {
     $defunct = !($c->{'現存'} ?? true);
+    $label = htmlspecialchars($c->{'議會名稱'});
+    if ($extra_text) {
+        $label .= ' <span class="text-muted">(' . htmlspecialchars($extra_text) . ')</span>';
+    }
     return sprintf(
         '<a href="%s" class="badge badge-light border text-dark council-badge" data-defunct="%d">%s</a>',
         htmlspecialchars(viewer_url('/collection/completeness/' . $c->{'代碼'})),
         $defunct ? 1 : 0,
-        htmlspecialchars($c->{'議會名稱'})
+        $label
     );
 }
 ?>
@@ -102,7 +107,22 @@ $bucket_labels = [
                 </h6>
                 <div class="d-flex flex-wrap" style="gap: 0.35rem;" data-zone="<?= $type_key ?>" data-bucket="<?= $bucket_key ?>">
                     <?php foreach ($buckets[$bucket_key] as $c): ?>
-                        <?= completeness_council_badge($c) ?>
+                        <?php
+                        // 場次／逐字稿的「完整」「部分缺漏」桶，額外標出屆數：
+                        // 完整 → 共 N 屆；部分缺漏 → 有資料屆數/總屆數，
+                        // 讓小議會（例如只有 8 屆）跟大議會（例如 14 屆）不會被誤認為同一回事
+                        $extra_text = null;
+                        if (in_array($type_key, ['sitting', 'transcript'], true)) {
+                            $total_terms = $c->types->{$type_key}->total_terms ?? null;
+                            $with_data   = $c->types->{$type_key}->terms_with_data ?? null;
+                            if ($bucket_key === 'ok' && !is_null($total_terms)) {
+                                $extra_text = "共 {$total_terms} 屆";
+                            } elseif ($bucket_key === 'incomplete' && !is_null($total_terms) && !is_null($with_data)) {
+                                $extra_text = "{$with_data}/{$total_terms} 屆";
+                            }
+                        }
+                        ?>
+                        <?= completeness_council_badge($c, $extra_text) ?>
                     <?php endforeach; ?>
                     <?php if (empty($buckets[$bucket_key])): ?>
                     <span class="text-muted small">（無）</span>
