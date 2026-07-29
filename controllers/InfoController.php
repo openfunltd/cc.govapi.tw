@@ -14,6 +14,13 @@ class InfoController extends MiniEngine_Controller
         $this->view->cc_code = $cc_code;
         $this->view->council_name = CouncilHelper::getName($cc_code);
 
+        // 逐字稿搜尋：全國跟單一議會子網域都適用，不屬於屆次路由，前端 JS 直接呼叫
+        // /transcripts API 做 crossfilter，這裡只需要準備頁面骨架
+        if ($term_no === 'search') {
+            $this->view->is_search = true;
+            return;
+        }
+
         if (CCAPI_Council::isAll($cc_code)) {
             // 全國頁沒有「屆」的概念（各議會屆次互不相干），維持原本的現況卡片牆
             $result = CCAPI::apiQuery('/overviews?limit=50', '全國議會現況資料');

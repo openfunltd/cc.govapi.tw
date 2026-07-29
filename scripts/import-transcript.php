@@ -38,6 +38,8 @@ $index_mapping = [
         '議會代碼'   => ['type' => 'keyword'],
         '屆'         => ['type' => 'integer'],
         '會期代碼'   => ['type' => 'keyword'],
+        '日期'       => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+        '年'         => ['type' => 'integer'],
         '內容'       => ['type' => 'text'],
         '來源分類'   => ['type' => 'keyword'],
         '檔案數'     => ['type' => 'integer'],
@@ -118,8 +120,9 @@ function read_doc_file($base_dir, $relative_path)
 }
 
 /**
- * 查詢既有 sitting index 取得 議會代碼/屆/會期代碼（該筆場次匯入時已算好）；
- * 查不到（理論上不應發生）才退回自行解析代碼字串
+ * 查詢既有 sitting index 取得 議會代碼/屆/會期代碼/日期（該筆場次匯入時已算好）；
+ * 查不到（理論上不應發生）才退回自行解析代碼字串（日期部分只能放棄，因為代碼裡的
+ * 日期段是場次自己組的格式，沒有 sitting 資料時無法可靠反推）
  */
 function derive_sitting_context($code)
 {
@@ -127,10 +130,13 @@ function derive_sitting_context($code)
         $r = Elastic::dbQuery('/{prefix}sitting/_doc/' . rawurlencode($code), 'GET');
         if ($r->found ?? false) {
             $s = $r->_source;
+            $date = $s->{'日期'} ?? null;
             return [
                 '議會代碼' => $s->{'議會代碼'} ?? null,
                 '屆'       => $s->{'屆'} ?? null,
                 '會期代碼' => $s->{'會期代碼'} ?? null,
+                '日期'     => $date,
+                '年'       => $date ? (int)substr($date, 0, 4) : null,
             ];
         }
     } catch (Exception $e) {
@@ -141,6 +147,8 @@ function derive_sitting_context($code)
         '議會代碼' => $parts[0] ?? null,
         '屆'       => isset($parts[1]) ? (int)$parts[1] : null,
         '會期代碼' => (isset($parts[0]) && isset($parts[1]) && isset($parts[2])) ? "{$parts[0]}-{$parts[1]}-{$parts[2]}" : null,
+        '日期'     => null,
+        '年'       => null,
     ];
 }
 
@@ -208,6 +216,8 @@ foreach ($groups as $code => $rows) {
         '議會代碼'   => $context['議會代碼'],
         '屆'         => $context['屆'],
         '會期代碼'   => $context['會期代碼'],
+        '日期'       => $context['日期'],
+        '年'         => $context['年'],
         '內容'       => $content,
         '來源分類'   => array_keys($source_types),
         '檔案數'     => $file_count,

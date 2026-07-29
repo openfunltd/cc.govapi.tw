@@ -27,6 +27,18 @@
 <main>
   <div class="container" style="max-width: 1100px;">
 
+    <?php if (!empty($this->is_search)): ?>
+    <?= $this->partial('info/search', $this) ?>
+    <?php else: ?>
+
+    <form action="/info/search" method="get" class="pt-3 pb-1">
+      <div class="input-group">
+        <span class="input-group-text">🔍</span>
+        <input type="text" name="q" class="form-control" placeholder="搜尋逐字稿關鍵字…">
+        <button class="btn btn-outline-primary" type="submit">搜尋逐字稿</button>
+      </div>
+    </form>
+
     <?php if ($this->cc_code === 'all'): ?>
 
     <div class="pt-4 pb-3">
@@ -74,6 +86,8 @@
 
     <?php else: ?>
     <?= $this->partial('info/detail', $this) ?>
+    <?php endif; ?>
+
     <?php endif; ?>
 
     <?php if (CCAPI::hasLog()): ?>

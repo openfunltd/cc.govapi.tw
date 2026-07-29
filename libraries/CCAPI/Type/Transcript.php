@@ -49,6 +49,11 @@ class CCAPI_Type_Transcript extends CCAPI_Type
                 'description' => '逐字稿內容來源（例: 議事錄、速記錄、大會會議紀錄），一筆可能包含多種來源',
                 'type' => 'string',
             ],
+            '年' => [
+                'es_field' => '年',
+                'description' => '場次日期的西元年（例: 2024），從場次資料衍生',
+                'type' => 'integer',
+            ],
         ];
     }
 
