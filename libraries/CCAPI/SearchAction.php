@@ -202,6 +202,10 @@ class CCAPI_SearchAction
                     '*' => (object)[
                         'pre_tags' => ['<em>'],
                         'post_tags' => ['</em>'],
+                        // 有些欄位內容超過 ES highlight 預設的 1,000,000 字分析上限
+                        // （例如逐字稿全文），不設這個就會整個查詢直接 500，
+                        // 而不是只是那超過上限的部分不 highlight
+                        'max_analyzed_offset' => 999999,
                     ],
                 ],
             ];
