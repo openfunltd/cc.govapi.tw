@@ -12,9 +12,12 @@
  *   會期：最後一筆會期結束日 >= (現任:今天 / 歷史:任期屆滿日) - 90天 → ok
  *   場次：該屆 sitting count > 0 → ok
  *   逐字稿：該屆 transcript count > 0 → ok
+ *   議案：該屆 bill count > 0 → ok
  *
- * 逐字稿沒有資料一律算「缺」（missing），不區分「還沒收錄」跟「這個管道本來就
- * 抓不到、逐字稿發布在別處」——維持跟其他三項同一套判斷邏輯，不特殊處理。
+ * 逐字稿／議案沒有資料一律算「缺」（missing），不區分「還沒收錄」跟「這個管道
+ * 本來就抓不到、資料發布在別處」——維持跟其他項目同一套判斷邏輯，不特殊處理。
+ * 議案目前只有少數議會有資料（持續擴充中的實驗性補充資料），且「屆」是從來源
+ * 檔名解析出來的推測值，不是正式關聯欄位，這裡直接沿用這個推測值做屆次分組。
  */
 
 include(__DIR__ . '/../init.inc.php');
@@ -199,6 +202,34 @@ foreach ($transcript_agg->aggregations->by_council->buckets as $cb) {
 }
 error_log("Loaded transcript counts for " . count($transcript_counts) . " councils");
 
+// ── 6.5. 議案計數：terms agg by 議會代碼 → 屆 ──────────────────────────────
+
+$bill_agg_query = [
+    'size' => 0,
+    'aggs' => [
+        'by_council' => [
+            'terms' => ['field' => '議會代碼', 'size' => 100],
+            'aggs' => [
+                'by_term' => [
+                    'terms' => ['field' => '屆', 'size' => 50],
+                ],
+            ],
+        ],
+    ],
+];
+$bill_agg = Elastic::dbQuery('/{prefix}bill/_search', 'POST',
+    json_encode($bill_agg_query));
+
+// [cc_code][屆] = count
+$bill_counts = [];
+foreach ($bill_agg->aggregations->by_council->buckets as $cb) {
+    $cc = $cb->key;
+    foreach ($cb->by_term->buckets as $tb) {
+        $bill_counts[$cc][(int)$tb->key] = (int)$tb->doc_count;
+    }
+}
+error_log("Loaded bill counts for " . count($bill_counts) . " councils");
+
 // ── 7. 計算完整度並寫入 ES ──────────────────────────────────────────────────
 
 function calc_status($count, $type, $term_info, $is_current, $gap_days = 90)
@@ -253,10 +284,12 @@ foreach ($councils as $cc => $council) {
     $session_total = 0;
     $sitting_total = 0;
     $transcript_total = 0;
+    $bill_total = 0;
     $councilor_terms_with_data = 0;
     $session_terms_with_data = 0;
     $sitting_terms_with_data = 0;
     $transcript_terms_with_data = 0;
+    $bill_terms_with_data = 0;
 
     foreach ($terms as $t) {
         $term_no = $t['屆次'];
@@ -267,15 +300,18 @@ foreach ($councils as $cc => $council) {
         $s_count = $s_info['count'];
         $st_count = $sitting_counts[$cc][$term_no] ?? 0;
         $tr_count = $transcript_counts[$cc][$term_no] ?? 0;
+        $b_count = $bill_counts[$cc][$term_no] ?? 0;
 
         $councilor_total  += $c_count;
         $session_total    += $s_count;
         $sitting_total     += $st_count;
         $transcript_total += $tr_count;
+        $bill_total       += $b_count;
         if ($c_count > 0) $councilor_terms_with_data++;
         if ($s_count > 0) $session_terms_with_data++;
         if ($st_count > 0) $sitting_terms_with_data++;
         if ($tr_count > 0) $transcript_terms_with_data++;
+        if ($b_count > 0) $bill_terms_with_data++;
 
         $session_term_info = array_merge($t, ['latest_end' => $s_info['latest_end']]);
 
@@ -292,6 +328,8 @@ foreach ($councils as $cc => $council) {
             'sitting_status'    => calc_status($st_count, 'sitting', $t, $is_current, $session_gap_days),
             'transcript_count'  => $tr_count,
             'transcript_status' => calc_status($tr_count, 'transcript', $t, $is_current, $session_gap_days),
+            'bill_count'        => $b_count,
+            'bill_status'       => calc_status($b_count, 'bill', $t, $is_current, $session_gap_days),
         ];
     }
 
@@ -310,6 +348,9 @@ foreach ($councils as $cc => $council) {
     $transcript_type_status = ($total_terms === 0 || $transcript_terms_with_data === 0)
         ? 'missing'
         : ($transcript_terms_with_data === $total_terms ? 'ok' : 'incomplete');
+    $bill_type_status = ($total_terms === 0 || $bill_terms_with_data === 0)
+        ? 'missing'
+        : ($bill_terms_with_data === $total_terms ? 'ok' : 'incomplete');
 
     $doc = [
         '代碼'       => $cc,
@@ -341,6 +382,12 @@ foreach ($councils as $cc => $council) {
                 'terms_with_data' => $transcript_terms_with_data,
                 'total_terms'     => $total_terms,
                 'status'          => $transcript_type_status,
+            ],
+            'bill' => [
+                'total'           => $bill_total,
+                'terms_with_data' => $bill_terms_with_data,
+                'total_terms'     => $total_terms,
+                'status'          => $bill_type_status,
             ],
         ],
         'terms'      => $term_docs,

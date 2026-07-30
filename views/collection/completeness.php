@@ -83,6 +83,7 @@ $zones = [
     'session'    => ['title' => '📅 會期區',  'color' => 'primary'],
     'sitting'    => ['title' => '🗓 場次區',  'color' => 'primary'],
     'transcript' => ['title' => '📄 逐字稿區', 'color' => 'primary'],
+    'bill'       => ['title' => '📋 議案區',  'color' => 'primary'],
 ];
 $bucket_labels = [
     'ok'         => ['icon' => '🟢', 'label' => '完整',   'text' => 'success'],
@@ -112,7 +113,7 @@ $bucket_labels = [
                         // 完整 → 共 N 屆；部分缺漏 → 有資料屆數/總屆數，
                         // 讓小議會（例如只有 8 屆）跟大議會（例如 14 屆）不會被誤認為同一回事
                         $extra_text = null;
-                        if (in_array($type_key, ['sitting', 'transcript'], true)) {
+                        if (in_array($type_key, ['sitting', 'transcript', 'bill'], true)) {
                             $total_terms = $c->types->{$type_key}->total_terms ?? null;
                             $with_data   = $c->types->{$type_key}->terms_with_data ?? null;
                             if ($bucket_key === 'ok' && !is_null($total_terms)) {
