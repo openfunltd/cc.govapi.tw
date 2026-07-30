@@ -1,6 +1,6 @@
 # cc.govapi.tw 實作計劃
 
-## 目前進度（2026-07-28）
+## 目前進度（2026-07-30）
 
 ### 已完成
 
@@ -82,6 +82,65 @@
 - 首頁（`IndexController::indexAction`）改為直接 302 轉址到 `/about`，不再維護獨立的首頁 view
 - 修正 about 頁曾連結到私有研究用 repo 的問題（`f3d0376`，已移除）
 
+#### Phase 15 — 場次（Sitting）型別 ✅（commit `8169cd0`）
+- `場次.csv` 來源（會期底下逐日排程，通常一天上午/下午各一筆）
+- `scripts/import-sitting.php`：Doc ID 為代碼本身，衍生欄位「議會代碼」「屆」（從代碼推導）
+- `libraries/CCAPI/Type/Sitting.php`：filter 支援議會代碼、屆、會期代碼、日期、時段、場次類別、委員會名稱
+- `scripts/generate-completeness.php` 延伸出場次維度的完整度計算
+
+#### Phase 16 — 議會資訊頁 `/info` 初版 ✅（commits `076bb36`, `00a7b2f`）
+- 新增 `libraries/CCAPI/Type/Overview.php` + `scripts/generate-council-overview.php`：預先計算好的快取型別（議會基本資料、目前屆、議長/副議長姓名、議員人數、目前或最近一次會期＋場次片段），避免 `/info` 全國卡片牆做 N+1 即時查詢
+  - 「目前或最近會期」優先從場次資料判斷（會期紀錄常常落後於實際公告的排程），找不到才退回查會期索引
+  - 會期紀錄還沒建檔時，從會期代碼解析出友善名稱顯示（`CCAPI_Type_Session::getFriendlyName()`，已核對此命名規則橫跨全部議會一致）
+- 新增 `controllers/InfoController.php`：`all` 子網域顯示全國議會卡片牆，各議會子網域顯示屆次切換 + 分頁 tab（議員名單／會期／時間軸），沒帶屆次時導向最新一屆
+- `/info/{屆}/sessions`：沒帶會期代碼顯示目前進行中或最近一次會期＋場次列表；帶會期代碼顯示該會期完整場次記錄
+- `/info/{屆}/timeline`：會期層級時間軸（不含場次顆粒度）
+
+#### Phase 17 — 逐字稿（Transcript）型別與全文搜尋 ✅（commits `63a7cc6`, `caa9557`, `0d4f3a5`, `5496772`, `4ac54df`, `08a9850`）
+- `libraries/CCAPI/Type/Transcript.php`：與場次（sitting）一對一，ES Document ID 沿用場次代碼；查詢欄位為「內容」，搭配 `q=` 全文搜尋 + ES highlight 回傳命中片段
+- `scripts/import-transcript.php`：讀取逐字稿索引 CSV，依（來源分類, 委員會）分組成獨立的「分段」陣列欄位（標籤/內容/字數），同一場次若有大會會議紀錄、各委員會審查會議事錄等不同來源可各自分開顯示；來源檔案為 `.txt`／`.html` 兩種格式；議會代碼/屆/會期代碼優先查詢既有 sitting index
+  - 目前資料涵蓋 13 個議會、約 7,200 個場次（全部場次約 2 成），其餘議會多為結構性缺口（逐字稿另外公布在別處、上游場次資料對不上、或圖片尚待 OCR），屬於實驗性質的資料補充
+- fix：`q=` 全文搜尋中文查詢加上片語比對（每個詞加雙引號、詞間 AND），避免單字被拆散誤判命中（`caa9557`，`CCAPI_SearchAction` 共用邏輯，所有型別受惠）
+- fix：ES highlight 命中超長欄位內容（最長一筆 327 萬字）會讓整個查詢 500，`CCAPI::apiQuery()` 又把非 JSON 錯誤靜默當作沒資料，畫面上看起來像「查無資料」但其實是查詢炸掉。修法是 highlight 設定加上 `max_analyzed_offset`（`0d4f3a5`，共用邏輯）
+- `/info/search`：全國跟單一議會子網域都適用的逐字稿搜尋頁，前端 JS 呼叫 `/transcripts` API，支援依議會/年份 crossfilter
+- `/info/{屆}/sessions`：場次列表逐列顯示逐字稿連結（只有真的有逐字稿才顯示），`/info/{屆}/transcript/{場次代碼}` 對應單一場次（不是整個會期，避免一次載入破千萬字），同一場次的「分段」各自渲染成一個 tab
+- `/info` 頁面底部加上「本頁使用 API」清單（沿用既有 `CCAPI::getLogs()` 機制）
+
+#### Phase 18 — 資料完整度總覽改版：議員/會期/場次/逐字稿四區分色 ✅（commits `8d00f64`, `d3a12ae`）
+- `scripts/generate-completeness.php` 新增逐字稿完整度維度
+- `views/collection/completeness.php` 改成四個區塊（議員/會期/場次/逐字稿），每區依 status 分成完整/部分缺漏/缺三欄；拿掉「屆」這個維度；現存/已廢止議會不再拆兩張表，改成單一列表 + JS 開關切換是否顯示已廢止議會
+- 完整桶顯示「共 N 屆」，部分缺漏桶顯示「有資料屆數/總屆數」，避免小議會與大議會的「完整」被誤認為同一回事
+
+#### Phase 19 — `/skill.md`、`/knowledge.md`：給 AI Agent 讀的文件 ✅（commit `9883ce5`）
+- `/skill.md`：從 `CCAPI_Type/*.php` 自動掃描產生 Markdown 版 API 使用說明（跟 `swagger.yaml` 同一份 type 定義，不會脫節）
+- `/knowledge.md`：固定文字的背景知識，重點是避免 AI Agent 用自己既有知識庫裡「議會」「議員」等詞的一般定義（容易跟國會、其他國家地方議會搞混）去理解這個 API
+- `skill.md` 開頭連結指向 `knowledge.md`，讓 Agent 先讀背景知識再看 API 怎麼呼叫
+
+#### Phase 20 — 議員個人頁 `/info/councilor/{人物代碼}` ✅（commits `7b04aff`, `b2a0ff6`）
+- `CCAPI_Type_Councilor` 新增「人物代碼」filter 欄位，可查出同一人跨屆的所有記錄
+- 個人頁：照片/姓名/最新一屆職稱黨籍選區摘要 + 簡歷/學歷/聯絡資訊（取最新一屆）+ 歷屆完整紀錄表格
+- 「發言記錄」tab（關鍵字比對版本，非精確逐句）：依「姓＋職稱＋名」組出逐字稿說話者標記猜測字串（例：侯議員漢廷），已知複姓與原住民族名/羅馬拼音兩種例外會 fallback 成直接比對全名；依會期分組、依日期新到舊排序，每個場次附場次名稱；明確標示這是過渡性的粗略版本，等逐字稿清整成逐句之後才會有更準確的做法
+
+#### Phase 21 — Bug 修正與 `/info` 顯示改善 ✅（commits `a384725`, `127639f`, `09dfaae`, `8acba89`）
+- fix：viewer 列表頁與 swagger 全國查詢網址寫死 `all.cc.govapi.tw`，不吃 `CCAPI_DOMAIN_POSTFIX`（開發/自訂網域環境完全抓不到資料）
+- fix：`import-session.php` 日期欄位加上 trim，避免來源偶爾多出的空白造成 ES date 型別解析失敗、匯入靜默失敗
+- `/info` 全國卡片牆：會期名稱開頭重複的「第X屆」拿掉；「進行中」跟「已結束」合併成統一的「最新會期：{名稱}（開始日期 ~ 結束日期或進行中）」格式
+- fix：`CCAPI_Council`／`CouncilHelper` 議會清單都漏了基隆市（`kee`），導致 `kee.cc.govapi.tw` 在應用層直接 404
+
+#### Phase 22 — `/info` 全國議會清單依地理分區分組 ✅（commit `ca5b7f0`）
+- 新增 `CouncilHelper::getRegions()`：跟隨 `budget.openfun.app` 首頁的分區方式（北部/中部/南部/東部/外島），方便使用者依地區尋找議會
+
+#### Phase 23 — 議員資料新增選區、當選狀態欄位 ✅（commits `d7714f7`, `0bff005`, `7615a88`）
+- 來源新增「選舉區號」「選區別」（原名「選區名稱」，後改名）「當選狀態」（當選／遞補／補選當選）三個欄位，`選區別` 含原住民保障名額
+- API 開放對應的 filter 欄位；`/info` 議員列表與個人頁改用選區別取代單純的區域名稱，非直接當選時顯示遞補／補選當選 badge
+- `/info/{屆}/councilors` 議員名單依「選舉區號」由小到大分組排序（原住民保障名額的選舉區號固定編在一般選區之後，數字排序自然排最後）
+- fix：`import-councilor.php` 出生日期驗證改成嚴格檢查月份 01-12、日期 01-31——較舊回溯資料常見「年份已知、月日不明」用 00 佔位（例：`1939-00-00`），ES date 型別不接受
+- 來源同時新增一個跟既有「身分別」內容完全重複的「身份別」（打錯字造成的重複欄位），ccapi 端先忽略不匯入
+
+#### Phase 24 — `/info/{屆}/committees` 新增委員會 tab ✅（commit `77b9c8b`）
+- 委員會不綁屆，是議會層級的常設編制；依「類別」（常設／特種）分組列出，並標示已廢止的委員會
+- 目前沒有「委員會成員」資料（查不到哪位議員屬於哪個委員會），這次先做委員會清單本身，成員關聯之後有資料再補
+
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
 - `scripts/import-council.php` CSV 第一欄 header 因 UTF-8 BOM（`\xEF\xBB\xBF`）導致 `Undefined array key "代碼"`，已修正
@@ -147,48 +206,59 @@ cc.govapi.tw/
 ├── controllers/
 │   ├── ApiController.php              # 帶入議會代碼的 API 控制器（collections / item）
 │   ├── IndexController.php            # 首頁（302 → /about）/ 未知 subdomain 404
-│   ├── AboutController.php            # /about 說明頁
+│   ├── AboutController.php            # /about 說明頁、/knowledge.md
+│   ├── InfoController.php             # /info 議會資訊頁（全國卡片牆／單一議會屆次分頁 tab／議員個人頁／逐字稿搜尋）
 │   ├── ViewerController.php           # /viewer 資料瀏覽器首頁（dashboard）
 │   ├── CollectionController.php       # /viewer/collection/* 列表／單筆／完整度頁
-│   ├── SwaggerController.php          # /swagger、/swagger.yaml
+│   ├── SwaggerController.php          # /swagger、/swagger.yaml、/skill.md
 │   └── ErrorController.php
 ├── libraries/
 │   ├── Elastic.php                    # 從 ly.govapi.tw-v2 複製（無修改）
 │   ├── OpenFunAPIHelper.php
 │   ├── MiniEngineHelper.php
-│   ├── CCAPI.php                      # CCAPI::apiQuery()，viewer 呼叫自己 API 用
-│   ├── CouncilHelper.php              # 議會代碼/名稱對照、目前議會、切換議會 URL（viewer 用）
+│   ├── CCAPI.php                      # CCAPI::apiQuery()，viewer/info 呼叫自己 API 用，含 getLogs()
+│   ├── CouncilHelper.php              # 議會代碼/名稱對照、地理分區分組（getRegions()）、目前議會、切換議會 URL（viewer 用）
 │   ├── TypeHelper.php                 # 各型別在 viewer 顯示用的欄位/agg/tab 設定
 │   └── CCAPI/
 │       ├── Council.php                # 議會代碼清單 + subdomain 解析
 │       ├── Helper.php                 # CCAPI_Helper（型別名稱 ↔ 檔名/URL 對應，含不規則複數處理）
 │       ├── Type.php                   # CCAPI_Type 基底類別（filterFields、buildData、agg 等共用邏輯）
-│       ├── SearchAction.php           # CCAPI_SearchAction（getCollections/getItem，含 cc_code 注入與驗證）
+│       ├── SearchAction.php           # CCAPI_SearchAction（getCollections/getItem，含 cc_code 注入與驗證、中文片語搜尋、highlight 設定）
 │       └── Type/
 │           ├── Council.php            # 議會
 │           ├── Term.php               # 屆
 │           ├── Councilor.php          # 議員
-│           ├── Session.php            # 會期
+│           ├── Session.php            # 會期（含 getFriendlyName()）
+│           ├── Sitting.php            # 場次
+│           ├── Transcript.php         # 逐字稿
 │           ├── Committee.php          # 委員會
+│           ├── Overview.php           # 議會現況快取（唯讀彙整型別，供 /info 用）
 │           └── Completeness.php       # 資料完整度（唯讀彙整型別，非來源資料）
 ├── scripts/
 │   ├── import-council.php             # 議會.csv → ccv1_council
 │   ├── import-term.php                # 屆.csv → ccv1_term（並更新 council.latest_term）
 │   ├── import-councilor.php           # 議員.jsonl → ccv1_councilor
 │   ├── import-session.php             # 會期.csv → ccv1_session
+│   ├── import-sitting.php             # 場次.csv → ccv1_sitting
+│   ├── import-transcript.php          # 逐字稿索引 CSV + 逐字稿檔案 → ccv1_transcript
 │   ├── import-committee.php           # data.csv → ccv1_committee
-│   └── generate-completeness.php      # 彙整計算 → ccv1_completeness
+│   ├── generate-completeness.php      # 彙整計算 → ccv1_completeness（議員/會期/場次/逐字稿四維度）
+│   └── generate-council-overview.php  # 彙整計算 → ccv1_overview（供 /info 全國卡片牆用，需在資料重新匯入後手動重跑）
 ├── views/
 │   ├── common/, layout/app.php        # 共用版型
-│   ├── nav/top.php                    # 共用 navbar（首頁/viewer/swagger/about 共用，含議會切換下拉選單）
+│   ├── nav/top.php                    # 共用 navbar（首頁/viewer/swagger/about/info 共用，含議會切換下拉選單）
 │   ├── about/index.php                # /about 說明頁
 │   ├── swagger/ui.php                 # Swagger UI
 │   ├── viewer/index.php               # /viewer dashboard
-│   └── collection/                    # 列表/單筆/完整度頁（table, item, rawdata, *_data.php 各型別詳情, completeness*.php）
+│   ├── collection/                    # 列表/單筆/完整度頁（table, item, rawdata, *_data.php 各型別詳情, completeness*.php）
+│   └── info/                          # /info 議會資訊頁：index（骨架）、detail（tab 容器）、header、
+│                                       # councilors、sessions、timeline、committees、transcript、search、
+│                                       # councilor（個人頁 tab 容器）、councilor_profile、councilor_speeches
 ├── public/swagger-ui/                 # Swagger UI 靜態資源
 ├── static/                            # sb-admin-2 CSS/JS（viewer 舊版殘留，逐步淘汰中）
 ├── 議會.csv, 屆.csv                    # 進版控管的來源資料
-└── （git-ignored：議員.jsonl, 會期.csv, data.csv, config.inc.php, datacc.openfun.app/）
+└── （git-ignored：議員.jsonl, 會期.csv, data.csv, 場次.csv, 逐字稿索引.csv, 逐字稿/,
+    縣市界.geojson, config.inc.php, datacc.openfun.app/）
 ```
 
 ---
@@ -201,10 +271,15 @@ cc.govapi.tw/
 | `ccv1_term` | `Type/Term.php` | `屆.csv` | `{議會代碼}-{屆次}`（例 `tpe-13`） |
 | `ccv1_councilor` | `Type/Councilor.php` | `議員.jsonl` | `{議會代碼}-{屆次}-{姓名}` |
 | `ccv1_session` | `Type/Session.php` | `會期.csv` | 代碼本身（例 `nan-18-r1`） |
+| `ccv1_sitting` | `Type/Sitting.php` | `場次.csv` | 代碼本身 |
+| `ccv1_transcript` | `Type/Transcript.php` | 逐字稿索引 CSV + 逐字稿檔案 | 與對應場次同一個代碼（1:1） |
 | `ccv1_committee` | `Type/Committee.php` | `data.csv` | 代碼本身（例 `tpe-c1`） |
+| `ccv1_overview` | `Type/Overview.php` | 由 `generate-council-overview.php` 彙整其他 index 算出 | 議會代碼（例 `tpe`） |
 | `ccv1_completeness` | `Type/Completeness.php` | 由 `generate-completeness.php` 彙整其他 index 算出 | 議會代碼（例 `tpe`） |
 
 （index 前綴 `ccv1_` 由 `ELASTIC_PREFIX` 環境變數決定）
+
+**⚠️ `ccv1_overview`、`ccv1_completeness` 是彙整快取，不會自動跟著來源資料更新**：任何一種來源資料（議員/會期/場次/委員會/逐字稿）重新匯入後，都要手動重跑 `generate-completeness.php` 跟 `generate-council-overview.php`，否則 `/info` 與 `/viewer/collection/completeness` 會顯示過期資料。
 
 ---
 
@@ -236,8 +311,15 @@ GET all.cc.govapi.tw/completenesses
 https://tpe.cc.govapi.tw/viewer
 https://all.cc.govapi.tw/viewer/collection/completeness
 
+# 議會資訊頁（給不寫程式的一般讀者看）
+https://all.cc.govapi.tw/info
+https://tpe.cc.govapi.tw/info/14/councilors
+https://tpe.cc.govapi.tw/info/search?q=預算
+
 # API 文件
 https://all.cc.govapi.tw/swagger
+https://all.cc.govapi.tw/skill.md
+https://all.cc.govapi.tw/knowledge.md
 ```
 
 ---
@@ -252,7 +334,8 @@ https://all.cc.govapi.tw/swagger
 
 ### 較小的待辦（依 `/about` 頁面與程式碼註解線索整理，尚未排入 Phase）
 
-- **人物代碼跨屆連結**：`議員` 目前每屆各存一筆記錄，`人物代碼` 欄位已存在於來源資料但尚未用於 API 層面串連同一人的跨屆資料
+- **委員會成員資料**：目前只有委員會本身的清單（`/info/{屆}/committees`），完全沒有「哪位議員屬於哪個委員會」的關聯資料，等這份資料收集到之後可以把委員會 tab 升級成依委員會分組議員
 - **開會日詳細議程樹／會議紀錄 PDF 連結**：`/about` 頁面已預告、場次（sitting）與逐字稿（transcript）已完成，議程樹狀結構跟原始會議紀錄檔案連結尚未實作
-- **`static/` 舊版 sb-admin-2 資源淘汰**：viewer 已改用 Bootstrap 5，舊版 CSS/JS 是否仍有頁面依賴需盤點後移除
+- **地圖顯示評估**：已下載全國 22 縣市界 GeoJSON（`縣市界.geojson`，git-ignored），但 `/info` 是否要做地圖視覺化尚未決定、也還沒有任何地圖 UI
+- **`static/` 舊版 sb-admin-2 資源淘汰**：viewer 已改用 Bootstrap 5，`views/layout/app.php` 仍在引用舊版 `static/`，需盤點還有沒有頁面依賴後移除
 - **`ly.govapi.tw-v2/` 參考專案移除**：待確認不再需要參考後移除該目錄
