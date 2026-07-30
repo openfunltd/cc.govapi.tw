@@ -24,6 +24,12 @@
   include(__DIR__ . '/../nav/top.php');
 ?>
 
+<?php
+// 卡片上方已經顯示「第 X 屆」，會期名稱開頭的「第X屆」是重複資訊，這裡顯示時拿掉
+function info_strip_term_prefix($name) {
+    return preg_replace('/^第\d+屆/u', '', $name ?? '');
+}
+?>
 <main>
   <div class="container" style="max-width: 1100px;">
 
@@ -70,11 +76,13 @@
               </ul>
               <div class="small">
                 <span class="status-dot <?= $status ?>"></span>
-                <?php if ($status === 'ongoing'): ?>
-                  進行中：<?= htmlspecialchars($session->{'會期名稱'} ?? '') ?>
-                <?php elseif ($status === 'ended'): ?>
-                  最近一次會期已結束：<?= htmlspecialchars($session->{'會期名稱'} ?? '') ?>
-                  <span class="text-body-secondary">（<?= htmlspecialchars($session->{'結束日期'} ?? '') ?>）</span>
+                <?php if ($status === 'ongoing' || $status === 'ended'): ?>
+                  最新會期：<?= htmlspecialchars(info_strip_term_prefix($session->{'會期名稱'} ?? '')) ?>
+                  <?php if ($session->{'開始日期'} ?? null): ?>
+                  <span class="text-body-secondary">
+                    （<?= htmlspecialchars($session->{'開始日期'}) ?> ~ <?= $status === 'ongoing' ? '進行中' : htmlspecialchars($session->{'結束日期'} ?? '') ?>）
+                  </span>
+                  <?php endif; ?>
                 <?php else: ?>
                   <span class="text-body-secondary">目前無會期資料</span>
                 <?php endif; ?>
