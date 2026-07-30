@@ -1,3 +1,8 @@
 RewriteEngine On
+
+# 封鎖 GPTBot（爬得太兇造成伺服器負載過高）
+RewriteCond %{HTTP_USER_AGENT} GPTBot [NC]
+RewriteRule ^ - [F,L]
+
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^(.*)$ index.php [QSA,L]
