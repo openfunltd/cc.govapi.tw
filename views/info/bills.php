@@ -15,10 +15,22 @@ $term_no = $this->term_no;
   <button class="btn btn-primary" id="bill-search-btn" type="button">搜尋</button>
 </div>
 
-<div class="card shadow-sm mb-3">
-  <div class="card-header py-2"><strong class="small">依類別篩選</strong></div>
-  <div class="card-body" id="bill-facet-category" style="max-height:260px; overflow-y:auto;">
-    <span class="text-muted small">載入中…</span>
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header py-2"><strong class="small">依類別篩選</strong></div>
+      <div class="card-body" id="bill-facet-category" style="max-height:260px; overflow-y:auto;">
+        <span class="text-muted small">載入中…</span>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-header py-2"><strong class="small">依提案人篩選</strong></div>
+      <div class="card-body" id="bill-facet-proposer" style="max-height:260px; overflow-y:auto;">
+        <span class="text-muted small">載入中…</span>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -33,7 +45,7 @@ $term_no = $this->term_no;
   var termNo = <?= json_encode($term_no) ?>;
   var pageSize = 10;
 
-  var state = { q: '', category: null, page: 1 };
+  var state = { q: '', category: null, proposer: null, page: 1 };
 
   function fp(name) { return encodeURIComponent(name); }
 
@@ -46,6 +58,7 @@ $term_no = $this->term_no;
     var parts = baseParts();
     if (s.q) parts.push('q=' + encodeURIComponent(s.q));
     if (s.category) parts.push(fp('類別') + '=' + encodeURIComponent(s.category));
+    if (s.proposer) parts.push(fp('提案人') + '=' + encodeURIComponent(s.proposer));
     return parts;
   }
 
@@ -67,28 +80,28 @@ $term_no = $this->term_no;
     }).join('');
   }
 
-  function renderFacet(buckets) {
-    var el = document.getElementById('bill-facet-category');
+  function renderFacet(containerId, stateKey, esField, buckets) {
+    var el = document.getElementById(containerId);
     el.innerHTML = '';
     if (!buckets || !buckets.length) {
       el.innerHTML = '<span class="text-muted small">無資料</span>';
       return;
     }
     var allBtn = document.createElement('span');
-    allBtn.className = 'badge me-1 mb-1 ' + (state.category == null ? 'bg-primary' : 'bg-light text-dark border');
+    allBtn.className = 'badge me-1 mb-1 ' + (state[stateKey] == null ? 'bg-primary' : 'bg-light text-dark border');
     allBtn.style.cursor = 'pointer';
     allBtn.textContent = '全部';
-    allBtn.addEventListener('click', function () { state.category = null; state.page = 1; run(); });
+    allBtn.addEventListener('click', function () { state[stateKey] = null; state.page = 1; run(); });
     el.appendChild(allBtn);
 
     buckets.forEach(function (b) {
-      var value = b['類別'];
-      var active = (state.category != null && state.category === value);
+      var value = b[esField];
+      var active = (state[stateKey] != null && state[stateKey] === value);
       var badge = document.createElement('span');
       badge.className = 'badge me-1 mb-1 ' + (active ? 'bg-primary' : 'bg-light text-dark border');
       badge.style.cursor = 'pointer';
       badge.textContent = value + '（' + b.count + '）';
-      badge.addEventListener('click', function () { state.category = value; state.page = 1; run(); });
+      badge.addEventListener('click', function () { state[stateKey] = value; state.page = 1; run(); });
       el.appendChild(badge);
     });
   }
@@ -169,11 +182,17 @@ $term_no = $this->term_no;
     var resultParts = buildQuery().concat(['limit=' + pageSize, 'page=' + state.page]);
     fetchJson(apiBase + '?' + resultParts.join('&')).then(renderResults);
 
-    // 類別 facet：排除自己這個篩選條件，才能做 crossfilter
+    // 類別／提案人 facet：排除自己這個篩選條件，才能做 crossfilter
     var categoryParts = buildQuery({ category: null }).concat(['limit=0', 'agg=' + fp('類別')]);
     fetchJson(apiBase + '?' + categoryParts.join('&')).then(function (d) {
       var buckets = (d.aggs && d.aggs[0] && d.aggs[0].buckets) || [];
-      renderFacet(buckets);
+      renderFacet('bill-facet-category', 'category', '類別', buckets);
+    });
+
+    var proposerParts = buildQuery({ proposer: null }).concat(['limit=0', 'agg=' + fp('提案人')]);
+    fetchJson(apiBase + '?' + proposerParts.join('&')).then(function (d) {
+      var buckets = (d.aggs && d.aggs[0] && d.aggs[0].buckets) || [];
+      renderFacet('bill-facet-proposer', 'proposer', '提案人', buckets);
     });
   }
 
