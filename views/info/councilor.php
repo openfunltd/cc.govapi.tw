@@ -19,6 +19,9 @@ $tab = $this->profile_tab ?? 'profile';
     <li class="nav-item">
       <a class="nav-link <?= $tab === 'speeches' ? 'active' : '' ?>" href="/info/councilor/<?= urlencode($person_code) ?>/speeches">發言記錄</a>
     </li>
+    <li class="nav-item">
+      <a class="nav-link <?= $tab === 'bills' ? 'active' : '' ?>" href="/info/councilor/<?= urlencode($person_code) ?>/bills">提案記錄</a>
+    </li>
   </ul>
 
   <?= $this->partial('info/councilor_' . $tab, $this) ?>

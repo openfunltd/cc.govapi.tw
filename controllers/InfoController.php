@@ -24,10 +24,11 @@ class InfoController extends MiniEngine_Controller
         }
 
         // 議員個人頁：用「人物代碼」串連同一人跨屆的所有記錄，不屬於屆次路由
-        // /info/councilor/{人物代碼}（基本資料，預設）或 /info/councilor/{人物代碼}/speeches（發言記錄）
+        // /info/councilor/{人物代碼}（基本資料，預設）或 /info/councilor/{人物代碼}/speeches
+        // （發言記錄）或 /info/councilor/{人物代碼}/bills（提案記錄）
         if ($term_no === 'councilor') {
             $person_code = $tab;
-            $profile_tab = ($sub_id === 'speeches') ? 'speeches' : 'profile';
+            $profile_tab = in_array($sub_id, ['speeches', 'bills'], true) ? $sub_id : 'profile';
             $this->view->is_councilor_profile = true;
             $this->view->profile_tab = $profile_tab;
 
@@ -36,6 +37,8 @@ class InfoController extends MiniEngine_Controller
 
             if ($profile_tab === 'speeches') {
                 $this->loadCouncilorSpeeches($records, $_GET['term'] ?? null);
+            } elseif ($profile_tab === 'bills') {
+                $this->loadCouncilorBills($records);
             }
             return;
         }
@@ -462,5 +465,42 @@ class InfoController extends MiniEngine_Controller
             $label .= ($label ? '・' : '') . $sitting->{'委員會名稱'};
         }
         return $label ?: null;
+    }
+
+    /**
+     * 提案記錄 tab：議案的「提案人」欄位直接就是議員姓名（不像逐字稿說話者標記
+     * 需要猜測姓+職稱+名的格式），用「議會代碼＋姓名」直接查詢即可，比發言記錄
+     * 準確很多。依「屆」（議案來源本身沒有會期/場次可以分組，屆是從來源檔名
+     * 解析出來的推測值）由新到舊分組。
+     */
+    protected function loadCouncilorBills($records)
+    {
+        $this->view->bill_total = 0;
+        $this->view->bill_groups = [];
+        if (!$records) {
+            return;
+        }
+
+        $cc_code = $records[0]->{'議會代碼'};
+        $name = $records[0]->{'姓名'};
+
+        $r = CCAPI::apiQuery(
+            '/bills?limit=200&' . urlencode('議會代碼') . '=' . urlencode($cc_code)
+                . '&' . urlencode('提案人') . '=' . urlencode($name),
+            '該議員提案記錄'
+        );
+        $this->view->bill_total = $r->total ?? 0;
+
+        $groups = [];
+        foreach (($r->bills ?? []) as $b) {
+            $term_no = $b->{'屆'} ?? null;
+            $key = $term_no ?? 0;
+            if (!isset($groups[$key])) {
+                $groups[$key] = (object)['屆' => $term_no, 'items' => []];
+            }
+            $groups[$key]->items[] = $b;
+        }
+        krsort($groups, SORT_NUMERIC);
+        $this->view->bill_groups = array_values($groups);
     }
 }
