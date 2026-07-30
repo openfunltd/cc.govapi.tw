@@ -28,6 +28,9 @@
   <?php if ($b->{'連署人'} ?? null): ?>
   ・連署人：<?= htmlspecialchars($b->{'連署人'}) ?>
   <?php endif; ?>
+  <?php if ($b->{'備註'} ?? null): ?>
+  ・備註：<?= htmlspecialchars($b->{'備註'}) ?>
+  <?php endif; ?>
 </p>
 
 <?php

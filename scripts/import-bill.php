@@ -7,8 +7,12 @@
  *   php scripts/import-bill.php --reset    # 先刪除 index 再重建並匯入
  *
  * 來源：議案.jsonl（每行一筆 JSON，欄位：代碼/縣市/類別/案號/提案單位/提案人/
- * 連署人/案由/說明/辦法/審查意見/議決/來源檔案/來源頁碼）
+ * 連署人/案由/說明/辦法/審查意見/議決/來源檔案/來源頁碼/備註）
  * 所有來源欄位直接沿用原始名稱匯入 ES
+ * 「備註」欄位各縣市意義不同（不是同一個概念）：屏東縣是議案類型（三讀／一般／
+ * 臨時動議案）、連江縣是提案主體（縣府／議員／人民陳情案）、臺北市是發言議員
+ * 名單、彰化縣是所屬會期、新北市是狀態註記，沿用既有「同名欄位不同縣市不同
+ * 語意」的慣例，不強行統一，照原樣存放
  * 衍生欄位：
  *   議會代碼：從「代碼」欄位第一段解析（例：yun-44d4ef6b-民甲200 → yun）
  *   屆：從「來源檔案」檔名解析「第N屆」（來源目前沒有屆/會期/場次的正式關聯
@@ -38,6 +42,7 @@ $index_mapping = [
         '議決'     => ['type' => 'text'],
         '來源檔案' => ['type' => 'keyword'],
         '來源頁碼' => ['type' => 'keyword'],
+        '備註'     => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         // 衍生欄位
         '議會代碼' => ['type' => 'keyword'],
         '屆'       => ['type' => 'integer'],
@@ -46,7 +51,7 @@ $index_mapping = [
 
 $known_source_keys = [
     '代碼', '縣市', '類別', '案號', '提案單位', '提案人', '連署人',
-    '案由', '說明', '辦法', '審查意見', '議決', '來源檔案', '來源頁碼',
+    '案由', '說明', '辦法', '審查意見', '議決', '來源檔案', '來源頁碼', '備註',
 ];
 
 if ($reset) {
@@ -75,6 +80,41 @@ $fh = fopen($jsonl_path, 'r');
 $bom = fread($fh, 3);
 if ($bom !== "\xEF\xBB\xBF") {
     rewind($fh);
+}
+
+/**
+ * 把「一」～「九十九」這種中文數字轉成整數，解析不出來回傳 null。
+ * 屆次來源檔名有些縣市（連江縣、屏東縣）用中文數字寫（例：第十九屆、第六屆），
+ * 不是阿拉伯數字，只比對 \d 會抓不到。
+ */
+function chinese_num_to_int($s)
+{
+    $digits = ['〇' => 0, '零' => 0, '一' => 1, '二' => 2, '兩' => 2, '三' => 3, '四' => 4,
+               '五' => 5, '六' => 6, '七' => 7, '八' => 8, '九' => 9];
+    if (isset($digits[$s])) return $digits[$s];
+    if ($s === '十') return 10;
+    if (preg_match('/^十([一二兩三四五六七八九])$/u', $s, $m)) return 10 + $digits[$m[1]];
+    if (preg_match('/^([一二兩三四五六七八九])十$/u', $s, $m)) return $digits[$m[1]] * 10;
+    if (preg_match('/^([一二兩三四五六七八九])十([一二兩三四五六七八九])$/u', $s, $m)) {
+        return $digits[$m[1]] * 10 + $digits[$m[2]];
+    }
+    return null;
+}
+
+/**
+ * 從檔名解析「第N屆」，先試阿拉伯數字（例：20屆第13.14次臨時會議事錄），
+ * 抓不到再試中文數字（例：屏東縣議會第十九屆第二次定期會、連江縣議會第六屆
+ * 第八次定期大會），都抓不到就回傳 null（不寫入屆欄位）。
+ */
+function extract_term_from_filename($filename)
+{
+    if (preg_match('/第?(\d+)屆/u', $filename, $m)) {
+        return (int)$m[1];
+    }
+    if (preg_match('/第([〇零一二兩三四五六七八九十]+)屆/u', $filename, $m)) {
+        return chinese_num_to_int($m[1]);
+    }
+    return null;
 }
 
 $count = 0;
@@ -119,11 +159,14 @@ while (($line = fgets($fh)) !== false) {
     // 從「代碼」第一段解析議會代碼（例：yun-44d4ef6b-民甲200 → yun）
     $cc_code = explode('-', $code)[0];
 
+    // 來源「代碼」欄位偶爾用跟 ccapi 既有議會代碼不一致的縣市代碼（實測屏東縣
+    // 全部 2,799 筆一致用 pin，不是零星錯誤，這裡是唯一已知案例），修正成
+    // ccapi 慣用的代碼，才能正確連到對應的 {代碼}.cc.govapi.tw
+    $cc_code_fixes = ['pin' => 'pif'];
+    $cc_code = $cc_code_fixes[$cc_code] ?? $cc_code;
+
     // 從「來源檔案」檔名解析屆次，解析不到就不寫入這個欄位
-    $term = null;
-    if (preg_match('/第?(\d+)屆/u', $record['來源檔案'] ?? '', $m)) {
-        $term = (int)$m[1];
-    }
+    $term = extract_term_from_filename($record['來源檔案'] ?? '');
 
     $doc = ['議會代碼' => $cc_code];
     if ($term !== null) {
