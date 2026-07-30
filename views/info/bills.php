@@ -148,6 +148,7 @@ $term_no = $this->term_no;
       var html = '<div class="small mt-1">' + caseHtml + '</div>';
       html += fieldBlock('審查意見', escapeHtml(b['審查意見'] || ''));
       html += fieldBlock('議決', escapeHtml(b['議決'] || ''));
+      html += '<div class="mt-1"><a class="small" href="/info/' + termNo + '/bill/' + encodeURIComponent(b['代碼']) + '">查看完整議案 →</a></div>';
       body.insertAdjacentHTML('beforeend', html);
 
       card.appendChild(body);

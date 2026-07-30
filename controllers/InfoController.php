@@ -60,8 +60,8 @@ class InfoController extends MiniEngine_Controller
         }
 
         $term_no = (int)$term_no;
-        // 'transcript' 是從 sessions tab 連結進去的子頁面，不放進主要 tab 導覽列
-        $valid_tabs = array_merge(array_keys($this->tabs), ['transcript']);
+        // 'transcript'／'bill' 是從各自列表頁連結進去的單筆詳情子頁面，不放進主要 tab 導覽列
+        $valid_tabs = array_merge(array_keys($this->tabs), ['transcript', 'bill']);
         $tab = ($tab && in_array($tab, $valid_tabs)) ? $tab : 'councilors';
 
         $this->view->term_no = $term_no;
@@ -85,6 +85,9 @@ class InfoController extends MiniEngine_Controller
                 break;
             case 'transcript':
                 $this->loadTranscriptTab($cc_code, $term_no, $sub_id);
+                break;
+            case 'bill':
+                $this->view->bill_detail = $this->loadBillDetail($sub_id);
                 break;
         }
     }
@@ -304,6 +307,19 @@ class InfoController extends MiniEngine_Controller
 
         $transcript = CCAPI::apiQuery('/transcript/' . rawurlencode($sitting_code), '場次逐字稿');
         $this->view->transcript = ($transcript->error ?? true) ? null : $transcript->data;
+    }
+
+    /**
+     * 議案單筆詳情頁：對應單一議案代碼，顯示完整欄位（案由/說明/辦法/審查意見/議決全文）
+     */
+    protected function loadBillDetail($bill_code)
+    {
+        if (!$bill_code) {
+            return null;
+        }
+        $bill_code = urldecode($bill_code);
+        $r = CCAPI::apiQuery('/bill/' . rawurlencode($bill_code), '議案詳情');
+        return ($r->error ?? true) ? null : $r->data;
     }
 
     /**
