@@ -28,9 +28,28 @@ class CouncilHelper
         'lie'  => '連江縣議會',
     ];
 
+    /**
+     * 各議會依地理分區分組，順序、分組方式跟 budget.openfun.app 首頁一致
+     */
+    protected static $regions = [
+        '北部' => ['tpe', 'nwt', 'kee', 'tao', 'hsz', 'hsq', 'ila'],
+        '中部' => ['mia', 'txg', 'cha', 'nan', 'yun'],
+        '南部' => ['cyq', 'cyi', 'tnn', 'khh', 'pif', 'pen'],
+        '東部' => ['hua', 'ttt'],
+        '外島' => ['kin', 'lie'],
+    ];
+
     public static function getAll()
     {
         return self::$councils;
+    }
+
+    /**
+     * 取得依地理分區分組的議會代碼，格式：['北部' => ['tpe', 'nwt', ...], ...]
+     */
+    public static function getRegions()
+    {
+        return self::$regions;
     }
 
     /**

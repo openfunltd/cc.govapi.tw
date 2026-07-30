@@ -53,9 +53,20 @@ function info_strip_term_prefix($name) {
       <h1 class="h3 fw-semibold mb-1">🏛 全國議會資訊</h1>
       <p class="text-body-secondary mb-4">各議會目前的屆期、議長、議員人數與最近會期概況，點進議會名稱看更多資料。</p>
 
-      <div class="row g-3">
-        <?php foreach (($this->overviews ?? []) as $o): ?>
+      <?php
+        $overviews_by_code = [];
+        foreach (($this->overviews ?? []) as $o) {
+            $overviews_by_code[$o->{'代碼'}] = $o;
+        }
+      ?>
+
+      <?php foreach (CouncilHelper::getRegions() as $region_name => $region_codes): ?>
+      <h2 class="h5 fw-semibold mb-3"><?= htmlspecialchars($region_name) ?></h2>
+      <div class="row g-3 mb-4">
+        <?php foreach ($region_codes as $code): ?>
         <?php
+          $o = $overviews_by_code[$code] ?? null;
+          if (!$o) continue;
           $postfix = getenv('CCAPI_DOMAIN_POSTFIX') ?: '.cc.govapi.tw';
           $council_url = 'https://' . $o->{'代碼'} . $postfix . '/info';
           $session = $o->{'會期'} ?? null;
@@ -92,6 +103,7 @@ function info_strip_term_prefix($name) {
         </div>
         <?php endforeach; ?>
       </div>
+      <?php endforeach; ?>
     </div>
 
     <?php else: ?>
