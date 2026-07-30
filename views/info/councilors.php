@@ -17,10 +17,11 @@
           <?php if (($c->{'職稱'} ?? '議員') !== '議員'): ?>
           <span class="badge bg-warning text-dark"><?= htmlspecialchars($c->{'職稱'}) ?></span>
           <?php endif; ?>
+          <?= info_election_status_badge($c) ?>
         </div>
         <div class="text-body-secondary" style="font-size: 0.75rem;">
           <?= htmlspecialchars($c->{'黨籍'} ?? '—') ?><br>
-          <?= htmlspecialchars($c->{'區域'} ?? '—') ?>
+          <?= htmlspecialchars(info_district_label($c) ?: '—') ?>
         </div>
       </div>
     </div>

@@ -78,8 +78,24 @@ class CCAPI_Type_Councilor extends CCAPI_Type
             ],
             '區域' => [
                 'es_field' => '區域.keyword',
-                'description' => '選區／區域名稱',
+                'description' => '所屬縣市（例: 基隆市）',
                 'type' => 'string',
+            ],
+            '選區名稱' => [
+                'es_field' => '選區名稱.keyword',
+                'description' => '選舉區名稱（例: 基隆市第3選舉區）',
+                'type' => 'string',
+            ],
+            '選舉區號' => [
+                'es_field' => '選舉區號',
+                'description' => '選舉區號',
+                'type' => 'string',
+            ],
+            '當選狀態' => [
+                'es_field' => '當選狀態',
+                'description' => '當選狀態（當選、遞補、補選當選；較舊的資料可能沒有這個欄位）',
+                'type' => 'string',
+                'enum' => ['當選', '遞補', '補選當選'],
             ],
             '身分別' => [
                 'es_field' => '身分別',
@@ -96,7 +112,7 @@ class CCAPI_Type_Councilor extends CCAPI_Type
 
     public static function queryFields()
     {
-        return ['姓名', '黨籍', '區域', '簡歷'];
+        return ['姓名', '黨籍', '區域', '選區名稱', '簡歷'];
     }
 
     public static function sortFields()

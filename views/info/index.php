@@ -29,6 +29,25 @@
 function info_strip_term_prefix($name) {
     return preg_replace('/^第\d+屆/u', '', $name ?? '');
 }
+
+// 選區顯示：優先用「選區名稱」（例：基隆市第3選舉區），較舊資料這欄位可能是空的
+// 或只是「區域」這個佔位字串（資料品質問題），這種情況就退回用「區域」（縣市名）
+function info_district_label($record) {
+    $district = $record->{'選區名稱'} ?? '';
+    if ($district === '' || $district === '區域') {
+        return $record->{'區域'} ?? '';
+    }
+    return $district;
+}
+
+// 非直接當選（遞補、補選當選）時顯示提示 badge，一般當選或資料缺漏（較舊資料）不顯示
+function info_election_status_badge($record) {
+    $status = $record->{'當選狀態'} ?? '';
+    if ($status === '' || $status === '當選') {
+        return '';
+    }
+    return '<span class="badge bg-info text-dark">' . htmlspecialchars($status) . '</span>';
+}
 ?>
 <main>
   <div class="container" style="max-width: 1100px;">

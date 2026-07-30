@@ -44,6 +44,9 @@ $index_mapping = [
         '出生地'   => ['type' => 'keyword'],
         '參選政黨' => ['type' => 'keyword'],
         '參選學歷' => ['type' => 'keyword'],
+        '選舉區號' => ['type' => 'keyword'],
+        '選區名稱' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        '當選狀態' => ['type' => 'keyword'],
         // 衍生欄位
         '屆次'     => ['type' => 'integer'],
     ],
@@ -66,6 +69,15 @@ if ($reset) {
         error_log("Create index failed: " . $e->getMessage());
         exit(1);
     }
+}
+
+// index 已存在時（非 --reset）也嘗試更新 mapping，讓新增的來源欄位套用正確型別
+// （ES 允許為既有 index 補新欄位定義，不影響既有欄位，重複執行也安全）
+try {
+    $prefix = getenv('ELASTIC_PREFIX');
+    Elastic::dbQuery("/{$prefix}councilor/_mapping", 'PUT', json_encode($index_mapping));
+} catch (Exception $e) {
+    error_log("Mapping update skipped: " . $e->getMessage());
 }
 
 $jsonl_path = getenv('IMPORT_COUNCILOR_JSONL') ?: (__DIR__ . '/../議員.jsonl');
@@ -126,7 +138,9 @@ while (($line = fgets($fh)) !== false) {
     foreach ($record as $key => $val) {
         if ($val === '' || $val === null) continue;
         if ($key === '出生日期') {
-            if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $val)) {
+            // 較舊的回溯資料常見「年份已知、月日不明」用 00 佔位（例：1939-00-00），
+            // ES date 型別不接受，一律當作未知日期跳過（保留年份已知這件事沒有意義，直接略過整欄）
+            if (preg_match('/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/', $val)) {
                 $doc[$key] = $val;
             }
             continue;

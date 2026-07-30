@@ -23,8 +23,9 @@ $latest = $records[0];
       <?php if (($latest->{'職稱'} ?? '議員') !== '議員'): ?>
       <span class="badge bg-warning text-dark"><?= htmlspecialchars($latest->{'職稱'}) ?></span>
       <?php endif; ?>
+      <?= info_election_status_badge($latest) ?>
       ・<?= htmlspecialchars($latest->{'黨籍'} ?? '—') ?>
-      ・<?= htmlspecialchars($latest->{'區域'} ?? '—') ?>
+      ・<?= htmlspecialchars(info_district_label($latest) ?: '—') ?>
     </p>
     <p class="small text-body-secondary mb-3">共任職 <?= count($records) ?> 屆</p>
 
@@ -66,6 +67,7 @@ $latest = $records[0];
         <th>黨籍</th>
         <th>職稱</th>
         <th>選區／區域</th>
+        <th>當選狀態</th>
       </tr>
     </thead>
     <tbody>
@@ -77,7 +79,8 @@ $latest = $records[0];
         <td><?= htmlspecialchars($r->{'議會代碼'} ?? '') ?></td>
         <td><?= htmlspecialchars($r->{'黨籍'} ?? '—') ?></td>
         <td><?= htmlspecialchars($r->{'職稱'} ?? '') ?></td>
-        <td><?= htmlspecialchars($r->{'區域'} ?? '—') ?></td>
+        <td><?= htmlspecialchars(info_district_label($r) ?: '—') ?></td>
+        <td><?= info_election_status_badge($r) ?: '—' ?></td>
       </tr>
       <?php endforeach; ?>
     </tbody>
