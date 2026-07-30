@@ -1,8 +1,10 @@
 <?php if (empty($this->councilors)): ?>
 <div class="alert alert-light border mb-4">目前尚無本屆議員資料</div>
 <?php else: ?>
+<?php foreach ($this->councilors as $group): ?>
+<h2 class="h6 fw-semibold text-body-secondary mb-2"><?= htmlspecialchars($group['label']) ?></h2>
 <div class="row g-3 mb-4">
-  <?php foreach ($this->councilors as $c): ?>
+  <?php foreach ($group['councilors'] as $c): ?>
   <div class="col-6 col-md-3 col-lg-2">
     <a href="/info/councilor/<?= urlencode($c->{'人物代碼'} ?? '') ?>" class="text-decoration-none text-reset">
     <div class="card councilor-card h-100 shadow-sm">
@@ -29,4 +31,5 @@
   </div>
   <?php endforeach; ?>
 </div>
+<?php endforeach; ?>
 <?php endif; ?>

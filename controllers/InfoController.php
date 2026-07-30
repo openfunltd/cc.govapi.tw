@@ -116,7 +116,33 @@ class InfoController extends MiniEngine_Controller
     protected function loadCouncilors($cc_code, $term_no)
     {
         $r = CCAPI::apiQuery('/councilors?limit=100&' . urlencode('屆次') . '=' . $term_no, '本屆議員名單');
-        return $r->councilors ?? [];
+        return $this->groupCouncilorsByDistrict($r->councilors ?? []);
+    }
+
+    /**
+     * 依選區分組，組內依姓名排序（沿用 API 預設排序），組間依選舉區號由小到大排序
+     * （原住民保障名額的選舉區號固定編在一般選區之後，數字排序自然會放在最後）。
+     * 較舊屆次（tpe-11~13）來源資料的「選區名稱」大多是「區域」佔位字串，不是真正
+     * 選區名稱，這裡改用「第N選舉區」代替，比直接顯示縣市名更有意義。
+     * 完全沒有選舉區號的記錄（來源資料缺漏）獨立分到最後一組。
+     */
+    protected function groupCouncilorsByDistrict($councilors)
+    {
+        $groups = [];
+        foreach ($councilors as $c) {
+            $district_no = $c->{'選舉區號'} ?? null;
+            $district_name = $c->{'選區名稱'} ?? '';
+            if ($district_name === '' || $district_name === '區域') {
+                $district_name = $district_no !== null && $district_no !== '' ? "第{$district_no}選舉區" : '選區不詳';
+            }
+            $key = ($district_no !== null && $district_no !== '') ? (int)$district_no : PHP_INT_MAX;
+            if (!isset($groups[$key])) {
+                $groups[$key] = ['label' => $district_name, 'councilors' => []];
+            }
+            $groups[$key]['councilors'][] = $c;
+        }
+        ksort($groups, SORT_NUMERIC);
+        return array_values($groups);
     }
 
     protected function loadTermSessions($cc_code, $term_no)
