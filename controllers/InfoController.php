@@ -7,6 +7,7 @@ class InfoController extends MiniEngine_Controller
         'sessions'    => '會期',
         'timeline'    => '時間軸',
         'committees'  => '委員會',
+        'bills'       => '議案',
     ];
 
     public function indexAction($term_no = null, $tab = null, $sub_id = null)
