@@ -81,8 +81,8 @@ class CCAPI_Type_Councilor extends CCAPI_Type
                 'description' => '所屬縣市（例: 基隆市）',
                 'type' => 'string',
             ],
-            '選區名稱' => [
-                'es_field' => '選區名稱.keyword',
+            '選區別' => [
+                'es_field' => '選區別.keyword',
                 'description' => '選舉區名稱（例: 基隆市第3選舉區）',
                 'type' => 'string',
             ],
@@ -112,7 +112,7 @@ class CCAPI_Type_Councilor extends CCAPI_Type
 
     public static function queryFields()
     {
-        return ['姓名', '黨籍', '區域', '選區名稱', '簡歷'];
+        return ['姓名', '黨籍', '區域', '選區別', '簡歷'];
     }
 
     public static function sortFields()

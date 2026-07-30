@@ -45,15 +45,23 @@ $index_mapping = [
         '參選政黨' => ['type' => 'keyword'],
         '參選學歷' => ['type' => 'keyword'],
         '選舉區號' => ['type' => 'keyword'],
-        '選區名稱' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        '選區別'   => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         '當選狀態' => ['type' => 'keyword'],
         // 衍生欄位
         '屆次'     => ['type' => 'integer'],
     ],
 ];
 
+// 「身份別」（份）是來源資料新增「選區別」欄位時順手打錯字造成的重複欄位，
+// 內容跟既有的「身分別」（分）完全一樣（比對全部 6,514 筆資料零差異），
+// 不匯入，只是列進已知欄位清單讓匯入腳本不會因為看到未預期欄位而中止
+$ignored_source_keys = ['身份別'];
+
 // 已知的來源欄位（不含衍生欄位 屆次）
-$known_source_keys = array_diff(array_keys($index_mapping['properties']), ['屆次']);
+$known_source_keys = array_merge(
+    array_diff(array_keys($index_mapping['properties']), ['屆次']),
+    $ignored_source_keys
+);
 
 if ($reset) {
     try {
@@ -136,6 +144,7 @@ while (($line = fgets($fh)) !== false) {
     $doc = ['屆次' => $term_int];
 
     foreach ($record as $key => $val) {
+        if (in_array($key, $ignored_source_keys, true)) continue;
         if ($val === '' || $val === null) continue;
         if ($key === '出生日期') {
             // 較舊的回溯資料常見「年份已知、月日不明」用 00 佔位（例：1939-00-00），

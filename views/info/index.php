@@ -30,10 +30,10 @@ function info_strip_term_prefix($name) {
     return preg_replace('/^第\d+屆/u', '', $name ?? '');
 }
 
-// 選區顯示：優先用「選區名稱」（例：基隆市第3選舉區），較舊資料這欄位可能是空的
+// 選區顯示：優先用「選區別」（例：基隆市第3選舉區），較舊資料這欄位可能是空的
 // 或只是「區域」這個佔位字串（資料品質問題），這種情況就退回用「區域」（縣市名）
 function info_district_label($record) {
-    $district = $record->{'選區名稱'} ?? '';
+    $district = $record->{'選區別'} ?? '';
     if ($district === '' || $district === '區域') {
         return $record->{'區域'} ?? '';
     }
