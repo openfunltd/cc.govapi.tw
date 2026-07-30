@@ -3,9 +3,10 @@
 class InfoController extends MiniEngine_Controller
 {
     protected $tabs = [
-        'councilors' => '議員名單',
-        'sessions'   => '會期',
-        'timeline'   => '時間軸',
+        'councilors'  => '議員名單',
+        'sessions'    => '會期',
+        'timeline'    => '時間軸',
+        'committees'  => '委員會',
     ];
 
     public function indexAction($term_no = null, $tab = null, $sub_id = null)
@@ -77,6 +78,9 @@ class InfoController extends MiniEngine_Controller
                 break;
             case 'timeline':
                 $this->view->timeline_sessions = $this->loadTermSessions($cc_code, $term_no);
+                break;
+            case 'committees':
+                $this->view->committee_groups = $this->loadCommittees($cc_code);
                 break;
             case 'transcript':
                 $this->loadTranscriptTab($cc_code, $term_no, $sub_id);
@@ -152,6 +156,35 @@ class InfoController extends MiniEngine_Controller
             '本屆所有會期'
         );
         return $r->sessions ?? [];
+    }
+
+    /**
+     * 委員會不綁屆，是議會層級的常設編制，這裡回傳依「類別」（常設／特種）分組的
+     * 委員會清單。目前資料沒有「委員會成員」，所以只列出委員會本身，不列出議員。
+     */
+    protected function loadCommittees($cc_code)
+    {
+        $r = CCAPI::apiQuery(
+            '/committees?limit=100&' . urlencode('議會代碼') . '=' . urlencode($cc_code),
+            '本議會委員會清單'
+        );
+        $committees = $r->committees ?? [];
+
+        $today = date('Y-m-d');
+        $groups = [];
+        foreach ($committees as $c) {
+            $abolished = $c->{'廢止日期'} ?? null;
+            $c->_is_abolished = ($abolished !== null && $abolished !== '' && $abolished < $today);
+            $type = $c->{'類別'} ?? '常設';
+            $groups[$type][] = $c;
+        }
+        uksort($groups, function ($a, $b) {
+            if ($a === $b) return 0;
+            if ($a === '常設') return -1;
+            if ($b === '常設') return 1;
+            return strcmp($a, $b);
+        });
+        return $groups;
     }
 
     protected function loadSessionsTab($cc_code, $term_no, $session_code)
