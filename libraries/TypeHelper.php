@@ -206,6 +206,39 @@ class TypeHelper
                     'data' => '逐字稿內容',
                 ],
             ],
+            'bill' => [
+                'name' => '議案',
+                'icon' => 'fas fa-fw fa-file-signature',
+                'cols' => [
+                    'all' => [
+                        '議會代碼',
+                        '屆',
+                        '類別',
+                        '案號',
+                        '提案單位',
+                        '提案人',
+                    ],
+                    'single' => [
+                        '屆',
+                        '類別',
+                        '案號',
+                        '提案單位',
+                        '提案人',
+                    ],
+                ],
+                'default_aggs' => [
+                    'all' => [
+                        '議會代碼',
+                        '類別',
+                    ],
+                    'single' => [
+                        '類別',
+                    ],
+                ],
+                'item_features' => [
+                    'data' => '議案內容',
+                ],
+            ],
         ];
     }
 

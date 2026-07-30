@@ -15,3 +15,4 @@ putenv('IMPORT_COMMITTEE_CSV=');      // 委員會 data.csv 路徑，預設 {pro
 putenv('IMPORT_SITTING_CSV=');        // 場次.csv 路徑，預設 {project}/場次.csv
 putenv('IMPORT_TRANSCRIPT_CSV=');     // 逐字稿索引.csv 路徑，預設 {project}/逐字稿索引.csv
 putenv('IMPORT_TRANSCRIPT_BASE_DIR=');// 逐字稿原始檔案目錄（索引裡的相對路徑基準），預設 {project}/逐字稿
+putenv('IMPORT_BILL_JSONL=');         // 議案.jsonl 路徑，預設 {project}/議案.jsonl

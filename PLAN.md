@@ -141,6 +141,14 @@
 - 委員會不綁屆，是議會層級的常設編制；依「類別」（常設／特種）分組列出，並標示已廢止的委員會
 - 目前沒有「委員會成員」資料（查不到哪位議員屬於哪個委員會），這次先做委員會清單本身，成員關聯之後有資料再補
 
+#### Phase 25 — 議案（Bill）型別 ✅
+- `議案.jsonl` 來源（欄位：代碼/縣市/類別/案號/提案單位/提案人/連署人/案由/說明/辦法/審查意見/議決/來源檔案/來源頁碼），跟「會期」「場次」不同顆粒度——議案是當天大會/委員會實際在審的個別提案內容
+- `scripts/import-bill.php`：Doc ID 為代碼本身，衍生欄位「議會代碼」（從代碼第一段解析）、「屆」（從來源檔名解析「第N屆」，解析不到就不寫入這個欄位）
+  - fix：來源「代碼」不保證跨紀錄唯一（實測新北市有 36 組「同一份文件裡、同一類別+同一案號卻是完全不同議案」的案例），直接拿代碼當 ES doc ID 會被 upsert 覆蓋掉、靜默遺失資料；改成偵測到重複時對 doc ID 加上序號後綴（`{代碼}-dup2`），確保每筆來源記錄都保留下來
+- `libraries/CCAPI/Type/Bill.php`：filter 支援議會代碼、屆、類別、提案單位、提案人；查詢欄位為案由/說明/辦法/審查意見/議決/提案單位/提案人
+- `libraries/TypeHelper.php`、`views/collection/bill_data.php`：瀏覽器列表/詳情頁
+- **目前只涵蓋 4 個議會**（雲林縣、新北市、花蓮縣、臺南市），是持續擴充中的實驗性補充資料；**沒有會期代碼／場次代碼可以連結**，「屆」只是從檔名解析出來的推測值（來源議事錄檔案常橫跨一個定期會加多個臨時會，無法精確對應到單一會期或場次）
+
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
 - `scripts/import-council.php` CSV 第一欄 header 因 UTF-8 BOM（`\xEF\xBB\xBF`）導致 `Undefined array key "代碼"`，已修正
@@ -232,6 +240,7 @@ cc.govapi.tw/
 │           ├── Sitting.php            # 場次
 │           ├── Transcript.php         # 逐字稿
 │           ├── Committee.php          # 委員會
+│           ├── Bill.php               # 議案
 │           ├── Overview.php           # 議會現況快取（唯讀彙整型別，供 /info 用）
 │           └── Completeness.php       # 資料完整度（唯讀彙整型別，非來源資料）
 ├── scripts/
@@ -242,6 +251,7 @@ cc.govapi.tw/
 │   ├── import-sitting.php             # 場次.csv → ccv1_sitting
 │   ├── import-transcript.php          # 逐字稿索引 CSV + 逐字稿檔案 → ccv1_transcript
 │   ├── import-committee.php           # data.csv → ccv1_committee
+│   ├── import-bill.php                # 議案.jsonl → ccv1_bill
 │   ├── generate-completeness.php      # 彙整計算 → ccv1_completeness（議員/會期/場次/逐字稿四維度）
 │   └── generate-council-overview.php  # 彙整計算 → ccv1_overview（供 /info 全國卡片牆用，需在資料重新匯入後手動重跑）
 ├── views/
@@ -258,7 +268,7 @@ cc.govapi.tw/
 ├── static/                            # sb-admin-2 CSS/JS（viewer 舊版殘留，逐步淘汰中）
 ├── 議會.csv, 屆.csv                    # 進版控管的來源資料
 └── （git-ignored：議員.jsonl, 會期.csv, data.csv, 場次.csv, 逐字稿索引.csv, 逐字稿/,
-    縣市界.geojson, config.inc.php, datacc.openfun.app/）
+    議案.jsonl, 縣市界.geojson, config.inc.php, datacc.openfun.app/）
 ```
 
 ---
@@ -274,6 +284,7 @@ cc.govapi.tw/
 | `ccv1_sitting` | `Type/Sitting.php` | `場次.csv` | 代碼本身 |
 | `ccv1_transcript` | `Type/Transcript.php` | 逐字稿索引 CSV + 逐字稿檔案 | 與對應場次同一個代碼（1:1） |
 | `ccv1_committee` | `Type/Committee.php` | `data.csv` | 代碼本身（例 `tpe-c1`） |
+| `ccv1_bill` | `Type/Bill.php` | `議案.jsonl` | 代碼本身，重複時加 `-dup{N}` 後綴 |
 | `ccv1_overview` | `Type/Overview.php` | 由 `generate-council-overview.php` 彙整其他 index 算出 | 議會代碼（例 `tpe`） |
 | `ccv1_completeness` | `Type/Completeness.php` | 由 `generate-completeness.php` 彙整其他 index 算出 | 議會代碼（例 `tpe`） |
 
