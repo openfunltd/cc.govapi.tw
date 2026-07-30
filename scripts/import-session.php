@@ -94,9 +94,13 @@ while (($row = fgetcsv($fh)) !== false) {
     $data['屆'] = (int)$data['屆'];
     $data['次'] = (int)$data['次'];
 
-    // 空白日期轉 null（ES 不接受空字串 date）
+    // 空白日期轉 null（ES 不接受空字串 date）；先 trim 避免來源資料裡偶爾出現的
+    // 前後空白讓 ES 日期格式解析失敗（曾發生過 " 2025-12-08" 這種多一個空白字元）
     foreach (['開始日期', '結束日期'] as $f) {
-        if (isset($data[$f]) && trim($data[$f]) === '') {
+        if (isset($data[$f])) {
+            $data[$f] = trim($data[$f]);
+        }
+        if (isset($data[$f]) && $data[$f] === '') {
             $data[$f] = null;
         }
     }
