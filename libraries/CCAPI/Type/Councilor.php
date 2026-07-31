@@ -40,6 +40,11 @@ class CCAPI_Type_Councilor extends CCAPI_Type
     public static function getFilterFieldsInfo(): array
     {
         return [
+            '代碼' => [
+                'es_field' => '代碼',
+                'description' => '候選人登記代碼（例: 574-ER10712NB00021-REP-KND0002），跟「人物代碼」是不同格式的兩組代碼',
+                'type' => 'string',
+            ],
             '議會代碼' => [
                 'es_field' => '議會代碼',
                 'description' => '議會代碼（例: tpe）',

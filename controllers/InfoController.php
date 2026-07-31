@@ -90,7 +90,9 @@ class InfoController extends MiniEngine_Controller
                 $this->loadTranscriptTab($cc_code, $term_no, $sub_id);
                 break;
             case 'bill':
-                $this->view->bill_detail = $this->loadBillDetail($sub_id);
+                $bill = $this->loadBillDetail($sub_id);
+                $this->resolveBillPeople($bill);
+                $this->view->bill_detail = $bill;
                 break;
         }
     }
@@ -323,6 +325,52 @@ class InfoController extends MiniEngine_Controller
         $bill_code = urldecode($bill_code);
         $r = CCAPI::apiQuery('/bill/' . rawurlencode($bill_code), '議案詳情');
         return ($r->error ?? true) ? null : $r->data;
+    }
+
+    /**
+     * 議案的「提案人結構」「連署人結構」裡的「議員代碼」對應到 councilor 的
+     * 「代碼」欄位（候選人登記代碼），不是「人物代碼」（跨屆連結用的代碼），
+     * 要連到議員個人頁 /info/councilor/{人物代碼} 得先查一次 councilor 換算。
+     * 一次查詢批次處理該筆議案裡出現過的所有代碼（OR 查詢），不逐筆查避免 N+1。
+     * 查不到對應議員資料的（理論上不應該發生，但沒有全面驗證過）就不加連結，
+     * 前端顯示原始姓名文字。
+     */
+    protected function resolveBillPeople($bill)
+    {
+        if (!$bill) {
+            return;
+        }
+        $codes = [];
+        foreach (['提案人結構', '連署人結構'] as $field) {
+            foreach ($bill->{$field} ?? [] as $p) {
+                if ($p->{'議員代碼'} ?? null) {
+                    $codes[$p->{'議員代碼'}] = true;
+                }
+            }
+        }
+        if (!$codes) {
+            return;
+        }
+
+        $qs = '';
+        foreach (array_keys($codes) as $code) {
+            $qs .= '&' . urlencode('代碼') . '=' . urlencode($code);
+        }
+        $r = CCAPI::apiQuery(
+            '/councilors?limit=' . count($codes) . $qs,
+            '議案提案人／連署人對應議員資料'
+        );
+
+        $person_code_by_code = [];
+        foreach (($r->councilors ?? []) as $c) {
+            $person_code_by_code[$c->{'代碼'}] = $c->{'人物代碼'} ?? null;
+        }
+
+        foreach (['提案人結構', '連署人結構'] as $field) {
+            foreach ($bill->{$field} ?? [] as $p) {
+                $p->{'人物代碼'} = $person_code_by_code[$p->{'議員代碼'} ?? ''] ?? null;
+            }
+        }
     }
 
     /**
