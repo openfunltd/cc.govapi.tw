@@ -160,9 +160,9 @@ while (($line = fgets($fh)) !== false) {
     $cc_code = explode('-', $code)[0];
 
     // 來源「代碼」欄位偶爾用跟 ccapi 既有議會代碼不一致的縣市代碼（實測屏東縣
-    // 全部 2,799 筆一致用 pin，不是零星錯誤，這裡是唯一已知案例），修正成
-    // ccapi 慣用的代碼，才能正確連到對應的 {代碼}.cc.govapi.tw
-    $cc_code_fixes = ['pin' => 'pif'];
+    // 全部一致用 pin、金門縣全部一致用 kmt，都不是零星錯誤），修正成 ccapi
+    // 慣用的代碼，才能正確連到對應的 {代碼}.cc.govapi.tw
+    $cc_code_fixes = ['pin' => 'pif', 'kmt' => 'kin'];
     $cc_code = $cc_code_fixes[$cc_code] ?? $cc_code;
 
     // 從「來源檔案」檔名解析屆次，解析不到就不寫入這個欄位
