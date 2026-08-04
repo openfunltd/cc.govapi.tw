@@ -19,3 +19,7 @@ putenv('IMPORT_BILL_JSONL=');         // 議案.jsonl 路徑，預設 {project}/
 putenv('IMPORT_CANDIDATE_JSONL=');    // bulletin.jsonl 路徑，預設 {project}/bulletin.jsonl
 putenv('IMPORT_CANDIDATE_VOTES_JSONL=');// 得票數.jsonl 路徑（已篩選縣市/直轄市議員、
                                        // 縣市層級得票數的子集），預設 {project}/得票數.jsonl
+putenv('IMPORT_CANDIDATE_PERSON_JSONL=');// 人物代碼.jsonl 路徑（候選人代碼→人物代碼
+                                       // 對照表子集），預設 {project}/人物代碼.jsonl
+putenv('IMPORT_CANDIDATE_ELECTED_JSONL=');// 當選註記.jsonl 路徑（候選人代碼→中選會
+                                       // 當選註記對照表子集），預設 {project}/當選註記.jsonl

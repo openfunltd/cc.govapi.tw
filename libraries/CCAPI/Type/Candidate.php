@@ -55,6 +55,11 @@ class CCAPI_Type_Candidate extends CCAPI_Type
                 'description' => '對應中選會選舉資料庫的候選人代碼，可跟 councilor 的「參選代碼」／「人物代碼」比對是否當選；查無此代碼代表沒有比對到候選人名單（仍有學經歷/政見等內容，只是不能 join）',
                 'type' => 'string',
             ],
+            '人物代碼' => [
+                'es_field' => '人物代碼',
+                'description' => '同一人歷次參選（不限選舉類型，也不限有沒有當選）共用的代碼，可用來查詢某人所有屆期的候選人紀錄，包含落選的次數；跟 councilor 的「人物代碼」是同一套代碼體系，當選過的人兩邊代碼相同；查無此代碼代表沒有比對到候選人名單（同「候選人代碼」缺值的情況）',
+                'type' => 'string',
+            ],
             '選舉代碼' => [
                 'es_field' => '選舉代碼',
                 'description' => '選舉代碼（例: ELC-T1-111）。要定位同一場選舉的所有候選人，需搭配「行政區代碼」「選區別」一起查（單一縣市可能有多個選舉區）',
@@ -86,6 +91,11 @@ class CCAPI_Type_Candidate extends CCAPI_Type
                 'es_field' => '得票排名',
                 'description' => '候選人在自己選區的得票排名（1 為最高票）；只有縣市議員/直轄市議員的得票資料涵蓋這個欄位，其餘沒有這個欄位',
                 'type' => 'integer',
+            ],
+            '當選' => [
+                'es_field' => '當選',
+                'description' => '是否當選（來自中選會 cand.csv 的當選註記，選舉當下的正式結果，不受議員後續離職/辭職影響——這比「查得到 councilor 記錄」更可靠，因為 councilor 資料若議員中途離職會直接消失整筆記錄）',
+                'type' => 'boolean',
             ],
         ];
     }

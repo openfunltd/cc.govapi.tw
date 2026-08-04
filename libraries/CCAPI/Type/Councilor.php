@@ -45,6 +45,11 @@ class CCAPI_Type_Councilor extends CCAPI_Type
                 'description' => '候選人登記代碼（例: 574-ER10712NB00021-REP-KND0002），跟「人物代碼」是不同格式的兩組代碼',
                 'type' => 'string',
             ],
+            '參選代碼' => [
+                'es_field' => '參選代碼',
+                'description' => '該屆參選時的候選人代碼（例: ELC-T1-111:63000-1:1），跟 candidate 的「候選人代碼」是同一組代碼體系，可用來比對某次選舉是否當選',
+                'type' => 'string',
+            ],
             '議會代碼' => [
                 'es_field' => '議會代碼',
                 'description' => '議會代碼（例: tpe）',

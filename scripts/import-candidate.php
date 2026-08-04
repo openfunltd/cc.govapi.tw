@@ -48,6 +48,31 @@
  * 不在 crawl 流程裡重跑（原始檔案 1.7GB，不適合每次匯入都整份掃過）。
  * 依「選舉代碼＋選區代碼」把同一場選舉的候選人分組，算出每位候選人在自己選區裡的
  * 得票排名／得票率（得票數 ÷ 該選區全部候選人得票數總和）。
+ *
+ * 人物代碼（衍生自另一個來源，見 人物代碼.jsonl）：
+ * 原始來源 mixed-tw.gov.cec.data-選舉資料庫/files/person.jsonl（39MB，51,158 個
+ * 人物分組）把同一個人歷次參選（不限選舉類型，總統/立委/縣市長/議員都算）的所有
+ * 候選人代碼歸在同一組，組的 id 是該人「第一次參選」的候選人代碼——這跟 councilor
+ * 的「人物代碼」是同一套推導邏輯（已實測驗證：林世宗 4 屆議員的參選代碼全部對應到
+ * 同一個 group id，且這個 group id 跟他 councilor 記錄的人物代碼一模一樣），所以
+ * 直接沿用當作候選人的「人物代碼」，讓查得到 councilor 的當選人跟查不到 councilor
+ * 的落選人可以用同一套代碼互相對應／串連歷次參選記錄。
+ * 這裡讀的 人物代碼.jsonl 已經是預先篩選過的子集（只留我們候選人清單裡實際出現過
+ * 的代碼，4,136 筆），不在 crawl 流程裡重跑（原始檔案 39MB，不適合每次匯入都整份
+ * 掃過且要解析巢狀結構）。查無人物代碼的（來源沒有候選人代碼的那 109 筆本來就無法
+ * 查表）就不寫入這個欄位。
+ *
+ * 當選（衍生自另一個來源，見 當選註記.jsonl）：
+ * 原本用「這個候選人代碼是否存在於 councilor 資料」判斷有沒有當選，但實測發現
+ * councilor 來源（moi 地方公職人員資訊專區）如果議員中途辭職，資料就會直接消失
+ * （實測案例：李彥秀 111 年台北市議員選舉最高票當選，但 councilor 資料完全沒有
+ * 這筆記錄——她可能任內離職，議員名冊就不會保留她的紀錄），會把「當選但後來離職」
+ * 誤判成「沒有當選」。改成直接採用中選會 `mixed-tw.gov.cec.data-選舉資料庫/
+ * files/cand.csv` 的「當選註記」欄位（`*`／`!` 都代表當選，空字串代表落選，`-`
+ * 是極少數未查明的特殊狀態、當作未當選處理），這是選舉當下的正式結果，不會因為
+ * 事後的人事異動而改變。
+ * 這裡讀的 當選註記.jsonl 同樣是預先篩選過的子集（只留 ELC-T1/ELC-T2 候選人，
+ * 13,206 筆）。
  */
 
 include(__DIR__ . '/../init.inc.php');
@@ -97,6 +122,9 @@ $index_mapping = [
         '得票數'     => ['type' => 'integer'],
         '得票排名'   => ['type' => 'integer'],
         '得票率'     => ['type' => 'float'],
+        '人物代碼'   => ['type' => 'keyword'],
+        '當選'       => ['type' => 'boolean'],
+        '當選註記'   => ['type' => 'keyword'],
     ],
 ];
 
@@ -174,6 +202,51 @@ if (file_exists($votes_path)) {
     error_log("得票數.jsonl not found at {$votes_path}, skipping vote data (candidate import continues without it)");
 }
 
+// ── 讀取人物代碼對照表：候選人代碼 → 人物代碼（同一人跨屆/跨次參選的共用代碼）──
+
+$person_by_code = [];
+$person_path = getenv('IMPORT_CANDIDATE_PERSON_JSONL') ?: (__DIR__ . '/../人物代碼.jsonl');
+if (file_exists($person_path)) {
+    $pfh = fopen($person_path, 'r');
+    while (($pline = fgets($pfh)) !== false) {
+        $pline = trim($pline);
+        if ($pline === '') continue;
+        $precord = json_decode($pline, true);
+        if (!$precord) continue;
+        $pcode = $precord['候選人代碼'] ?? '';
+        $pgroup = $precord['人物代碼'] ?? '';
+        if ($pcode !== '' && $pgroup !== '') {
+            $person_by_code[$pcode] = $pgroup;
+        }
+    }
+    fclose($pfh);
+    error_log("Loaded person mapping for " . count($person_by_code) . " candidates");
+} else {
+    error_log("人物代碼.jsonl not found at {$person_path}, skipping person mapping (candidate import continues without it)");
+}
+
+// ── 讀取中選會當選註記：候選人代碼 → 是否當選（見上方註解，不用 councilor 資料
+// 有沒有這筆記錄來判斷，議員中途離職會讓 councilor 記錄消失、誤判成沒當選）──
+
+$elected_by_code = [];
+$elected_path = getenv('IMPORT_CANDIDATE_ELECTED_JSONL') ?: (__DIR__ . '/../當選註記.jsonl');
+if (file_exists($elected_path)) {
+    $efh = fopen($elected_path, 'r');
+    while (($eline = fgets($efh)) !== false) {
+        $eline = trim($eline);
+        if ($eline === '') continue;
+        $erecord = json_decode($eline, true);
+        if (!$erecord) continue;
+        $ecode = $erecord['候選人代碼'] ?? '';
+        if ($ecode === '') continue;
+        $elected_by_code[$ecode] = $erecord['當選註記'] ?? '';
+    }
+    fclose($efh);
+    error_log("Loaded elected marker for " . count($elected_by_code) . " candidates");
+} else {
+    error_log("當選註記.jsonl not found at {$elected_path}, skipping elected marker (candidate import continues without it)");
+}
+
 $fh = fopen($jsonl_path, 'r');
 $bom = fread($fh, 3);
 if ($bom !== "\xEF\xBB\xBF") {
@@ -238,7 +311,7 @@ $count = 0;
 $dedup_dropped = 0;
 $no_council_code_field = 0;
 
-function import_candidate_doc($record, $doc_id, $county_to_cc_code, $votes_by_code, $votes_rank)
+function import_candidate_doc($record, $doc_id, $county_to_cc_code, $votes_by_code, $votes_rank, $person_by_code, $elected_by_code)
 {
     $doc = ['代碼' => $doc_id];
 
@@ -270,6 +343,16 @@ function import_candidate_doc($record, $doc_id, $county_to_cc_code, $votes_by_co
                 $doc['得票率'] = $votes_rank[$candidate_code]['得票率'];
             }
         }
+        if (isset($person_by_code[$candidate_code])) {
+            $doc['人物代碼'] = $person_by_code[$candidate_code];
+        }
+        if (isset($elected_by_code[$candidate_code])) {
+            $marker = $elected_by_code[$candidate_code];
+            $doc['當選'] = in_array($marker, ['*', '!'], true);
+            if ($marker !== '') {
+                $doc['當選註記'] = $marker;
+            }
+        }
     }
 
     return $doc;
@@ -288,7 +371,7 @@ foreach ($grouped as $code => $records) {
         $dedup_dropped += count($records) - 1;
     }
 
-    $doc = import_candidate_doc($chosen, $code, $county_to_cc_code, $votes_by_code, $votes_rank);
+    $doc = import_candidate_doc($chosen, $code, $county_to_cc_code, $votes_by_code, $votes_rank, $person_by_code, $elected_by_code);
     if (!isset($doc['議會代碼'])) {
         $no_council_code_field++;
     }
@@ -308,7 +391,7 @@ foreach ($no_code_records as $record) {
     $seen_synthetic_ids[$base_id] = ($seen_synthetic_ids[$base_id] ?? 0) + 1;
     $doc_id = $seen_synthetic_ids[$base_id] > 1 ? "{$base_id}-dup{$seen_synthetic_ids[$base_id]}" : $base_id;
 
-    $doc = import_candidate_doc($record, $doc_id, $county_to_cc_code, $votes_by_code, $votes_rank);
+    $doc = import_candidate_doc($record, $doc_id, $county_to_cc_code, $votes_by_code, $votes_rank, $person_by_code, $elected_by_code);
     if (!isset($doc['議會代碼'])) {
         $no_council_code_field++;
     }

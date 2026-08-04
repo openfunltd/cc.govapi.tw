@@ -46,6 +46,16 @@ class InfoController extends MiniEngine_Controller
             return;
         }
 
+        // 候選人歷年參選頁：用「人物代碼」串連同一人歷次參選紀錄，包含落選的次數
+        // （councilor 只收錄當選過的人，落選者在那邊完全查不到，這裡是唯一能看到
+        // 落選紀錄的地方）。/info/candidate/{人物代碼}，不屬於屆次路由。
+        if ($term_no === 'candidate') {
+            $person_code = $tab;
+            $this->view->is_candidate_profile = true;
+            $this->loadCandidateProfile($person_code);
+            return;
+        }
+
         if (CCAPI_Council::isAll($cc_code)) {
             // 全國頁沒有「屆」的概念（各議會屆次互不相干），維持原本的現況卡片牆
             $result = CCAPI::apiQuery('/overviews?limit=50', '全國議會現況資料');
@@ -666,6 +676,7 @@ class InfoController extends MiniEngine_Controller
                     '同選區候選人得票比較'
                 );
                 $race_candidates = $race_r->candidates ?? [];
+                $this->enrichRaceCandidates($race_candidates);
             }
 
             $groups[] = (object)[
@@ -676,5 +687,83 @@ class InfoController extends MiniEngine_Controller
         }
 
         $this->view->election_groups = $groups;
+    }
+
+    /**
+     * 候選人歷年參選頁：用「人物代碼」查出同一人歷次參選紀錄（candidate 的
+     * 人物代碼是從 mixed-tw.gov.cec.data-選舉資料庫/person.jsonl 衍生，見
+     * import-candidate.php 說明，涵蓋落選的人；候選人資料只回溯到民國98年，
+     * 更早期的參選紀錄查不到）。每筆參選都附上同選區得票比較表。
+     */
+    protected function loadCandidateProfile($person_code)
+    {
+        $this->view->candidate_groups = [];
+        $this->view->candidate_is_councilor = false;
+        $this->view->candidate_person_code = null;
+        if (!$person_code) {
+            return;
+        }
+        $person_code = urldecode($person_code);
+        $this->view->candidate_person_code = $person_code;
+
+        $r = CCAPI::apiQuery(
+            '/candidates?limit=50&' . urlencode('人物代碼') . '=' . urlencode($person_code) . '&sort=' . urlencode('年份>'),
+            '該候選人歷年參選紀錄'
+        );
+
+        $groups = [];
+        foreach (($r->candidates ?? []) as $cand) {
+            $race_candidates = [];
+            if ($cand->{'選舉代碼'} ?? null) {
+                $race_qs = '&' . urlencode('選舉代碼') . '=' . urlencode($cand->{'選舉代碼'})
+                    . '&' . urlencode('行政區代碼') . '=' . urlencode($cand->{'行政區代碼'} ?? '')
+                    . '&' . urlencode('選區別') . '=' . urlencode($cand->{'選區別'} ?? '');
+                $race_r = CCAPI::apiQuery(
+                    '/candidates?limit=100&sort=' . urlencode('得票排名<') . $race_qs,
+                    '同選區候選人得票比較'
+                );
+                $race_candidates = $race_r->candidates ?? [];
+                $this->enrichRaceCandidates($race_candidates);
+            }
+            $groups[] = (object)[
+                'candidate' => $cand,
+                'race'      => $race_candidates,
+            ];
+        }
+        $this->view->candidate_groups = $groups;
+
+        // 是否曾經當選過議員（不限哪一屆），有的話在頁面上附連結過去
+        $councilor_r = CCAPI::apiQuery(
+            '/councilors?limit=1&' . urlencode('人物代碼') . '=' . urlencode($person_code),
+            '候選人是否曾任議員'
+        );
+        $this->view->candidate_is_councilor = ($councilor_r->total ?? 0) > 0;
+    }
+
+    /**
+     * 幫「同選區得票比較」表格補上性別、黨籍（來源在候選人的「其他欄位」裡，攤平成
+     * 頂層屬性方便 view 直接讀）。「當選」欄位已經是 candidate 資料本身的欄位
+     * （來自中選會 cand.csv 的當選註記），不需要另外查 councilor 是否有這筆
+     * 記錄來判斷——查 councilor 存不存在會被議員中途離職資料消失誤判成沒當選
+     * （實測案例：李彥秀 111 年台北市議員選舉最高票當選，但因任內離職，councilor
+     * 資料完全沒有這筆記錄，見 import-candidate.php 的說明）。
+     */
+    protected function enrichRaceCandidates($race_candidates)
+    {
+        if (!$race_candidates) {
+            return;
+        }
+
+        foreach ($race_candidates as $rc) {
+            $extra = $rc->{'其他欄位'} ?? null;
+            $gender = $extra->{'性別'} ?? null;
+            // 少數（卡片式版面）沒有獨立的「性別」欄位，是跟出生年月日/出生地
+            // 合併成一整段文字塞在「個人資料」欄位裡，要另外解析
+            if (!$gender && ($extra->{'個人資料'} ?? null) && preg_match('/性別[:：]\s*([男女])/u', $extra->{'個人資料'}, $m)) {
+                $gender = $m[1];
+            }
+            $rc->{'性別'} = $gender;
+            $rc->{'黨籍'} = $extra->{'推薦之政黨'} ?? null;
+        }
     }
 }

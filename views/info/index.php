@@ -56,6 +56,8 @@ function info_election_status_badge($record) {
     <?= $this->partial('info/search', $this) ?>
     <?php elseif (!empty($this->is_councilor_profile)): ?>
     <?= $this->partial('info/councilor', $this) ?>
+    <?php elseif (!empty($this->is_candidate_profile)): ?>
+    <?= $this->partial('info/candidate', $this) ?>
     <?php else: ?>
 
     <form action="/info/search" method="get" class="pt-3 pb-1">

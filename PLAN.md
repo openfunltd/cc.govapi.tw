@@ -161,6 +161,17 @@
 - `libraries/TypeHelper.php`、`views/collection/candidate_data.php`：瀏覽器列表/詳情頁
 - **資料品質注意事項**（已寫進 `knowledge.md`）：政見有沒有可用文字要看「政見來源」欄位（`text-garbled` 代表文字層是亂碼），不能只看「政見」是否有值；候選人代碼只回溯到民國 98 年（2009），更早期公報是純掃描圖沒有文字層，不在這批資料裡
 
+#### Phase 27 — 議員頁面整合候選人得票資料、新增候選人歷年參選頁 ✅
+- 用議員的「參選代碼」比對 candidate 的「候選人代碼」（同一組代碼體系），把該次選舉的得票數/得票率/得票排名附到議員物件上（`InfoController::attachVoteShare()`，批次查詢避免 N+1）
+  - `/info/{屆}/councilors`：每個選區內依得票率由高到低排序，卡片顯示「得票：XX%」
+  - `/info/councilor/{人物代碼}` 歷屆紀錄表格加上得票數／得票率欄位
+  - 新增「選舉紀錄」tab：每屆顯示候選人公報內容（學歷/經歷/政見，政見是圖片或亂碼時直接嵌圖）與同選區得票比較表（依 candidate 的選舉代碼＋行政區代碼＋選區別精確定位同一場選舉），比較表加上性別／黨籍／是否當選三欄，候選人姓名連結到 `/info/candidate/{人物代碼}`
+- CCAPI_Type_Councilor 新增「參選代碼」filter 欄位；CCAPI_Type_Candidate 新增「人物代碼」「當選」filter 欄位
+- **候選人的「人物代碼」衍生自 `mixed-tw.gov.cec.data-選舉資料庫/person.jsonl`**（同一人歷次參選不限選舉類型歸在同一組，組 id 是該人第一次參選的候選人代碼，已實測跟 councilor 的人物代碼推導邏輯完全一致、100% 比對成功、零衝突），讓落選者也有一個可跨屆連結的代碼——`councilor` 完全不收錄落選者，這是唯一能串連歷次參選（含落選）的方式
+- **fix：「是否當選」改用中選會 cand.csv 的當選註記，不要用「candidate 代碼是否存在於 councilor 資料」判斷**——已實測發現 councilor 來源（moi 地方公職人員資訊專區）若議員任期中辭職，資料會直接消失整筆記錄，把「當選但後來離職」誤判成「沒有當選」（案例：李彥秀 111 年台北市議員選舉最高票當選，`councilor` 完全沒有這筆記錄）；改用當選當下的正式結果就不受這個問題影響
+- 新增 `/info/candidate/{人物代碼}` 頁面：顯示某人歷年參選紀錄（含落選次數），每次參選都有候選人公報內容＋同選區得票比較表，若曾經當選過議員會附上連到 `/info/councilor/{人物代碼}` 的連結
+- 三個新的篩選/對照表子集（皆為原始檔案篩選後的小檔案，不在 crawl 流程重跑）：`得票數.jsonl`（1.7GB→13,205列）、`人物代碼.jsonl`（39MB→4,136列）、`當選註記.jsonl`（13,206列）
+
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
 - `scripts/import-council.php` CSV 第一欄 header 因 UTF-8 BOM（`\xEF\xBB\xBF`）導致 `Undefined array key "代碼"`，已修正
@@ -265,7 +276,8 @@ cc.govapi.tw/
 │   ├── import-transcript.php          # 逐字稿索引 CSV + 逐字稿檔案 → ccv1_transcript
 │   ├── import-committee.php           # data.csv → ccv1_committee
 │   ├── import-bill.php                # 議案.jsonl → ccv1_bill
-│   ├── import-candidate.php           # bulletin.jsonl + 得票數.jsonl → ccv1_candidate
+│   ├── import-candidate.php           # bulletin.jsonl + 得票數.jsonl + 人物代碼.jsonl
+│   │                                   # + 當選註記.jsonl → ccv1_candidate
 │   ├── generate-completeness.php      # 彙整計算 → ccv1_completeness（議員/會期/場次/逐字稿四維度）
 │   └── generate-council-overview.php  # 彙整計算 → ccv1_overview（供 /info 全國卡片牆用，需在資料重新匯入後手動重跑）
 ├── views/
@@ -277,13 +289,15 @@ cc.govapi.tw/
 │   ├── collection/                    # 列表/單筆/完整度頁（table, item, rawdata, *_data.php 各型別詳情, completeness*.php）
 │   └── info/                          # /info 議會資訊頁：index（骨架）、detail（tab 容器）、header、
 │                                       # councilors、sessions、timeline、committees、transcript、search、
-│                                       # councilor（個人頁 tab 容器）、councilor_profile、councilor_speeches
+│                                       # councilor（個人頁 tab 容器）、councilor_profile、
+│                                       # councilor_speeches、councilor_bills、councilor_elections、
+│                                       # candidate（候選人歷年參選頁）
 ├── public/swagger-ui/                 # Swagger UI 靜態資源
 ├── static/                            # sb-admin-2 CSS/JS（viewer 舊版殘留，逐步淘汰中）
 ├── 議會.csv, 屆.csv                    # 進版控管的來源資料
 └── （git-ignored：議員.jsonl, 會期.csv, data.csv, 場次.csv, 逐字稿索引.csv, 逐字稿/,
-    議案.jsonl, bulletin.jsonl, 得票數.jsonl, 縣市界.geojson, config.inc.php,
-    datacc.openfun.app/）
+    議案.jsonl, bulletin.jsonl, 得票數.jsonl, 人物代碼.jsonl, 當選註記.jsonl,
+    縣市界.geojson, config.inc.php, datacc.openfun.app/）
 ```
 
 ---
@@ -300,7 +314,7 @@ cc.govapi.tw/
 | `ccv1_transcript` | `Type/Transcript.php` | 逐字稿索引 CSV + 逐字稿檔案 | 與對應場次同一個代碼（1:1） |
 | `ccv1_committee` | `Type/Committee.php` | `data.csv` | 代碼本身（例 `tpe-c1`） |
 | `ccv1_bill` | `Type/Bill.php` | `議案.jsonl` | 代碼本身，重複時加 `-dup{N}` 後綴 |
-| `ccv1_candidate` | `Type/Candidate.php` | `bulletin.jsonl` + `得票數.jsonl` | 候選人代碼；缺值時用來源PDF/頁碼/號次/姓名組合替代 ID |
+| `ccv1_candidate` | `Type/Candidate.php` | `bulletin.jsonl` + `得票數.jsonl` + `人物代碼.jsonl` + `當選註記.jsonl` | 候選人代碼；缺值時用來源PDF/頁碼/號次/姓名組合替代 ID |
 | `ccv1_overview` | `Type/Overview.php` | 由 `generate-council-overview.php` 彙整其他 index 算出 | 議會代碼（例 `tpe`） |
 | `ccv1_completeness` | `Type/Completeness.php` | 由 `generate-completeness.php` 彙整其他 index 算出 | 議會代碼（例 `tpe`） |
 

@@ -77,8 +77,11 @@ $groups = $this->election_groups ?? [];
             <th>排名</th>
             <th>號次</th>
             <th>姓名</th>
+            <th>性別</th>
+            <th>黨籍</th>
             <th>得票數</th>
             <th>得票率</th>
+            <th>當選</th>
           </tr>
         </thead>
         <tbody>
@@ -87,9 +90,19 @@ $groups = $this->election_groups ?? [];
           <tr class="<?= $is_self ? 'table-primary' : '' ?>">
             <td><?= htmlspecialchars($rc->{'得票排名'} ?? '—') ?></td>
             <td><?= htmlspecialchars($rc->{'號次'} ?? '—') ?></td>
-            <td><?= htmlspecialchars($rc->{'姓名'} ?? '') ?><?= $is_self ? '（本人）' : '' ?></td>
+            <td>
+              <?php if ($rc->{'人物代碼'} ?? null): ?>
+              <a href="/info/candidate/<?= urlencode($rc->{'人物代碼'}) ?>"><?= htmlspecialchars($rc->{'姓名'} ?? '') ?></a>
+              <?php else: ?>
+              <?= htmlspecialchars($rc->{'姓名'} ?? '') ?>
+              <?php endif; ?>
+              <?= $is_self ? '（本人）' : '' ?>
+            </td>
+            <td><?= htmlspecialchars($rc->{'性別'} ?? '—') ?></td>
+            <td><?= htmlspecialchars($rc->{'黨籍'} ?? '—') ?></td>
             <td><?= ($rc->{'得票數'} ?? null) !== null ? number_format($rc->{'得票數'}) : '—' ?></td>
             <td><?= ($rc->{'得票率'} ?? null) !== null ? htmlspecialchars($rc->{'得票率'}) . '%' : '—' ?></td>
+            <td><?= ($rc->{'當選'} ?? false) ? '✅' : '' ?></td>
           </tr>
           <?php endforeach; ?>
         </tbody>
