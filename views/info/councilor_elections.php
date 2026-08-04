@@ -1,0 +1,105 @@
+<?php
+$records = $this->councilor_records ?? [];
+if (!$records): ?>
+<div class="alert alert-warning mt-4">找不到議員資料</div>
+<?php return; endif;
+
+$groups = $this->election_groups ?? [];
+?>
+
+<div class="alert alert-light border small">
+  選舉公報資料只回溯到民國98年（2009年），較舊的屆次可能查不到公報內容；
+  政見如果來源是圖片或文字層是亂碼，會直接顯示原始圖片。
+</div>
+
+<?php if (!$groups): ?>
+<div class="alert alert-light border">找不到這位議員的選舉紀錄</div>
+<?php else: ?>
+
+<?php foreach ($groups as $group): ?>
+<?php $c = $group->{'candidate'} ?? null; ?>
+<div class="card shadow-sm mb-4">
+  <div class="card-header py-2">
+    <strong class="small">第 <?= htmlspecialchars($group->{'屆次'} ?? '') ?> 屆</strong>
+  </div>
+  <div class="card-body">
+    <?php if (!$c): ?>
+    <div class="text-body-secondary small">找不到這屆的候選人公報資料</div>
+    <?php else: ?>
+
+    <div class="row g-3 mb-3">
+      <?php if ($c->{'相片路徑'} ?? null): ?>
+      <div class="col-auto">
+        <img src="<?= htmlspecialchars($c->{'相片路徑'}) ?>" alt="" style="width:120px; aspect-ratio:3/4; object-fit:cover;" class="rounded shadow-sm">
+      </div>
+      <?php endif; ?>
+      <div class="col">
+        <p class="small text-body-secondary mb-2">
+          <?= htmlspecialchars($c->{'選舉名稱'} ?? '') ?>
+          <?php if ($c->{'號次'} ?? null): ?>
+          ・號次 <?= htmlspecialchars($c->{'號次'}) ?>
+          <?php endif; ?>
+          <?php if (($c->{'得票數'} ?? null) !== null): ?>
+          ・得票數 <?= number_format($c->{'得票數'}) ?>
+          <?php endif; ?>
+          <?php if (($c->{'得票率'} ?? null) !== null): ?>
+          （<?= htmlspecialchars($c->{'得票率'}) ?>%<?php if ($c->{'得票排名'} ?? null): ?>，第 <?= htmlspecialchars($c->{'得票排名'}) ?> 高票<?php endif; ?>）
+          <?php endif; ?>
+        </p>
+
+        <?php if ($c->{'學歷'} ?? null): ?>
+        <h3 class="h6 fw-semibold mb-1">學歷</h3>
+        <p class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($c->{'學歷'}) ?></p>
+        <?php endif; ?>
+
+        <?php if ($c->{'經歷'} ?? null): ?>
+        <h3 class="h6 fw-semibold mb-1">經歷</h3>
+        <p class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($c->{'經歷'}) ?></p>
+        <?php endif; ?>
+
+        <h3 class="h6 fw-semibold mb-1">政見</h3>
+        <?php if (($c->{'政見來源'} ?? null) === 'text' && ($c->{'政見'} ?? null)): ?>
+        <p class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($c->{'政見'}) ?></p>
+        <?php elseif ($c->{'政見圖路徑'} ?? null): ?>
+        <img src="<?= htmlspecialchars($c->{'政見圖路徑'}) ?>" alt="政見" class="img-fluid border rounded">
+        <?php else: ?>
+        <p class="small text-body-secondary">（無政見資料）</p>
+        <?php endif; ?>
+      </div>
+    </div>
+
+    <?php if (!empty($group->{'race'})): ?>
+    <h3 class="h6 fw-semibold mb-2">同選區得票比較</h3>
+    <div class="table-responsive">
+      <table class="table table-sm">
+        <thead class="table-light">
+          <tr>
+            <th>排名</th>
+            <th>號次</th>
+            <th>姓名</th>
+            <th>得票數</th>
+            <th>得票率</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php foreach ($group->{'race'} as $rc): ?>
+          <?php $is_self = ($rc->{'候選人代碼'} ?? null) === ($c->{'候選人代碼'} ?? null); ?>
+          <tr class="<?= $is_self ? 'table-primary' : '' ?>">
+            <td><?= htmlspecialchars($rc->{'得票排名'} ?? '—') ?></td>
+            <td><?= htmlspecialchars($rc->{'號次'} ?? '—') ?></td>
+            <td><?= htmlspecialchars($rc->{'姓名'} ?? '') ?><?= $is_self ? '（本人）' : '' ?></td>
+            <td><?= ($rc->{'得票數'} ?? null) !== null ? number_format($rc->{'得票數'}) : '—' ?></td>
+            <td><?= ($rc->{'得票率'} ?? null) !== null ? htmlspecialchars($rc->{'得票率'}) . '%' : '—' ?></td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <?php endif; ?>
+
+    <?php endif; ?>
+  </div>
+</div>
+<?php endforeach; ?>
+
+<?php endif; ?>

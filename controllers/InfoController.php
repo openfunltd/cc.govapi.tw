@@ -25,10 +25,11 @@ class InfoController extends MiniEngine_Controller
 
         // 議員個人頁：用「人物代碼」串連同一人跨屆的所有記錄，不屬於屆次路由
         // /info/councilor/{人物代碼}（基本資料，預設）或 /info/councilor/{人物代碼}/speeches
-        // （發言記錄）或 /info/councilor/{人物代碼}/bills（提案記錄）
+        // （發言記錄）或 /info/councilor/{人物代碼}/bills（提案記錄）或
+        // /info/councilor/{人物代碼}/elections（選舉紀錄）
         if ($term_no === 'councilor') {
             $person_code = $tab;
-            $profile_tab = in_array($sub_id, ['speeches', 'bills'], true) ? $sub_id : 'profile';
+            $profile_tab = in_array($sub_id, ['speeches', 'bills', 'elections'], true) ? $sub_id : 'profile';
             $this->view->is_councilor_profile = true;
             $this->view->profile_tab = $profile_tab;
 
@@ -39,6 +40,8 @@ class InfoController extends MiniEngine_Controller
                 $this->loadCouncilorSpeeches($records, $_GET['term'] ?? null);
             } elseif ($profile_tab === 'bills') {
                 $this->loadCouncilorBills($records);
+            } elseif ($profile_tab === 'elections') {
+                $this->loadCouncilorElections($records);
             }
             return;
         }
@@ -129,12 +132,58 @@ class InfoController extends MiniEngine_Controller
     protected function loadCouncilors($cc_code, $term_no)
     {
         $r = CCAPI::apiQuery('/councilors?limit=100&' . urlencode('屆次') . '=' . $term_no, '本屆議員名單');
-        return $this->groupCouncilorsByDistrict($r->councilors ?? []);
+        $councilors = $r->councilors ?? [];
+        $this->attachVoteShare($councilors);
+        return $this->groupCouncilorsByDistrict($councilors);
     }
 
     /**
-     * 依選區分組，組內依姓名排序（沿用 API 預設排序），組間依選舉區號由小到大排序
-     * （原住民保障名額的選舉區號固定編在一般選區之後，數字排序自然會放在最後）。
+     * 用議員的「參選代碼」比對 candidate 的「候選人代碼」（同一組代碼體系），
+     * 把該次選舉的得票數／得票率／得票排名附到議員物件上（沒有比對到候選人
+     * 資料時就不會有這幾個屬性，例如候選人資料只回溯到民國98年，較舊的屆次
+     * 查不到）。一次查詢批次處理整批議員，不逐筆查，避免 N+1。
+     */
+    protected function attachVoteShare($councilors)
+    {
+        $codes = [];
+        foreach ($councilors as $c) {
+            if ($c->{'參選代碼'} ?? null) {
+                $codes[$c->{'參選代碼'}] = true;
+            }
+        }
+        if (!$codes) {
+            return;
+        }
+
+        $qs = '';
+        foreach (array_keys($codes) as $code) {
+            $qs .= '&' . urlencode('候選人代碼') . '=' . urlencode($code);
+        }
+        $r = CCAPI::apiQuery(
+            '/candidates?limit=' . count($codes) . $qs,
+            '議員名單對應候選人得票資料'
+        );
+
+        $by_code = [];
+        foreach (($r->candidates ?? []) as $cand) {
+            $by_code[$cand->{'候選人代碼'}] = $cand;
+        }
+
+        foreach ($councilors as $c) {
+            $cand = $by_code[$c->{'參選代碼'} ?? ''] ?? null;
+            if ($cand) {
+                $c->{'得票數'} = $cand->{'得票數'} ?? null;
+                $c->{'得票率'} = $cand->{'得票率'} ?? null;
+                $c->{'得票排名'} = $cand->{'得票排名'} ?? null;
+            }
+        }
+    }
+
+    /**
+     * 依選區分組，組內依得票率由高到低排序（沒有得票資料的排最後，保留原本
+     * API 排序的相對順序），讓使用者能一眼看出每一區誰的得票最強；組間依
+     * 選舉區號由小到大排序（原住民保障名額的選舉區號固定編在一般選區之後，
+     * 數字排序自然會放在最後）。
      * 部分較舊資料的「選區別」是「區域」佔位字串，不是真正選區名稱，這裡改用
      * 「第N選舉區」代替，比直接顯示縣市名更有意義。
      * 完全沒有選舉區號的記錄（來源資料缺漏）獨立分到最後一組。
@@ -155,6 +204,19 @@ class InfoController extends MiniEngine_Controller
             $groups[$key]['councilors'][] = $c;
         }
         ksort($groups, SORT_NUMERIC);
+
+        foreach ($groups as &$group) {
+            usort($group['councilors'], function ($a, $b) {
+                $va = $a->{'得票率'} ?? null;
+                $vb = $b->{'得票率'} ?? null;
+                if ($va === null && $vb === null) return 0;
+                if ($va === null) return 1;
+                if ($vb === null) return -1;
+                return $vb <=> $va;
+            });
+        }
+        unset($group);
+
         return array_values($groups);
     }
 
@@ -387,7 +449,9 @@ class InfoController extends MiniEngine_Controller
             '/councilors?limit=50&' . urlencode('人物代碼') . '=' . urlencode($person_code) . '&sort=' . urlencode('屆次>'),
             '該議員所有屆期記錄'
         );
-        return $r->councilors ?? [];
+        $records = $r->councilors ?? [];
+        $this->attachVoteShare($records);
+        return $records;
     }
 
     /**
@@ -550,5 +614,67 @@ class InfoController extends MiniEngine_Controller
         }
         krsort($groups, SORT_NUMERIC);
         $this->view->bill_groups = array_values($groups);
+    }
+
+    /**
+     * 選舉紀錄 tab：每一屆的「參選代碼」對應到 candidate 的完整候選人公報資料
+     * （學歷/經歷/政見/相片，候選人資料只回溯到民國98年，較舊屆次可能查不到）
+     * 加上同選區其他候選人的得票比較表（用候選人自己的選舉代碼＋行政區代碼＋
+     * 選區別去查，這三個欄位一起才能精確定位同一場選舉，見 knowledge.md 說明）。
+     * 依屆次新到舊排列（$records 已經是這個順序）。
+     */
+    protected function loadCouncilorElections($records)
+    {
+        $this->view->election_groups = [];
+        if (!$records) {
+            return;
+        }
+
+        $codes = [];
+        foreach ($records as $r) {
+            if ($r->{'參選代碼'} ?? null) {
+                $codes[$r->{'參選代碼'}] = true;
+            }
+        }
+        if (!$codes) {
+            return;
+        }
+
+        $qs = '';
+        foreach (array_keys($codes) as $code) {
+            $qs .= '&' . urlencode('候選人代碼') . '=' . urlencode($code);
+        }
+        $r = CCAPI::apiQuery('/candidates?limit=' . count($codes) . $qs, '該議員各屆候選人公報資料');
+
+        $candidate_by_code = [];
+        foreach (($r->candidates ?? []) as $cand) {
+            $candidate_by_code[$cand->{'候選人代碼'}] = $cand;
+        }
+
+        $groups = [];
+        foreach ($records as $term_record) {
+            $participation_code = $term_record->{'參選代碼'} ?? null;
+            $candidate = $participation_code ? ($candidate_by_code[$participation_code] ?? null) : null;
+
+            $race_candidates = [];
+            if ($candidate && ($candidate->{'選舉代碼'} ?? null)) {
+                $race_qs = '&' . urlencode('選舉代碼') . '=' . urlencode($candidate->{'選舉代碼'})
+                    . '&' . urlencode('行政區代碼') . '=' . urlencode($candidate->{'行政區代碼'} ?? '')
+                    . '&' . urlencode('選區別') . '=' . urlencode($candidate->{'選區別'} ?? '');
+                $race_r = CCAPI::apiQuery(
+                    '/candidates?limit=100&sort=' . urlencode('得票排名<') . $race_qs,
+                    '同選區候選人得票比較'
+                );
+                $race_candidates = $race_r->candidates ?? [];
+            }
+
+            $groups[] = (object)[
+                '屆次'      => $term_record->{'屆次'},
+                'candidate' => $candidate,
+                'race'      => $race_candidates,
+            ];
+        }
+
+        $this->view->election_groups = $groups;
     }
 }

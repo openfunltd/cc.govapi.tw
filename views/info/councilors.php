@@ -24,6 +24,9 @@
         <div class="text-body-secondary" style="font-size: 0.75rem;">
           <?= htmlspecialchars($c->{'黨籍'} ?? '—') ?><br>
           <?= htmlspecialchars(info_district_label($c) ?: '—') ?>
+          <?php if ($c->{'得票率'} ?? null): ?>
+          <br><span class="text-primary">得票：<?= htmlspecialchars($c->{'得票率'}) ?>%</span>
+          <?php endif; ?>
         </div>
       </div>
     </div>

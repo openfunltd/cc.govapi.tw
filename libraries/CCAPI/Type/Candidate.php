@@ -55,6 +55,21 @@ class CCAPI_Type_Candidate extends CCAPI_Type
                 'description' => '對應中選會選舉資料庫的候選人代碼，可跟 councilor 的「參選代碼」／「人物代碼」比對是否當選；查無此代碼代表沒有比對到候選人名單（仍有學經歷/政見等內容，只是不能 join）',
                 'type' => 'string',
             ],
+            '選舉代碼' => [
+                'es_field' => '選舉代碼',
+                'description' => '選舉代碼（例: ELC-T1-111）。要定位同一場選舉的所有候選人，需搭配「行政區代碼」「選區別」一起查（單一縣市可能有多個選舉區）',
+                'type' => 'string',
+            ],
+            '行政區代碼' => [
+                'es_field' => '行政區代碼',
+                'description' => '候選人所屬縣市的行政區代碼（例: 63000）',
+                'type' => 'string',
+            ],
+            '選區別' => [
+                'es_field' => '選區別',
+                'description' => '選舉區名稱（例: 第01選舉區），同一個縣市通常有多個同名選舉區跨不同選舉代碼，定位選區請用「選舉代碼＋行政區代碼＋選區別」三個欄位一起查',
+                'type' => 'string',
+            ],
             'code_match' => [
                 'es_field' => 'code_match',
                 'description' => '候選人代碼比對方式，代表可信度：exact／name_only／subsequence／cjk（皆為高或中高可信度），沒有這個欄位代表沒比對到',
