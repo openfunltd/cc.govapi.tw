@@ -16,3 +16,6 @@ putenv('IMPORT_SITTING_CSV=');        // 場次.csv 路徑，預設 {project}/�
 putenv('IMPORT_TRANSCRIPT_CSV=');     // 逐字稿索引.csv 路徑，預設 {project}/逐字稿索引.csv
 putenv('IMPORT_TRANSCRIPT_BASE_DIR=');// 逐字稿原始檔案目錄（索引裡的相對路徑基準），預設 {project}/逐字稿
 putenv('IMPORT_BILL_JSONL=');         // 議案.jsonl 路徑，預設 {project}/議案.jsonl
+putenv('IMPORT_CANDIDATE_JSONL=');    // bulletin.jsonl 路徑，預設 {project}/bulletin.jsonl
+putenv('IMPORT_CANDIDATE_VOTES_JSONL=');// 得票數.jsonl 路徑（已篩選縣市/直轄市議員、
+                                       // 縣市層級得票數的子集），預設 {project}/得票數.jsonl

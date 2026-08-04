@@ -239,6 +239,37 @@ class TypeHelper
                     'data' => '議案內容',
                 ],
             ],
+            'candidate' => [
+                'name' => '候選人',
+                'icon' => 'fas fa-fw fa-id-card',
+                'cols' => [
+                    'all' => [
+                        '議會代碼',
+                        '年份',
+                        '縣市',
+                        '姓名',
+                        '號次',
+                    ],
+                    'single' => [
+                        '年份',
+                        '縣市',
+                        '姓名',
+                        '號次',
+                    ],
+                ],
+                'default_aggs' => [
+                    'all' => [
+                        '議會代碼',
+                        '年份',
+                    ],
+                    'single' => [
+                        '年份',
+                    ],
+                ],
+                'item_features' => [
+                    'data' => '候選人資料',
+                ],
+            ],
         ];
     }
 

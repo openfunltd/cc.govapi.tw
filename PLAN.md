@@ -149,6 +149,18 @@
 - `libraries/TypeHelper.php`、`views/collection/bill_data.php`：瀏覽器列表/詳情頁
 - **目前只涵蓋 4 個議會**（雲林縣、新北市、花蓮縣、臺南市），是持續擴充中的實驗性補充資料；**沒有會期代碼／場次代碼可以連結**，「屆」只是從檔名解析出來的推測值（來源議事錄檔案常橫跨一個定期會加多個臨時會，無法精確對應到單一會期或場次）
 
+#### Phase 26 — 候選人（Candidate）型別 ✅
+- `bulletin.jsonl` 來源（選舉公報清整出的候選人學歷/經歷/政見/相片），只匯入縣市議員／直轄市議員候選人（立委/總統/縣市長/直轄市長不在 ccapi 範疇）；**不是「議員」**，包含落選候選人，跟現有 `councilor`（當選、實際擔任過議員的人）是不同實體，語意上刻意分開
+- `scripts/import-candidate.php`：
+  - 判斷是不是議員選舉優先用「選舉名稱」（來自候選人名單，準確），「選舉類型」（來自檔名）在合刊公報時可能不準，只在選舉名稱缺值時當退回依據
+  - fix：合刊公報造成同一位候選人被兩份不同來源 PDF 各自抽出一次的真重複（173 組），依候選人代碼去重，優先保留「選舉類型」正確標示為議員選舉的那筆
+  - 衍生欄位：代碼（doc ID，候選人代碼缺值時用來源PDF/頁碼/號次/姓名組合成替代 ID）、議會代碼（從縣市名稱對照，桃園市 2014 年改制前的舊「桃園縣」對應到已廢止的 `tao-1952`）、年份（從選舉名稱解析民國年）
+  - 圖片網址：相片路徑/政見圖路徑改寫成 `https://lydata.ronny-s3.click/bulletin/image/...` 公開網址
+  - 得票數/得票排名/得票率：另外 join 中選會逐投開票所得票明細（`tw.gov.cec~txn~candidates-votes.jsonl`，原始 1.7GB/577萬列，先篩選縣市層級+縣市議員/直轄市議員候選人縮小到 13,205 列存成 `得票數.jsonl`），依「選舉代碼＋選區代碼」分組算出同選區排名與得票率
+- `libraries/CCAPI/Type/Candidate.php`：filter 支援議會代碼、年份、縣市、姓名、候選人代碼、code_match、政見來源、得票排名；查詢欄位為姓名/學歷/經歷/政見
+- `libraries/TypeHelper.php`、`views/collection/candidate_data.php`：瀏覽器列表/詳情頁
+- **資料品質注意事項**（已寫進 `knowledge.md`）：政見有沒有可用文字要看「政見來源」欄位（`text-garbled` 代表文字層是亂碼），不能只看「政見」是否有值；候選人代碼只回溯到民國 98 年（2009），更早期公報是純掃描圖沒有文字層，不在這批資料裡
+
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
 - `scripts/import-council.php` CSV 第一欄 header 因 UTF-8 BOM（`\xEF\xBB\xBF`）導致 `Undefined array key "代碼"`，已修正
@@ -241,6 +253,7 @@ cc.govapi.tw/
 │           ├── Transcript.php         # 逐字稿
 │           ├── Committee.php          # 委員會
 │           ├── Bill.php               # 議案
+│           ├── Candidate.php          # 候選人（選舉公報，落選者也收錄，不是議員）
 │           ├── Overview.php           # 議會現況快取（唯讀彙整型別，供 /info 用）
 │           └── Completeness.php       # 資料完整度（唯讀彙整型別，非來源資料）
 ├── scripts/
@@ -252,6 +265,7 @@ cc.govapi.tw/
 │   ├── import-transcript.php          # 逐字稿索引 CSV + 逐字稿檔案 → ccv1_transcript
 │   ├── import-committee.php           # data.csv → ccv1_committee
 │   ├── import-bill.php                # 議案.jsonl → ccv1_bill
+│   ├── import-candidate.php           # bulletin.jsonl + 得票數.jsonl → ccv1_candidate
 │   ├── generate-completeness.php      # 彙整計算 → ccv1_completeness（議員/會期/場次/逐字稿四維度）
 │   └── generate-council-overview.php  # 彙整計算 → ccv1_overview（供 /info 全國卡片牆用，需在資料重新匯入後手動重跑）
 ├── views/
@@ -268,7 +282,8 @@ cc.govapi.tw/
 ├── static/                            # sb-admin-2 CSS/JS（viewer 舊版殘留，逐步淘汰中）
 ├── 議會.csv, 屆.csv                    # 進版控管的來源資料
 └── （git-ignored：議員.jsonl, 會期.csv, data.csv, 場次.csv, 逐字稿索引.csv, 逐字稿/,
-    議案.jsonl, 縣市界.geojson, config.inc.php, datacc.openfun.app/）
+    議案.jsonl, bulletin.jsonl, 得票數.jsonl, 縣市界.geojson, config.inc.php,
+    datacc.openfun.app/）
 ```
 
 ---
@@ -285,6 +300,7 @@ cc.govapi.tw/
 | `ccv1_transcript` | `Type/Transcript.php` | 逐字稿索引 CSV + 逐字稿檔案 | 與對應場次同一個代碼（1:1） |
 | `ccv1_committee` | `Type/Committee.php` | `data.csv` | 代碼本身（例 `tpe-c1`） |
 | `ccv1_bill` | `Type/Bill.php` | `議案.jsonl` | 代碼本身，重複時加 `-dup{N}` 後綴 |
+| `ccv1_candidate` | `Type/Candidate.php` | `bulletin.jsonl` + `得票數.jsonl` | 候選人代碼；缺值時用來源PDF/頁碼/號次/姓名組合替代 ID |
 | `ccv1_overview` | `Type/Overview.php` | 由 `generate-council-overview.php` 彙整其他 index 算出 | 議會代碼（例 `tpe`） |
 | `ccv1_completeness` | `Type/Completeness.php` | 由 `generate-completeness.php` 彙整其他 index 算出 | 議會代碼（例 `tpe`） |
 

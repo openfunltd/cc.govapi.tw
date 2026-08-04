@@ -13,3 +13,5 @@ data.csv
 逐字稿/
 縣市界.geojson
 議案.jsonl
+bulletin.jsonl
+得票數.jsonl
