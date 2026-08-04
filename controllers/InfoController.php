@@ -461,6 +461,13 @@ class InfoController extends MiniEngine_Controller
         );
         $records = $r->councilors ?? [];
         $this->attachVoteShare($records);
+
+        $cand_r = CCAPI::apiQuery(
+            '/candidates?limit=1&' . urlencode('人物代碼') . '=' . urlencode($person_code),
+            '議員是否有候選人歷次參選頁'
+        );
+        $this->view->councilor_has_candidate = ($cand_r->total ?? 0) > 0;
+
         return $records;
     }
 

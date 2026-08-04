@@ -61,6 +61,7 @@ function info_election_status_badge($record) {
     <?php else: ?>
 
     <form action="/info/search" method="get" class="pt-3 pb-1">
+      <input type="hidden" name="tab" value="transcript">
       <div class="input-group">
         <span class="input-group-text">🔍</span>
         <input type="text" name="q" class="form-control" placeholder="搜尋逐字稿關鍵字…">

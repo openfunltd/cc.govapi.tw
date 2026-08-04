@@ -23,3 +23,10 @@ putenv('IMPORT_CANDIDATE_PERSON_JSONL=');// 人物代碼.jsonl 路徑（候選�
                                        // 對照表子集），預設 {project}/人物代碼.jsonl
 putenv('IMPORT_CANDIDATE_ELECTED_JSONL=');// 當選註記.jsonl 路徑（候選人代碼→中選會
                                        // 當選註記對照表子集），預設 {project}/當選註記.jsonl
+
+// 以下三個是「得票數.jsonl／人物代碼.jsonl／當選註記.jsonl」對照表子集的原始來源
+// （scripts/prepare-candidate-lookups.php 讀這三個、重新產生上面三個子集），
+// 只有要重新產生對照表子集時才需要設定，平常匯入候選人資料不會用到
+putenv('IMPORT_CANDIDATE_PERSON_SOURCE_JSONL=');  // person.jsonl（人物代碼原始來源，39MB）
+putenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV=');   // cand.csv（當選註記原始來源）
+putenv('IMPORT_CANDIDATE_VOTES_SOURCE_JSONL=');   // 候選人得票數原始來源（1.7GB）

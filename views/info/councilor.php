@@ -10,7 +10,13 @@ $tab = $this->profile_tab ?? 'profile';
 ?>
 
 <div class="pt-4 pb-3">
-  <h1 class="h3 fw-semibold mb-3"><?= htmlspecialchars($latest->{'姓名'} ?? '') ?></h1>
+  <h1 class="h3 fw-semibold mb-3">
+    <?php if (!empty($this->councilor_has_candidate)): ?>
+    <a href="/info/candidate/<?= urlencode($person_code) ?>" class="link-body-emphasis text-decoration-none"><?= htmlspecialchars($latest->{'姓名'} ?? '') ?></a>
+    <?php else: ?>
+    <?= htmlspecialchars($latest->{'姓名'} ?? '') ?>
+    <?php endif; ?>
+  </h1>
 
   <ul class="nav nav-tabs mb-3">
     <li class="nav-item">

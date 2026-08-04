@@ -172,6 +172,17 @@
 - 新增 `/info/candidate/{人物代碼}` 頁面：顯示某人歷年參選紀錄（含落選次數），每次參選都有候選人公報內容＋同選區得票比較表，若曾經當選過議員會附上連到 `/info/councilor/{人物代碼}` 的連結
 - 三個新的篩選/對照表子集（皆為原始檔案篩選後的小檔案，不在 crawl 流程重跑）：`得票數.jsonl`（1.7GB→13,205列）、`人物代碼.jsonl`（39MB→4,136列）、`當選註記.jsonl`（13,206列）
 
+#### Phase 28 — 搜尋分頁拆四種資料、匯入來源全面改指向原始檔案、每日自動偵測重新匯入 ✅
+- **`/info/search` 從「逐字稿／議案」兩個分頁擴充成四個獨立分頁：議員姓名／逐字稿／政見／議案**，四者是不同性質的資料，各自獨立搜尋、獨立篩選：
+  - 議員姓名：查 `councilor` 的「姓名」欄位（`query_fields=姓名`，只搜姓名不搜黨籍/簡歷），只收錄查得到議員記錄的人（當選過至少一次），facet 依議會／黨籍；結果連到 `/info/councilor/{人物代碼}`
+  - 政見：查 `candidate` 的「政見」欄位（`query_fields=政見`），包含落選的候選人，facet 依議會／是否當選（用 `當選` 欄位）；結果連到 `/info/candidate/{人物代碼}`
+  - 逐字稿／議案：沿用原本邏輯不變
+  - 四個分頁的前端邏輯收斂成共用的 `createSearchTab()` factory（狀態管理／查詢組裝／facet 與分頁渲染都共用），只有「打哪個 API、限定哪些欄位全文搜尋、怎麼畫一張結果卡片」是各分頁自己的設定，避免四份幾乎一樣的程式碼
+- `views/info/councilor.php` 頁首姓名（基本資料／發言記錄／提案記錄／選舉紀錄四個 tab 共用）補上連到 `/info/candidate/{人物代碼}` 的連結，但只在真的查得到候選人資料時才連（`InfoController::loadCouncilorProfile()` 內查一次 `/candidates?人物代碼=X&limit=1` 判斷），避免連到空頁面
+- **`config.inc.php` 的 `IMPORT_*` 環境變數全面改成直接指向 `/srv/open-forest/...` 原始檔案**（議會.csv／屆.csv／議員.jsonl／會期.csv／場次.csv／委員會 data.csv／逐字稿／議案.jsonl／bulletin.jsonl），不再把檔案複製進專案目錄——複製進來的本機快照會在原始資料更新後過期而不自知（已知案例：新北市 107/111 年候選人公報補齊後，`bulletin.jsonl` 本機複製版沒有跟著更新，得靠手動比對才發現）。專案目錄裡對應的本機複製檔（會期.csv／場次.csv／議案.jsonl／bulletin.jsonl）已刪除；`議會.csv`／`屆.csv` 例外——這兩個是有提交進 git 的小型參考資料（給沒有 `/srv/open-forest` 存取權的人 clone 專案時的預設資料），保留提交版本，但本機執行時一樣透過 `config.inc.php` 指向即時來源
+- 新增 `scripts/prepare-candidate-lookups.php`：把先前用一次性 shell/python 指令從三個大型原始來源（cand.csv／person.jsonl／候選人得票數，皆在 `mixed-tw.gov.cec.data-選舉資料庫`）篩選出 得票數.jsonl／人物代碼.jsonl／當選註記.jsonl 三個對照表子集的做法，改寫成正式、可重複執行的腳本。**這三個對照表過不過期的性質不同**：得票數／當選註記是用獨立規則篩選（不會過期），但人物代碼是「反查 bulletin.jsonl 目前的候選人清單」，bulletin.jsonl 一有新候選人就會出現查無人物代碼的缺口，必須整個重新產生、不能只重跑 `import-candidate.php`（已知案例同上，新北市 107/111 年候選人補齊後還要多這一步，候選人姓名超連結才會出現）
+- 新增 `scripts/auto-refresh.php`：每天排程用，自動偵測每個型別的來源檔案（mtime+size 簽章，記錄在 gitignored 的 `.auto-refresh-state.json`）有沒有變化，只有變化的型別才重新匯入（candidate 型別會先重跑 `prepare-candidate-lookups.php`），全部跑完後只要有任何型別更新過，就重跑 `generate-completeness.php`／`generate-council-overview.php`。預設用 upsert（不加 `--reset`），`--reset-all` 用於來源資料有刪除/更正、需要清掉舊資料時手動使用
+
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
 - `scripts/import-council.php` CSV 第一欄 header 因 UTF-8 BOM（`\xEF\xBB\xBF`）導致 `Undefined array key "代碼"`，已修正
@@ -278,8 +289,12 @@ cc.govapi.tw/
 │   ├── import-bill.php                # 議案.jsonl → ccv1_bill
 │   ├── import-candidate.php           # bulletin.jsonl + 得票數.jsonl + 人物代碼.jsonl
 │   │                                   # + 當選註記.jsonl → ccv1_candidate
+│   ├── prepare-candidate-lookups.php  # 從 person.jsonl/cand.csv/候選人得票數原始來源
+│   │                                   # 重新產生上面三個對照表子集
 │   ├── generate-completeness.php      # 彙整計算 → ccv1_completeness（議員/會期/場次/逐字稿四維度）
-│   └── generate-council-overview.php  # 彙整計算 → ccv1_overview（供 /info 全國卡片牆用，需在資料重新匯入後手動重跑）
+│   ├── generate-council-overview.php  # 彙整計算 → ccv1_overview（供 /info 全國卡片牆用，需在資料重新匯入後手動重跑）
+│   └── auto-refresh.php               # 排程用：偵測各型別來源檔案有沒有變化，有才重新匯入
+│                                       # + 重跑上面兩個彙整快取（見 .auto-refresh-state.json）
 ├── views/
 │   ├── common/, layout/app.php        # 共用版型
 │   ├── nav/top.php                    # 共用 navbar（首頁/viewer/swagger/about/info 共用，含議會切換下拉選單）
