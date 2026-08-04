@@ -77,15 +77,27 @@ class CCAPI_Type_Candidate extends CCAPI_Type
             ],
             'code_match' => [
                 'es_field' => 'code_match',
-                'description' => '候選人代碼比對方式，代表可信度：exact／name_only／subsequence／cjk（皆為高或中高可信度），沒有這個欄位代表沒比對到',
+                'description' => '候選人代碼比對方式，代表可信度：exact／name_only／subsequence／cjk（皆為高或中高可信度）／cell-image-row-anchor（沒比對到候選人名冊，靠「姓名 OCR 命中名單當錨點、依列序推算」對出來的，可信度較低），沒有這個欄位代表沒比對到',
                 'type' => 'string',
-                'enum' => ['exact', 'name_only', 'subsequence', 'cjk'],
+                'enum' => ['exact', 'name_only', 'subsequence', 'cjk', 'cell-image-row-anchor'],
+            ],
+            '學歷來源' => [
+                'es_field' => '學歷來源',
+                'description' => '「學歷」欄位內容是否可用：text=可用；text-garbled=文字層抽出來是亂碼、不可當文字用；cell-image-vision=AI 視覺模型辨識裁切後的欄位圖片得出的文字（不是 PDF 文字層，仍可當文字用，但準確度可能略低，細節見 note）；沒有這個欄位代表學歷是圖片或空白',
+                'type' => 'string',
+                'enum' => ['text', 'text-garbled', 'cell-image-vision'],
+            ],
+            '經歷來源' => [
+                'es_field' => '經歷來源',
+                'description' => '「經歷」欄位內容是否可用，規則同「學歷來源」',
+                'type' => 'string',
+                'enum' => ['text', 'text-garbled', 'cell-image-vision'],
             ],
             '政見來源' => [
                 'es_field' => '政見來源',
-                'description' => '「政見」欄位內容是否可用：text=可用；text-garbled=文字層抽出來是亂碼、不可當文字用；沒有這個欄位代表政見是圖片或空白（見「政見圖路徑」）',
+                'description' => '「政見」欄位內容是否可用：text=可用；text-garbled=文字層抽出來是亂碼、不可當文字用；cell-image-vision=AI 視覺模型辨識裁切後的欄位圖片得出的文字（不是 PDF 文字層，仍可當文字用，但準確度可能略低，細節見 note）；沒有這個欄位代表政見是圖片或空白（見「政見圖路徑」）',
                 'type' => 'string',
-                'enum' => ['text', 'text-garbled'],
+                'enum' => ['text', 'text-garbled', 'cell-image-vision'],
             ],
             '得票排名' => [
                 'es_field' => '得票排名',

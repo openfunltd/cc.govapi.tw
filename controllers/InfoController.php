@@ -446,7 +446,7 @@ class InfoController extends MiniEngine_Controller
     }
 
     /**
-     * 用「人物代碼」查出同一人跨屆的所有議員記錄，依屆次由新到舊排序
+     * 用「人物代碼」查出同一人跨屆的所有議員記錄，依「選舉日期」由新到舊排序
      * （人物代碼已核對過全部 3,464 筆議員記錄都有值，可放心當作跨屆連結的 key）
      */
     protected function loadCouncilorProfile($person_code)
@@ -460,6 +460,7 @@ class InfoController extends MiniEngine_Controller
             '該議員所有屆期記錄'
         );
         $records = $r->councilors ?? [];
+        $records = $this->attachTermInfo($records);
         $this->attachVoteShare($records);
 
         $cand_r = CCAPI::apiQuery(
@@ -467,6 +468,83 @@ class InfoController extends MiniEngine_Controller
             '議員是否有候選人歷次參選頁'
         );
         $this->view->councilor_has_candidate = ($cand_r->total ?? 0) > 0;
+
+        return $records;
+    }
+
+    /**
+     * 附加每筆議員記錄的屆期資訊（投票日/就職日/任期屆滿日/議會名稱），並依「選舉
+     * 日期」（投票日，缺值時退回就職日）由新到舊重新排序。
+     *
+     * 不能只依「屆次」數字排序：同一人跨兩個議會代碼時（例：桃園縣議會 tao-1952
+     * 屆次可以編到 17，改制直轄市後的桃園市議會 tao 屆次又從 1 重新起算），屆次
+     * 數字本身在跨議會時不具備「誰比較新」的意義——tao-1952 屆次 17（2010~2014）
+     * 數字比 tao 屆次 3（約 2018~2022）大，但實際上 tao 屆次 3 才是比較新的任期。
+     * 已知案例：徐景文（人物代碼 ELC-T2-91:10003-7:26）同時有 tao-1952 17/16/15 屆
+     * 跟 tao 3/2 屆的記錄，純依屆次數字排序會把 tao 的兩屆錯誤排到最後面。
+     */
+    protected function attachTermInfo($records)
+    {
+        if (!$records) {
+            return $records;
+        }
+
+        $council_codes = [];
+        foreach ($records as $r) {
+            if ($r->{'議會代碼'} ?? null) {
+                $council_codes[$r->{'議會代碼'}] = true;
+            }
+        }
+        if (!$council_codes) {
+            return $records;
+        }
+
+        $term_by_key = [];
+        foreach (array_keys($council_codes) as $cc_code) {
+            $term_r = CCAPI::apiQuery(
+                '/terms?limit=100&' . urlencode('議會代碼') . '=' . urlencode($cc_code),
+                '議員所屬議會的屆期資料（排序/顯示任期年份用）'
+            );
+            foreach (($term_r->terms ?? []) as $term) {
+                $term_by_key[$cc_code . ':' . $term->{'屆次'}] = $term;
+            }
+        }
+
+        $council_name_by_code = [];
+        $qs = '';
+        foreach (array_keys($council_codes) as $code) {
+            $qs .= '&' . urlencode('代碼') . '=' . urlencode($code);
+        }
+        $council_r = CCAPI::apiQuery('/councils?limit=' . count($council_codes) . $qs, '議會名稱對照');
+        foreach (($council_r->councils ?? []) as $council) {
+            $council_name_by_code[$council->{'代碼'}] = $council->{'議會名稱'};
+        }
+
+        foreach ($records as $r) {
+            $key = ($r->{'議會代碼'} ?? '') . ':' . ($r->{'屆次'} ?? '');
+            $term = $term_by_key[$key] ?? null;
+            $vote_date = $term->{'投票日'} ?? null;
+            $start_date = $term->{'就職日'} ?? null;
+            $end_date = $term->{'任期屆滿日'} ?? null;
+
+            $r->{'_排序日期'} = $vote_date ?: ($start_date ?: '');
+
+            $start_year = substr($start_date ?: ($vote_date ?: ''), 0, 4);
+            $end_year = $end_date ? substr($end_date, 0, 4) : null;
+            $r->{'_任期年份'} = $start_year !== '' ? ($start_year . '-' . ($end_year ?: '至今')) : null;
+
+            $council_name = $council_name_by_code[$r->{'議會代碼'} ?? ''] ?? null;
+            $r->{'_議員頭銜'} = $council_name ? preg_replace('/議會$/u', '議員', $council_name) : null;
+        }
+
+        usort($records, function ($a, $b) {
+            $ka = $a->{'_排序日期'} ?? '';
+            $kb = $b->{'_排序日期'} ?? '';
+            if ($ka !== $kb) {
+                return strcmp($kb, $ka);
+            }
+            return ($b->{'屆次'} ?? 0) <=> ($a->{'屆次'} ?? 0);
+        });
 
         return $records;
     }
@@ -688,6 +766,8 @@ class InfoController extends MiniEngine_Controller
 
             $groups[] = (object)[
                 '屆次'      => $term_record->{'屆次'},
+                '議員頭銜'  => $term_record->{'_議員頭銜'} ?? null,
+                '任期年份'  => $term_record->{'_任期年份'} ?? null,
                 'candidate' => $candidate,
                 'race'      => $race_candidates,
             ];

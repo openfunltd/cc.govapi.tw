@@ -183,6 +183,45 @@
 - 新增 `scripts/prepare-candidate-lookups.php`：把先前用一次性 shell/python 指令從三個大型原始來源（cand.csv／person.jsonl／候選人得票數，皆在 `mixed-tw.gov.cec.data-選舉資料庫`）篩選出 得票數.jsonl／人物代碼.jsonl／當選註記.jsonl 三個對照表子集的做法，改寫成正式、可重複執行的腳本。**這三個對照表過不過期的性質不同**：得票數／當選註記是用獨立規則篩選（不會過期），但人物代碼是「反查 bulletin.jsonl 目前的候選人清單」，bulletin.jsonl 一有新候選人就會出現查無人物代碼的缺口，必須整個重新產生、不能只重跑 `import-candidate.php`（已知案例同上，新北市 107/111 年候選人補齊後還要多這一步，候選人姓名超連結才會出現）
 - 新增 `scripts/auto-refresh.php`：每天排程用，自動偵測每個型別的來源檔案（mtime+size 簽章，記錄在 gitignored 的 `.auto-refresh-state.json`）有沒有變化，只有變化的型別才重新匯入（candidate 型別會先重跑 `prepare-candidate-lookups.php`），全部跑完後只要有任何型別更新過，就重跑 `generate-completeness.php`／`generate-council-overview.php`。預設用 upsert（不加 `--reset`），`--reset-all` 用於來源資料有刪除/更正、需要清掉舊資料時手動使用
 
+#### Phase 29 — 候選人來源整合 OCR（cell-image-vision）資料 ✅
+- 候選人來源 `bulletin.jsonl` 更新，把原本比對不到候選人名冊、只能整頁掃描的公報也
+  納入：改成逐格裁圖後用 AI 視覺模型辨識文字，新增 `學歷來源`／`經歷來源`／
+  `欄位圖片` 欄位，`政見來源`（現在 學歷來源／經歷來源 也一樣）多一個列舉值
+  `cell-image-vision`（AI 視覺辨識文字，不是 PDF 文字層，但仍是可用文字，只是準確度
+  可能略低）；`code_match` 多一個列舉值 `cell-image-row-anchor`（靠姓名 OCR 命中
+  名單當錨點、依列序推算候選人代碼，可信度較低）
+- **fix：`政見來源`（含新的 學歷來源／經歷來源）判斷可用文字的邏輯只認 `text`，沒把
+  新的 `cell-image-vision` 算進去**——這批候選人（189 筆）原本會被誤判成沒有政見/
+  學歷/經歷，直接改用共用的 `info_candidate_text_ok()` helper（`views/info/index.php`）
+- **fix：這批候選人來源沒有算出 `選舉代碼`／`行政區代碼`**（因為沒比對到候選人名冊），
+  但候選人代碼本身有（靠姓名 OCR 錨點對出來的）——`import-candidate.php` 改成缺值時
+  從候選人代碼反解（格式固定 `{選舉代碼}:{行政區代碼}-{選區}:{號次}`），不然「同選區
+  得票比較」這個功能對這批候選人會整個查不到同一場選舉的其他候選人
+- `欄位圖片`（每個欄位裁切送去辨識的原始小圖）跟「相片路徑」「政見圖路徑」原始路徑
+  慣例不同（沒有 `files/image/` 前綴），但實測 `https://lydata.ronny-s3.click/bulletin/
+  {原始路徑}` 一樣是有效公開圖片，`bulletin_cell_image_url()` 轉成公開網址存入 ES；
+  `views/info/candidate.php`、`views/info/councilor_elections.php` 的學歷/經歷/政見
+  在 `cell-image-vision` 時提供「查看原圖／查看文字」切換按鈕，方便使用者核對辨識
+  文字跟原圖是否一致
+- `人物代碼.jsonl` 對照表隨這次資料更新一起用 `prepare-candidate-lookups.php` 重新
+  產生（bulletin.jsonl 候選人代碼從 6,019 增加到 6,273，全部 100% 比對成功）
+
+#### Phase 30 — 議員個人頁歷屆紀錄改依選舉日期排序 ✅
+- **fix：議員個人頁（`/info/councilor/{人物代碼}` 歷屆紀錄表格、`/elections` 選舉紀錄
+  分頁）原本依「屆次」數字由大到小排序，但同一人跨兩個議會代碼時屆次數字不能拿來
+  跨議會比較新舊**（例：桃園縣議會 `tao-1952` 屆次可以編到 17，改制直轄市後的桃園市
+  議會 `tao` 屆次又從 1 重新起算，`tao-1952` 屆次 17（2010~2014）數字比 `tao` 屆次 3
+  （2022~2026）大，純依屆次數字排序會把比較新的 `tao` 兩屆排到最後面）。已知案例：
+  徐景文（人物代碼 `ELC-T2-91:10003-7:26`）同時有 `tao-1952` 17/16/15 屆跟 `tao` 3/2
+  屆的記錄
+  - 新增 `InfoController::attachTermInfo()`：批次查每個議會代碼的屆期資料（`/terms?議會代碼=X`）
+    取得投票日／就職日／任期屆滿日，改依「投票日」（缺值退回就職日）由新到舊排序，
+    純屆次數字只當同日期時的 tie-breaker
+  - 歷屆紀錄表格新增「任期」欄（YYYY-YYYY，任期尚未結束顯示「YYYY-至今」）
+  - 選舉紀錄分頁每屆卡片標題從「第17屆」改成「第17屆桃園縣議員(2010-2014)」，同時
+    顯示議會名稱（`議會名稱` 尾字「議會」代換成「議員」）跟任期年份，不然看不出來
+    是哪個縣市、任期是什麼時候
+
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
 - `scripts/import-council.php` CSV 第一欄 header 因 UTF-8 BOM（`\xEF\xBB\xBF`）導致 `Undefined array key "代碼"`，已修正

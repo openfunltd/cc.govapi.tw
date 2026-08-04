@@ -48,7 +48,68 @@ function info_election_status_badge($record) {
     }
     return '<span class="badge bg-info text-dark">' . htmlspecialchars($status) . '</span>';
 }
+
+// 候選人學歷/經歷/政見是否為可用文字：text=公報文字層；cell-image-vision=AI 視覺
+// 模型辨識裁切後的欄位圖片得出的文字（不是文字層，但仍可當文字用）；text-garbled
+// （文字層是亂碼）跟缺值（圖片或空白）都不算可用
+function info_candidate_text_ok($source) {
+    return in_array($source, ['text', 'cell-image-vision'], true);
+}
+
+// 候選人學歷/經歷/政見欄位的共用渲染：可用文字時顯示文字；來源是 cell-image-vision
+// 且有對應的欄位裁切圖時，多顯示一個「查看原圖」切換鈕（跟 .ocr-toggle-btn 的
+// click delegation 配對，見本檔案下面的 <script>），方便使用者核對辨識文字跟
+// 原圖是否一致。$fallback_image_field 只有「政見」會傳（政見圖路徑），沒有可用
+// 文字時退回顯示整欄政見圖片，或顯示「無資料」；學歷/經歷沒有這個 fallback，
+// 沒有可用文字時整段（含標題）都不顯示
+function info_candidate_field_html($tag, $label, $c, $field, $fallback_image_field = null) {
+    $source = $c->{$field . '來源'} ?? null;
+    $text = $c->{$field} ?? null;
+    $ocr_image = $c->{'欄位圖片'}->{$field} ?? null;
+    $has_toggle = ($source === 'cell-image-vision') && $ocr_image;
+
+    if (info_candidate_text_ok($source) && $text) {
+        $html = "<div class=\"ocr-field\"><{$tag} class=\"h6 fw-semibold mb-1\">" . htmlspecialchars($label);
+        if ($has_toggle) {
+            $html .= ' <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 ocr-toggle-btn">查看原圖</button>';
+        }
+        $html .= "</{$tag}>";
+        $html .= '<p class="small ocr-text" style="white-space: pre-wrap;">' . htmlspecialchars($text) . '</p>';
+        if ($has_toggle) {
+            $html .= '<img class="ocr-image d-none border rounded" style="max-width: 100%; max-height: 240px;" src="' . htmlspecialchars($ocr_image) . '" alt="' . htmlspecialchars($label) . '原圖">';
+        }
+        return $html . '</div>';
+    }
+
+    if (!$fallback_image_field) {
+        return '';
+    }
+
+    $html = "<{$tag} class=\"h6 fw-semibold mb-1\">" . htmlspecialchars($label) . "</{$tag}>";
+    if ($c->{$fallback_image_field} ?? null) {
+        $html .= '<img src="' . htmlspecialchars($c->{$fallback_image_field}) . '" alt="' . htmlspecialchars($label) . '" class="img-fluid border rounded">';
+    } else {
+        $html .= '<p class="small text-body-secondary">（無' . htmlspecialchars($label) . '資料）</p>';
+    }
+    return $html;
+}
 ?>
+<script>
+// 候選人學歷/經歷/政見「查看原圖」切換鈕共用邏輯（見 info_candidate_field_html()）：
+// 用 event delegation 掛在 document 上，不管按鈕是從哪個 partial（candidate.php／
+// councilor_elections.php）渲染出來的都能生效，不用每個 partial 各自重複寫一份
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest('.ocr-toggle-btn');
+  if (!btn) return;
+  var wrap = btn.closest('.ocr-field');
+  var text = wrap.querySelector('.ocr-text');
+  var img = wrap.querySelector('.ocr-image');
+  var showingImage = !img.classList.contains('d-none');
+  text.classList.toggle('d-none');
+  img.classList.toggle('d-none');
+  btn.textContent = showingImage ? '查看原圖' : '查看文字';
+});
+</script>
 <main>
   <div class="container" style="max-width: 1100px;">
 

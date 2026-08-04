@@ -4,7 +4,7 @@ if (!$records): ?>
 <div class="alert alert-warning mt-4">找不到議員資料</div>
 <?php return; endif;
 
-// 記錄已依屆次由新到舊排序，第一筆當作「目前/最近」資訊來源
+// 記錄已依選舉日期由新到舊排序，第一筆當作「目前/最近」資訊來源
 $latest = $records[0];
 ?>
 
@@ -64,6 +64,7 @@ $latest = $records[0];
       <tr>
         <th>屆次</th>
         <th>議會</th>
+        <th>任期</th>
         <th>黨籍</th>
         <th>職稱</th>
         <th>選區／區域</th>
@@ -79,6 +80,7 @@ $latest = $records[0];
           <a href="/info/<?= (int)$r->{'屆次'} ?>/councilors">第 <?= htmlspecialchars($r->{'屆次'} ?? '') ?> 屆</a>
         </td>
         <td><?= htmlspecialchars($r->{'議會代碼'} ?? '') ?></td>
+        <td><?= htmlspecialchars($r->{'_任期年份'} ?? '—') ?></td>
         <td><?= htmlspecialchars($r->{'黨籍'} ?? '—') ?></td>
         <td><?= htmlspecialchars($r->{'職稱'} ?? '') ?></td>
         <td><?= htmlspecialchars(info_district_label($r) ?: '—') ?></td>

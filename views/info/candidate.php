@@ -67,24 +67,9 @@ foreach ($groups as $g) {
             <?php endif; ?>
           </p>
 
-          <?php if ($c->{'學歷'} ?? null): ?>
-          <h2 class="h6 fw-semibold mb-1">學歷</h2>
-          <p class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($c->{'學歷'}) ?></p>
-          <?php endif; ?>
-
-          <?php if ($c->{'經歷'} ?? null): ?>
-          <h2 class="h6 fw-semibold mb-1">經歷</h2>
-          <p class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($c->{'經歷'}) ?></p>
-          <?php endif; ?>
-
-          <h2 class="h6 fw-semibold mb-1">政見</h2>
-          <?php if (($c->{'政見來源'} ?? null) === 'text' && ($c->{'政見'} ?? null)): ?>
-          <p class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($c->{'政見'}) ?></p>
-          <?php elseif ($c->{'政見圖路徑'} ?? null): ?>
-          <img src="<?= htmlspecialchars($c->{'政見圖路徑'}) ?>" alt="政見" class="img-fluid border rounded">
-          <?php else: ?>
-          <p class="small text-body-secondary">（無政見資料）</p>
-          <?php endif; ?>
+          <?= info_candidate_field_html('h2', '學歷', $c, '學歷') ?>
+          <?= info_candidate_field_html('h2', '經歷', $c, '經歷') ?>
+          <?= info_candidate_field_html('h2', '政見', $c, '政見', '政見圖路徑') ?>
         </div>
       </div>
 

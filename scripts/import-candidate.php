@@ -8,8 +8,30 @@
  *
  * 來源：bulletin.jsonl（每行一位候選人，欄位：來源PDF/來源頁碼/選舉類型/縣市/
  * 選舉名稱/候選人代碼/選舉代碼/行政區代碼/選區別/code_match/姓名/號次/候選人別/
- * 學歷/經歷/政見/政見來源/其他欄位/note/extract_method/相片路徑/政見圖路徑）
+ * 學歷/學歷來源/經歷/經歷來源/政見/政見來源/欄位圖片/其他欄位/note/extract_method/
+ * 相片路徑/政見圖路徑）
  * 所有來源欄位直接沿用原始名稱匯入 ES
+ *
+ * 學歷來源／經歷來源／政見來源（欄位內容是否為可用文字，見 Candidate.php 說明）：
+ * 除了原本的 text／text-garbled，新增 cell-image-vision——來源把公報逐格裁圖後改用
+ * AI 視覺模型辨識圖片文字（不是 PDF 文字層），這仍是可用文字，只是抽取方式不同、
+ * 準確度可能略低（例如可能省略裝飾性文字、QR code 等，細節見每筆的 note 欄位）。
+ * 這批目前只有 189 筆（多半是候選人名冊比對不到、只能整頁裁圖辨識的少數頁面），
+ * 但『政見來源=cell-image-vision』時前端本來會被當成不可用文字誤判成沒有政見，
+ * 已於 views/info/candidate.php、views/info/councilor_elections.php 一併修正。
+ * 欄位圖片：cell-image-vision 那幾筆才有，是每個欄位（學歷/經歷/政見）裁切後送去
+ * 辨識的原始小圖，來源是相對路徑（例：cell/{來源PDF}/p1/r01c07.png），跟「相片路徑」
+ * 「政見圖路徑」不是同一個目錄慣例（那兩個原始路徑開頭是 files/image/，這個沒有），
+ * 但實測 https://lydata.ronny-s3.click/bulletin/{原始路徑} 一樣存在且是有效圖片，
+ * 用 bulletin_cell_image_url() 轉成公開網址，前端可以直接當 <img src> 用（例如
+ * cell-image-vision 時提供「查看原圖」切換按鈕，讓使用者比對辨識文字跟原圖）。
+ *
+ * 選舉代碼／行政區代碼缺值的 fallback：cell-image-vision 這批因為沒比對到候選人
+ * 名冊，來源沒有算出選舉代碼／行政區代碼（但候選人代碼本身有，因為是靠「姓名 OCR
+ * 命中名單當錨點」對出來的），這兩個欄位若缺值就從候選人代碼反解（格式固定是
+ * {選舉代碼}:{行政區代碼}-{選區}:{號次}，見 import_candidate_doc()），不然「同選區
+ * 得票比較」這個功能對這批候選人會失效（該功能是用選舉代碼+行政區代碼+選區別三個
+ * 欄位一起查同一場選舉的所有候選人）。
  *
  * 重要：來源涵蓋總統/立委/縣市長/直轄市長/縣市議員/直轄市議員六種選舉，這裡只匯入
  * 跟「地方議會」有關的縣市議員／直轄市議員候選人，其餘（國家層級、行政首長）不在
@@ -107,9 +129,12 @@ $index_mapping = [
         '號次'       => ['type' => 'keyword'],
         '候選人別'   => ['type' => 'keyword'],
         '學歷'       => ['type' => 'text'],
+        '學歷來源'   => ['type' => 'keyword'],
         '經歷'       => ['type' => 'text'],
+        '經歷來源'   => ['type' => 'keyword'],
         '政見'       => ['type' => 'text'],
         '政見來源'   => ['type' => 'keyword'],
+        '欄位圖片'   => ['type' => 'object', 'dynamic' => true, 'enabled' => false],
         '其他欄位'   => ['type' => 'object', 'dynamic' => true],
         'note'       => ['type' => 'text'],
         'extract_method' => ['type' => 'keyword'],
@@ -130,8 +155,9 @@ $index_mapping = [
 
 $known_source_keys = [
     '來源PDF', '來源頁碼', '選舉類型', '縣市', '選舉名稱', '候選人代碼', '選舉代碼',
-    '行政區代碼', '選區別', 'code_match', '姓名', '號次', '候選人別', '學歷', '經歷',
-    '政見', '政見來源', '其他欄位', 'note', 'extract_method', '相片路徑', '政見圖路徑',
+    '行政區代碼', '選區別', 'code_match', '姓名', '號次', '候選人別',
+    '學歷', '學歷來源', '經歷', '經歷來源', '政見', '政見來源', '欄位圖片',
+    '其他欄位', 'note', 'extract_method', '相片路徑', '政見圖路徑',
 ];
 
 if ($reset) {
@@ -162,6 +188,17 @@ function bulletin_image_url($path)
     $path = preg_replace('#^files/image/#', '', $path);
     $encoded = implode('/', array_map('rawurlencode', explode('/', $path)));
     return 'https://lydata.ronny-s3.click/bulletin/image/' . $encoded;
+}
+
+// 欄位圖片（cell-image-vision 那批的裁切小圖）路徑慣例跟「相片路徑」「政見圖路徑」
+// 不同，來源本身就是 cell/... 開頭（不用像 bulletin_image_url() 那樣先去掉
+// files/image/ 前綴），實測 https://lydata.ronny-s3.click/bulletin/{原始路徑}
+// 存在且是有效圖片（content-type: image/png），可以直接組出公開網址
+function bulletin_cell_image_url($path)
+{
+    if (!$path) return null;
+    $encoded = implode('/', array_map('rawurlencode', explode('/', $path)));
+    return 'https://lydata.ronny-s3.click/bulletin/' . $encoded;
 }
 
 // ── 讀取得票數子集，算出每位候選人的得票數／同選區排名／得票率 ──────────────
@@ -327,14 +364,31 @@ function import_candidate_doc($record, $doc_id, $county_to_cc_code, $votes_by_co
 
     foreach ($record as $key => $val) {
         if ($val === '' || $val === null) continue;
+        if ($val === []) continue;
         if ($key === '相片路徑' || $key === '政見圖路徑') {
             $doc[$key] = bulletin_image_url($val);
+            continue;
+        }
+        if ($key === '欄位圖片' && is_array($val)) {
+            $doc[$key] = array_map('bulletin_cell_image_url', $val);
             continue;
         }
         $doc[$key] = $val;
     }
 
+    // 候選人代碼格式固定是 {選舉代碼}:{行政區代碼}-{選區}:{號次}（例：
+    // ELC-T1-111:68000-7:1），沒比對到候選人名冊時來源不會算出選舉代碼／
+    // 行政區代碼，這裡從候選人代碼反解出來，不然「同選區得票比較」查不到同一場選舉
     $candidate_code = $record['候選人代碼'] ?? '';
+    if ($candidate_code !== '' && preg_match('/^([^:]+):(\d+)-/', $candidate_code, $cm)) {
+        if (empty($doc['選舉代碼'])) {
+            $doc['選舉代碼'] = $cm[1];
+        }
+        if (empty($doc['行政區代碼'])) {
+            $doc['行政區代碼'] = $cm[2];
+        }
+    }
+
     if ($candidate_code !== '' && isset($votes_by_code[$candidate_code])) {
         $doc['得票數'] = $votes_by_code[$candidate_code];
         if (isset($votes_rank[$candidate_code])) {
