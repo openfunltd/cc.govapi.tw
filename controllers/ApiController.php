@@ -28,6 +28,7 @@ class ApiController extends MiniEngine_Controller
         }
         OpenFunAPIHelper::apiDone([
             'size' => strlen(json_encode($ret, JSON_UNESCAPED_UNICODE)),
+            'count' => $this->countCollectionRecords($type, $ret),
         ]);
         return $this->cors_json($ret);
     }
@@ -42,7 +43,39 @@ class ApiController extends MiniEngine_Controller
         $ret = CCAPI_SearchAction::getItem($type, $id, $sub, $_SERVER['QUERY_STRING'], $cc_code);
         OpenFunAPIHelper::apiDone([
             'size' => strlen(json_encode($ret, JSON_UNESCAPED_UNICODE)),
+            'count' => $this->countItemRecords($ret),
         ]);
         return $this->cors_json($ret);
+    }
+
+    // collectionsAction 錯誤時 $ret 是純陣列（['error'=>true,...]），成功時是
+    // StdClass、實際資料放在 getReturnKey() 那個屬性（例如 councilors）
+    protected function countCollectionRecords($type, $ret)
+    {
+        if (!is_object($ret)) {
+            return 0;
+        }
+        $return_key = CCAPI_Type::run($type, 'getReturnKey');
+        return count($ret->{$return_key} ?? []);
+    }
+
+    // itemAction 的回應形狀不只一種：單筆詳情（->data）、關聯是子集合時
+    // （relation type 是 collection，回應形狀等同 getCollections()）、或
+    // relation type 是 _function 時的任意自訂形狀——沒有單一固定的 key 名稱，
+    // 找第一個陣列型別的屬性當作實際筆數，找不到就當作 1 筆（單一邏輯單位）
+    protected function countItemRecords($ret)
+    {
+        if (!is_object($ret) || ($ret->error ?? false)) {
+            return 0;
+        }
+        if (isset($ret->data)) {
+            return 1;
+        }
+        foreach (get_object_vars($ret) as $value) {
+            if (is_array($value)) {
+                return count($value);
+            }
+        }
+        return 1;
     }
 }

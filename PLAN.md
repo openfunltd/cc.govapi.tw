@@ -229,6 +229,7 @@
   - 這份類別是跟 `ly.govapi.tw-v2` 共用的逐字複製版本，之後要調整驗證/記錄邏輯要兩邊一起同步，不要各自演化
 - `controllers/ApiController.php` 的 `collectionsAction()`／`itemAction()` 開頭加 `OpenFunAPIHelper::checkUsage(['service' => 'ccapi', 'class' => ...])`，回傳前加 `apiDone(['size' => ...])`，跟 ly 的 `ApiController.php` 是同一個接法
 - `init.inc.php` 新增 `OpenFunAPIHelper::setUsageLogPath('/srv/data/cc.govapi.tw/usage')`（路徑寫死，不透過環境變數，跟 ly 一致）
+- **fix：`apiDone()` 的 `record_count` 一直都是 0**——`ly.govapi.tw-v2` 原始的 `ApiController.php` 本身就沒有把 `'count'` 選項傳進去（這份 helper 逐字複製過來自然也是同樣的缺口）。`collectionsAction()` 補上 `countCollectionRecords()`（用 `CCAPI_Type::run($type,'getReturnKey')` 抓實際回傳陣列的筆數）；`itemAction()` 補上 `countItemRecords()`（單筆詳情算 1 筆，找不到算 0 筆，若未來 relation 是子集合形狀就抓那個陣列的筆數——目前 ccapi 沒有任何型別定義 `getRelations()`，這個分支是保留給以後用的）
 
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
