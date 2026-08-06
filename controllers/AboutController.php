@@ -27,6 +27,7 @@ class AboutController extends MiniEngine_Controller
         header('Content-Type: text/plain; charset=utf-8');
         echo <<<TXT
         User-agent: *
+        Crawl-delay: 3
         Disallow: /api/
         Disallow: /info/search
         Disallow: /info/*/bills
