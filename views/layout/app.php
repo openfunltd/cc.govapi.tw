@@ -5,6 +5,13 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title><?= $this->escape(getenv('APP_NAME') ?: 'CCAPI 資料瀏覽器') ?></title>
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="cc.govapi.tw">
+    <meta property="og:title" content="<?= $this->escape(getenv('APP_NAME') ?: 'CCAPI 資料瀏覽器') ?>">
+    <meta property="og:description" content="台灣各縣市議會開放資料瀏覽器，免寫程式即可查詢議員、會期、議案等資料。">
+    <meta property="og:url" content="https://<?= $this->escape($_SERVER['HTTP_HOST'] ?? 'all.cc.govapi.tw') . $this->escape($_SERVER['REQUEST_URI'] ?? '/viewer') ?>">
+    <meta name="twitter:card" content="summary">
+    <meta name="description" content="台灣各縣市議會開放資料瀏覽器，免寫程式即可查詢議員、會期、議案等資料。">
     <link rel="shortcut icon" href="/static/favicon.ico">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@100..900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" integrity="sha512-Kc323vGBEqzTmouAECnVceyQqyqdsSiqLQISBL29aUW4U/M7pSPA/gEUZQqv1cwx4OnYxTxve5UMg5GT6L4JJg==" crossorigin="anonymous" referrerpolicy="no-referrer" />

@@ -6,7 +6,19 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@100..900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" integrity="sha512-jnSuA4Ss2PkkikSOLtYs8BlYIeeIK1h99ty4YfvRPAlzr377vr3CXDb7sb7eEEBYjDtcYj+AjBH3FLv5uSJuXg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js" integrity="sha512-7Pi/otdlbbCR+LnW+F7PwFcSDJOuUJB3OxtEHbg4vSMvzvJjde4Po1v4BR9Gdc9aXNUNFVUY+SK51wWT8WF0Gg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <title><?= $this->cc_code === 'all' ? '議會資訊 — 地方議會開放 API' : htmlspecialchars($this->council_name) . ' 議會資訊' ?></title>
+  <?php
+    $og_title = $this->og_title ?? '議會資訊 — 地方議會開放 API';
+    $og_description = $this->og_description ?? '台灣各縣市議會的議員、會期、議案、逐字稿等開放資料。';
+    $og_url = 'https://' . ($_SERVER['HTTP_HOST'] ?? 'all.cc.govapi.tw') . ($_SERVER['REQUEST_URI'] ?? '/');
+  ?>
+  <title><?= htmlspecialchars($og_title) ?></title>
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="cc.govapi.tw">
+  <meta property="og:title" content="<?= htmlspecialchars($og_title) ?>">
+  <meta property="og:description" content="<?= htmlspecialchars($og_description) ?>">
+  <meta property="og:url" content="<?= htmlspecialchars($og_url) ?>">
+  <meta name="twitter:card" content="summary">
+  <meta name="description" content="<?= htmlspecialchars($og_description) ?>">
   <style>
     body { font-family: 'Noto Sans TC', sans-serif; }
     .status-dot { display: inline-block; width: 0.6em; height: 0.6em; border-radius: 50%; margin-right: 0.3em; }

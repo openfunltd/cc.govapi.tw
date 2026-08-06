@@ -15,6 +15,8 @@ class InfoController extends MiniEngine_Controller
         $cc_code = $_SERVER['CCAPI_COUNCIL_CODE'] ?? 'all';
         $this->view->cc_code = $cc_code;
         $this->view->council_name = CouncilHelper::getName($cc_code);
+        // 預設 og 內容，各分支視情況覆蓋成更具體的版本（給社群分享／預覽卡片用）
+        $this->setOg('地方議會開放資料 — cc.govapi.tw', '台灣各縣市議會的議員、會期、議案、逐字稿等開放資料。');
 
         // 逐字稿搜尋：全國跟單一議會子網域都適用，不屬於屆次路由，前端 JS 直接呼叫
         // /transcripts API 做 crossfilter，這裡只需要準備頁面骨架
@@ -35,6 +37,18 @@ class InfoController extends MiniEngine_Controller
 
             $records = $this->loadCouncilorProfile($person_code);
             $this->view->councilor_records = $records;
+            if ($records) {
+                $latest = $records[0];
+                $council_name = CouncilHelper::getName($latest->{'議會代碼'} ?? '') ?: ($latest->{'議會代碼'} ?? '');
+                $district = $latest->{'選區別'} ?? '';
+                if ($district === '' || $district === '區域') {
+                    $district = $latest->{'區域'} ?? '';
+                }
+                $this->setOg(
+                    ($latest->{'姓名'} ?? '') . ' — ' . $council_name . '第' . ($latest->{'屆次'} ?? '') . '屆議員',
+                    trim(($latest->{'黨籍'} ?? '') . '・' . $district . '，共任職 ' . count($records) . ' 屆', '・')
+                );
+            }
 
             if ($profile_tab === 'speeches') {
                 $this->loadCouncilorSpeeches($records, $_GET['term'] ?? null);
@@ -53,6 +67,18 @@ class InfoController extends MiniEngine_Controller
             $person_code = $tab;
             $this->view->is_candidate_profile = true;
             $this->loadCandidateProfile($person_code);
+            $groups = $this->view->candidate_groups ?? [];
+            if ($groups) {
+                $latest = $groups[0]->{'candidate'};
+                $wins = 0;
+                foreach ($groups as $g) {
+                    if ($g->{'candidate'}->{'當選'} ?? false) $wins++;
+                }
+                $this->setOg(
+                    ($latest->{'姓名'} ?? '') . ' — 候選人歷年參選紀錄',
+                    '共參選 ' . count($groups) . ' 次，當選 ' . $wins . ' 次。' . ($latest->{'縣市'} ?? '')
+                );
+            }
             return;
         }
 
@@ -85,6 +111,10 @@ class InfoController extends MiniEngine_Controller
         $this->view->tabs = $this->tabs;
         $this->view->all_terms = $this->loadAllTerms($cc_code);
         $this->view->header = $this->loadHeader($cc_code, $term_no);
+        $this->setOg(
+            $this->view->council_name . '第' . $term_no . '屆・' . ($this->tabs[$tab] ?? $tab),
+            $this->view->council_name . '第' . $term_no . '屆的議員、會期、議案等開放資料。'
+        );
 
         switch ($tab) {
             case 'councilors':
@@ -106,8 +136,24 @@ class InfoController extends MiniEngine_Controller
                 $bill = $this->loadBillDetail($sub_id);
                 $this->resolveBillPeople($bill);
                 $this->view->bill_detail = $bill;
+                if ($bill) {
+                    $this->setOg(
+                        ($bill->{'案由'} ?? '議案詳情'),
+                        $this->view->council_name . '第' . ($bill->{'屆'} ?? $term_no) . '屆・' . ($bill->{'案號'} ?? '')
+                    );
+                }
                 break;
         }
+    }
+
+    /**
+     * 給社群分享／預覽卡片（og:title／og:description）用，views/info/index.php
+     * 的共用 <head> 會輸出這兩個值。內容都是純文字，view 那邊再做 htmlspecialchars
+     */
+    protected function setOg($title, $description)
+    {
+        $this->view->og_title = $title;
+        $this->view->og_description = $description;
     }
 
     protected function loadAllTerms($cc_code)

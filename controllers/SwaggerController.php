@@ -38,11 +38,11 @@ class SwaggerController extends MiniEngine_Controller
         $id_fields_string = implode('/', array_map(fn($field) => '{' . $field . '}', $id_fields));
         switch ($endpoint_type) {
         case 'list':
-            return "/{$resource}";
+            return "/api/{$resource}";
         case 'item':
-            return "/{$resource}/{$id_fields_string}";
+            return "/api/{$resource}/{$id_fields_string}";
         case 'relation':
-            return "/{$resource}/{$id_fields_string}/{$relation_name}";
+            return "/api/{$resource}/{$id_fields_string}/{$relation_name}";
         }
     }
 
@@ -395,9 +395,9 @@ class SwaggerController extends MiniEngine_Controller
         $id_example = implode('/', array_map(fn($info) => (string)$info['example'], $id_fields_info));
 
         $md = "### {$subject}（{$entity}）\n\n";
-        $md .= "- 列表：`GET /{$resource_list}`\n";
+        $md .= "- 列表：`GET /api/{$resource_list}`\n";
         if ($id_fields_info) {
-            $md .= "- 單筆：`GET /{$resource_item}/{$id_example}`（ID 依序為："
+            $md .= "- 單筆：`GET /api/{$resource_item}/{$id_example}`（ID 依序為："
                  . implode('、', array_keys($id_fields_info)) . "）\n";
         }
 

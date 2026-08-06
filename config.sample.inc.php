@@ -5,6 +5,11 @@ putenv('ELASTIC_URL=');               // ES URL（必填）
 putenv('ELASTIC_USER=');              // ES 使用者（必填）
 putenv('ELASTIC_PREFIX=ccv1_');       // index 前綴，例如 ccv1_councilor
 putenv('CCAPI_DOMAIN_POSTFIX=.cc.govapi.tw');  // 子網域後綴
+// 正式站務必設定：MiniEngine::defaultErrorHandler() 靠這個判斷要不要隱藏錯誤細節。
+// 沒設定時，路由找不到 controller（例如打到已移除的舊版無 /api/ 前綴路徑）或其他例外
+// 會回傳 200/完整檔案路徑＋stack trace（開發時方便除錯，正式站會洩漏伺服器路徑），
+// 設定後才會改成乾淨的 404 / 500，不外洩任何細節
+putenv('ENV=production');
 
 // 匯入資料來源路徑（可指定絕對路徑，供不同主機使用）
 putenv('IMPORT_COUNCIL_CSV=');        // 議會.csv 路徑，預設 {project}/議會.csv

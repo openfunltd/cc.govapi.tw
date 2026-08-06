@@ -304,7 +304,7 @@ class TypeHelper
     public static function getApiUrl($type)
     {
         $host = getenv('CCAPI_HOST') ?: CouncilHelper::getCurrentCode() . (getenv('CCAPI_DOMAIN_POSTFIX') ?: '.cc.govapi.tw');
-        return 'https://' . $host . '/' . $type . 's';
+        return 'https://' . $host . '/api/' . $type . 's';
     }
 
     public static function getCurrentFilter()

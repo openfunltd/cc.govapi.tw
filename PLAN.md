@@ -231,6 +231,19 @@
 - `init.inc.php` 新增 `OpenFunAPIHelper::setUsageLogPath('/srv/data/cc.govapi.tw/usage')`（路徑寫死，不透過環境變數，跟 ly 一致）
 - **fix：`apiDone()` 的 `record_count` 一直都是 0**——`ly.govapi.tw-v2` 原始的 `ApiController.php` 本身就沒有把 `'count'` 選項傳進去（這份 helper 逐字複製過來自然也是同樣的缺口）。`collectionsAction()` 補上 `countCollectionRecords()`（用 `CCAPI_Type::run($type,'getReturnKey')` 抓實際回傳陣列的筆數）；`itemAction()` 補上 `countItemRecords()`（單筆詳情算 1 筆，找不到算 0 筆，若未來 relation 是子集合形狀就抓那個陣列的筆數——目前 ccapi 沒有任何型別定義 `getRelations()`，這個分支是保留給以後用的）
 
+#### Phase 32 — 準備上 Anubis 擋爬蟲：`/api/` 前綴、robots.txt、OG 分享資訊 ✅
+- **API 型別路由全面加上 `/api/` 前綴**（例：`/councilors` → `/api/councilors`），跟人類可讀頁面（`/info/*`、`/viewer/*`）用路徑就能明確區分，讓 Anubis／robots.txt 規則只要寫一條 `/api/*` 就好，不用列 11 種型別、22 條路徑。專案還沒正式對外公開、沒有相容性負擔，**直接只留新路徑，沒有保留舊的無前綴路徑**：
+  - `index.php`：`/api/` 開頭才會丟進 `CCAPI_Helper::getApiType()` 解析，其餘（含裸路徑如 `/councilors`）一律不比對，會落到 MiniEngine 預設的「Controller not found」錯誤
+  - `libraries/CCAPI.php::apiQuery()`、`libraries/TypeHelper.php::getApiUrl()`：內部呼叫自己 API 的兩個共用入口點統一補上 `/api` 前綴，`/info`、`/viewer` 等頁面內部呼叫的地方完全不用改
+  - `controllers/SwaggerController.php`：`getEndPointPath()`（Swagger UI／swagger.yaml 的 paths）、`generateSkillSection()`（skill.md 的範例網址）都補上前綴，三份文件（swagger.yaml／skill.md／Swagger UI）自動保持一致
+  - `views/about/index.php`、`PLAN.md` 的範例網址一併更新成 `/api/...`
+  - **附帶發現**：改完之後測試舊的裸路徑（`/councilors`）會觸發 `MiniEngine_Controller_NotFound`，但 `MiniEngine::defaultErrorHandler()` 在沒設定 `ENV=production` 時會回傳 HTTP 200（不是 404）且內容包含完整伺服器檔案路徑（資訊洩漏）。這是既有框架行為、不是這次改動造成的 bug，但因為以前很少被觸發過。**確認 `ENV=production` 就是既有的解法**（框架本來就有判斷這個環境變數，設定後改成乾淨的 404/500、不外洩任何細節），已在本機實測驗證，`config.sample.inc.php` 補上這個環境變數的說明；正式站的 `/srv/config/cc.govapi.tw.inc.php` 需要確認有沒有設定
+- **新增 `/robots.txt`**（`AboutController::robotsAction()`）：擋 `/api/`（純資料 API，沒有 SEO 價值）跟 `/info/search`、`/info/{屆}/bills`（純前端 JS fetch 渲染、初始 HTML 沒有實際內容的兩個頁面，注意不是 `/info/{屆}/bill/{代碼}` 議案詳情頁，那個有內容要留給搜尋引擎）；因為路徑都收斂到 `/api/` 前綴，規則只要 3 行。**已知問題**：這個路由目前在 dev tunnel domain 上會被 Apache 在 vhost 層級直接擋掉（回應是 Apache 原生 404，根本沒進到 PHP），推測是這台開發機的共用 vhost 設定，不在這個 git repo 裡——正式站需要另外確認會不會有同樣狀況
+- **新增 OG 分享／SEO meta tags**（`og:title`／`og:description`／`og:url`／`twitter:card`／`name="description"`）：
+  - `views/info/index.php`：`InfoController::setOg()` 依頁面類型動態產生內容——議員個人頁顯示「{姓名} — {議會}第{屆次}屆議員」+ 黨籍/選區/任職屆數；候選人歷年參選頁顯示「{姓名} — 候選人歷年參選紀錄」+ 參選/當選次數；議案詳情頁顯示案由；屆次頁顯示「{議會}第{屆}屆・{tab 名稱}」；其餘（含 `/info/search`）用通用的網站介紹當 fallback
+  - `views/about/index.php`、`views/layout/app.php`（`/viewer`、`/collection` 共用）：固定的通用內容
+  - 目前**沒有 `og:image`**——專案裡沒有適合當分享縮圖的圖片素材（`static/` 只有一個 favicon.ico），沒有勉強塞一張不合適的圖進去，之後如果有分享卡片縮圖的需求需要另外準備素材
+
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
 - `scripts/import-council.php` CSV 第一欄 header 因 UTF-8 BOM（`\xEF\xBB\xBF`）導致 `Undefined array key "代碼"`，已修正
@@ -257,8 +270,8 @@
 
 - 所有議會資料放同一個 index（例如 `ccv1_councilor`）
 - 每筆文件有一個代表議會代碼的欄位（大多數型別叫 `議會代碼`，`council` 型別本身叫 `代碼`，由各 Type 的 `getCCCodeField()` 指定）
-- `tpe.cc.govapi.tw/councilors` → 自動加入 ES filter: `議會代碼=tpe`
-- `all.cc.govapi.tw/councilors` → 無自動 filter，可查詢全國資料
+- `tpe.cc.govapi.tw/api/councilors` → 自動加入 ES filter: `議會代碼=tpe`
+- `all.cc.govapi.tw/api/councilors` → 無自動 filter，可查詢全國資料
 - 優點：跨議會統計查詢自然支援；schema 一致；無 index 爆炸問題
 
 ### 欄位命名：直接採用來源原始名稱，不做雙重翻譯
@@ -391,25 +404,25 @@ cc.govapi.tw/
 
 ```
 # 台北市議會第13屆議員名單
-GET tpe.cc.govapi.tw/councilors?屆次=13
+GET tpe.cc.govapi.tw/api/councilors?屆次=13
 
 # 全國民主進步黨議員
-GET all.cc.govapi.tw/councilors?黨籍=民主進步黨
+GET all.cc.govapi.tw/api/councilors?黨籍=民主進步黨
 
 # 各黨派議員數量統計
-GET all.cc.govapi.tw/councilors?agg=黨籍
+GET all.cc.govapi.tw/api/councilors?agg=黨籍
 
 # 特定議員資料（doc _id，需 rawurlencode）
-GET tpe.cc.govapi.tw/councilor/tpe-13-王大明
+GET tpe.cc.govapi.tw/api/councilor/tpe-13-王大明
 
 # 台北市議會會期列表
-GET tpe.cc.govapi.tw/sessions
+GET tpe.cc.govapi.tw/api/sessions
 
 # 全國委員會，依類別統計
-GET all.cc.govapi.tw/committees?agg=類別
+GET all.cc.govapi.tw/api/committees?agg=類別
 
 # 全部議會資料完整度總覽
-GET all.cc.govapi.tw/completenesses
+GET all.cc.govapi.tw/api/completenesses
 
 # 資料瀏覽器（免寫程式）
 https://tpe.cc.govapi.tw/viewer

@@ -16,6 +16,26 @@ class AboutController extends MiniEngine_Controller
     }
 
     /**
+     * 擋掉的是「純資料 API」（一律掛在 /api/ 前綴下，見 index.php 路由說明）跟
+     * 兩個純前端 JS fetch 渲染、初始 HTML 沒有實際內容的頁面（/info/search、
+     * /info/{屆}/bills 清單 tab，注意不是 /info/{屆}/bill/{代碼} 議案詳情頁，
+     * 那個有內容要留著給搜尋引擎）。其餘（/info/*、/viewer/*、/about、
+     * /skill.md、/knowledge.md、/swagger*）都是有實際內容的人類可讀頁面，不擋。
+     */
+    public function robotsAction()
+    {
+        header('Content-Type: text/plain; charset=utf-8');
+        echo <<<TXT
+        User-agent: *
+        Disallow: /api/
+        Disallow: /info/search
+        Disallow: /info/*/bills
+
+        TXT;
+        return $this->noview();
+    }
+
+    /**
      * 給 AI Agent 讀的背景知識，重點是「避免用自己既有的知識庫誤判定義」——
      * 跟 skill.md（API 怎麼呼叫）分開，這份講的是資料本身在講什麼、容易跟
      * 什麼概念搞混。內容是固定文字，不像 skill.md 需要從 Type 定義自動產生。

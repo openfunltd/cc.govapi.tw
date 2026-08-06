@@ -7,6 +7,13 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" integrity="sha512-jnSuA4Ss2PkkikSOLtYs8BlYIeeIK1h99ty4YfvRPAlzr377vr3CXDb7sb7eEEBYjDtcYj+AjBH3FLv5uSJuXg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js" integrity="sha512-7Pi/otdlbbCR+LnW+F7PwFcSDJOuUJB3OxtEHbg4vSMvzvJjde4Po1v4BR9Gdc9aXNUNFVUY+SK51wWT8WF0Gg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <title>CCAPI 說明 — 地方議會開放 API</title>
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="cc.govapi.tw">
+  <meta property="og:title" content="CCAPI 說明 — 地方議會開放 API">
+  <meta property="og:description" content="台灣各縣市議會的議員、會期、議案、逐字稿等開放資料 API，免費、開源、跨議會查詢。">
+  <meta property="og:url" content="https://all.cc.govapi.tw/about">
+  <meta name="twitter:card" content="summary">
+  <meta name="description" content="台灣各縣市議會的議員、會期、議案、逐字稿等開放資料 API，免費、開源、跨議會查詢。">
   <style>
     body { font-family: 'Noto Sans TC', sans-serif; }
     .entity-card { border-left: 4px solid; }
@@ -179,8 +186,8 @@
             <div class="col-md-6">
               <p class="small mb-1 fw-semibold">API 路徑</p>
               <ul class="small mb-0">
-                <li><code>GET /councils</code> — 議會列表</li>
-                <li><code>GET /council/tpe</code> — 單一議會</li>
+                <li><code>GET /api/councils</code> — 議會列表</li>
+                <li><code>GET /api/council/tpe</code> — 單一議會</li>
               </ul>
               <a href="/viewer/collection/list/council" class="btn btn-sm btn-outline-primary mt-2">瀏覽器查看 →</a>
             </div>
@@ -205,8 +212,8 @@
             <div class="col-md-6">
               <p class="small mb-1 fw-semibold">API 路徑</p>
               <ul class="small mb-0">
-                <li><code>GET /terms</code> — 屆清單</li>
-                <li><code>GET /term/nwt-4</code> — 單一屆</li>
+                <li><code>GET /api/terms</code> — 屆清單</li>
+                <li><code>GET /api/term/nwt-4</code> — 單一屆</li>
               </ul>
               <a href="/viewer/collection/list/term" class="btn btn-sm btn-outline-success mt-2">瀏覽器查看 →</a>
             </div>
@@ -232,8 +239,8 @@
             <div class="col-md-6">
               <p class="small mb-1 fw-semibold">API 路徑</p>
               <ul class="small mb-0">
-                <li><code>GET /sessions</code> — 會期清單</li>
-                <li><code>GET /session/nwt-4-r1</code> — 單一會期</li>
+                <li><code>GET /api/sessions</code> — 會期清單</li>
+                <li><code>GET /api/session/nwt-4-r1</code> — 單一會期</li>
               </ul>
               <a href="/viewer/collection/list/session" class="btn btn-sm btn-outline-info mt-2">瀏覽器查看 →</a>
             </div>
@@ -259,8 +266,8 @@
             <div class="col-md-6">
               <p class="small mb-1 fw-semibold">API 路徑</p>
               <ul class="small mb-0">
-                <li><code>GET /sittings?會期代碼=nwt-4-r1</code> — 單一會期的場次</li>
-                <li><code>GET /sitting/tpe-14-r7-20220408-am</code> — 單一場次</li>
+                <li><code>GET /api/sittings?會期代碼=nwt-4-r1</code> — 單一會期的場次</li>
+                <li><code>GET /api/sitting/tpe-14-r7-20220408-am</code> — 單一場次</li>
               </ul>
               <a href="/viewer/collection/list/sitting" class="btn btn-sm mt-2" style="border-color:#fd7e14;color:#fd7e14;border-width:1px;border-style:solid;background:transparent">瀏覽器查看 →</a>
               <p class="small text-body-secondary mt-2 mb-0">各議會實際的場次資料覆蓋狀況，請見<a href="/viewer/collection/completeness">資料完整度</a>（依匯入結果即時計算，非固定數字）。</p>
@@ -287,9 +294,9 @@
             <div class="col-md-6">
               <p class="small mb-1 fw-semibold">API 路徑</p>
               <ul class="small mb-0">
-                <li><code>GET /councilors</code> — 議員清單</li>
-                <li><code>GET /councilors?黨籍=民主進步黨</code></li>
-                <li><code>GET /councilors?agg=黨籍</code> — 統計</li>
+                <li><code>GET /api/councilors</code> — 議員清單</li>
+                <li><code>GET /api/councilors?黨籍=民主進步黨</code></li>
+                <li><code>GET /api/councilors?agg=黨籍</code> — 統計</li>
               </ul>
               <a href="/viewer/collection/list/councilor" class="btn btn-sm btn-outline-warning mt-2">瀏覽器查看 →</a>
             </div>
@@ -315,8 +322,8 @@
             <div class="col-md-6">
               <p class="small mb-1 fw-semibold">API 路徑</p>
               <ul class="small mb-0">
-                <li><code>GET /committees</code> — 委員會清單</li>
-                <li><code>GET /committee/tpe-c1</code> — 單一委員會</li>
+                <li><code>GET /api/committees</code> — 委員會清單</li>
+                <li><code>GET /api/committee/tpe-c1</code> — 單一委員會</li>
               </ul>
               <a href="/viewer/collection/list/committee" class="btn btn-sm btn-outline-secondary mt-2" style="border-color:#6f42c1;color:#6f42c1">瀏覽器查看 →</a>
             </div>

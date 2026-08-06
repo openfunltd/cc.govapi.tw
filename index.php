@@ -52,9 +52,20 @@ MiniEngine::dispatch(function($uri) {
         return ['about', 'knowledge'];
     }
 
-    $param = CCAPI_Helper::getApiType($uri);
-    if ($param) {
-        return $param;
+    if ($uri === '/robots.txt') {
+        return ['about', 'robots'];
+    }
+
+    // 純資料 API 一律要有 /api/ 前綴（例：/api/councilors、/api/councilor/tpe-14-王大明），
+    // 跟 /info、/viewer 等人類可讀頁面用路徑就能明確區分，方便 robots.txt／Anubis 這類
+    // 規則直接用 /api/ 一條就涵蓋全部，不用每個型別各自列一條。專案還沒正式對外公開，
+    // 沒有相容性負擔，直接只留新路徑，不保留 /councilors 這種舊式無前綴路徑
+    if ($uri === '/api' || strpos($uri, '/api/') === 0) {
+        $api_uri = substr($uri, 4) ?: '/';
+        $param = CCAPI_Helper::getApiType($api_uri);
+        if ($param) {
+            return $param;
+        }
     }
 
     return null;
