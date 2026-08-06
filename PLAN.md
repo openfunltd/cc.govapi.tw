@@ -222,6 +222,14 @@
     顯示議會名稱（`議會名稱` 尾字「議會」代換成「議員」）跟任期年份，不然看不出來
     是哪個縣市、任期是什麼時候
 
+#### Phase 31 — 整合 OpenFunAPIHelper（token 驗證／用量記錄）✅
+- **`libraries/OpenFunAPIHelper.php` 原本存在但完全沒被任何 controller 呼叫**，而且是舊版設計（直接用 PDO 查 Postgres 做 token 驗證跟計數，`checkUsage()` 裡用量上限檢查還是 `// TODO` 沒寫完）。參考姊妹專案 `ly.govapi.tw-v2` 目前用的新版設計整個換掉：
+  - token 驗證交給前端 nginx gateway（`verify_token.lua`）處理，驗證結果透過 `X-Token-Info` header（Base64URL 編碼 JSON）傳進來；PHP 這邊只讀這個 header 做 scope（`allowed_services`）／來源（`allowed_origins`，僅 `frontend` 型 token 檢查）比對，沒有 header 時當 guest 直接放行（流量限制交給 nginx）
+  - 用量記錄改成寫 JSONL log（`/srv/data/cc.govapi.tw/usage/{日期}.log`），不寫資料庫
+  - 這份類別是跟 `ly.govapi.tw-v2` 共用的逐字複製版本，之後要調整驗證/記錄邏輯要兩邊一起同步，不要各自演化
+- `controllers/ApiController.php` 的 `collectionsAction()`／`itemAction()` 開頭加 `OpenFunAPIHelper::checkUsage(['service' => 'ccapi', 'class' => ...])`，回傳前加 `apiDone(['size' => ...])`，跟 ly 的 `ApiController.php` 是同一個接法
+- `init.inc.php` 新增 `OpenFunAPIHelper::setUsageLogPath('/srv/data/cc.govapi.tw/usage')`（路徑寫死，不透過環境變數，跟 ly 一致）
+
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
 - `scripts/import-council.php` CSV 第一欄 header 因 UTF-8 BOM（`\xEF\xBB\xBF`）導致 `Undefined array key "代碼"`，已修正

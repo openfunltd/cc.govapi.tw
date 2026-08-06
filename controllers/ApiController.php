@@ -4,6 +4,10 @@ class ApiController extends MiniEngine_Controller
 {
     public function collectionsAction($type)
     {
+        OpenFunAPIHelper::checkUsage([
+            'service' => 'ccapi',
+            'class' => "{$type}_collection",
+        ]);
         $cc_code = $_SERVER['CCAPI_COUNCIL_CODE'];
         try {
             $ret = CCAPI_SearchAction::getCollections($type, $_SERVER['QUERY_STRING'], $cc_code);
@@ -22,13 +26,23 @@ class ApiController extends MiniEngine_Controller
                 'message' => $message,
             ];
         }
+        OpenFunAPIHelper::apiDone([
+            'size' => strlen(json_encode($ret, JSON_UNESCAPED_UNICODE)),
+        ]);
         return $this->cors_json($ret);
     }
 
     public function itemAction($type, $id, $sub)
     {
+        OpenFunAPIHelper::checkUsage([
+            'service' => 'ccapi',
+            'class' => "{$type}_item",
+        ]);
         $cc_code = $_SERVER['CCAPI_COUNCIL_CODE'];
         $ret = CCAPI_SearchAction::getItem($type, $id, $sub, $_SERVER['QUERY_STRING'], $cc_code);
+        OpenFunAPIHelper::apiDone([
+            'size' => strlen(json_encode($ret, JSON_UNESCAPED_UNICODE)),
+        ]);
         return $this->cors_json($ret);
     }
 }

@@ -13,6 +13,7 @@ set_include_path(
     . PATH_SEPARATOR . __DIR__ . '/models'
 );
 MiniEngine::initEnv();
+OpenFunAPIHelper::setUsageLogPath('/srv/data/cc.govapi.tw/usage');
 
 function viewer_url($path = '')
 {
