@@ -244,6 +244,16 @@
   - `views/about/index.php`、`views/layout/app.php`（`/viewer`、`/collection` 共用）：固定的通用內容
   - 目前**沒有 `og:image`**——專案裡沒有適合當分享縮圖的圖片素材（`static/` 只有一個 favicon.ico），沒有勉強塞一張不合適的圖進去，之後如果有分享卡片縮圖的需求需要另外準備素材
 
+#### Phase 33 — `/skill.md` 改版符合跨服務標準 ✅
+- 依循 `~/work/openfun-data-portal/docs/api-skill-standard.md`（data.openfun.tw portal 要能直接 proxy 各服務自己的 `/skill.md`，不能依賴外部 knowledge repo 補資訊）重寫 `SwaggerController::generateSkillMd()`：
+  - 開頭改成標準格式：`# 地方議會開放 API（CCAPI）— \`{slug}\`` + 指向 portal 資料集頁的說明句（slug 是 `tw.openfun~api~tw.ccapi`，一定要用反引號包住，不然 `~...~` 會被當成刪除線渲染）
+  - 新增「⚠️ 開始之前」段落：Base URL（`/api` 前綴，上次 Phase 32 剛好鋪好路）、認證（固定措辭，講清楚 Bearer Token 解除流量限制、不帶也能呼叫）、最簡 curl 範例、Device Authorization Grant 固定三步驟範本、禁止用 WebFetch 抓 HTML 的警告——這些都是跨服務共用的固定格式，不是 ccapi 自己發明的
+  - 新增「⚠️ 不是立法院（國會）」業務警告段落（標準文件裡明確舉這個當範例），因為 skill.md 必須能獨立閱讀，不能只把這個警告留在 `/knowledge.md`
+  - 新增「範例查詢」：3 個實測過、帶 `Authorization: Bearer` 的完整 curl 範例（議員名單依屆次篩選、依黨籍篩選+分群統計、議案全文搜尋+分群統計）
+  - 新增「快速參考」表格（Base URL／認證／取得 Token／子網域／背景知識／全文搜尋）
+  - 既有的「子網域決定查詢範圍」「共用查詢參數」「列表/單筆 API 回應格式」「型別一覽」（自動掃描 Type 產生）都保留，只是往後挪位置配合新的段落順序
+  - 驗收：實測 `/skill.md` 同時符合標準文件的自動檢查條件（HTTP 200、`text/markdown`、包含「開始之前」「Bearer Token」「auth/device」字串）
+
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
 - `scripts/import-council.php` CSV 第一欄 header 因 UTF-8 BOM（`\xEF\xBB\xBF`）導致 `Undefined array key "代碼"`，已修正

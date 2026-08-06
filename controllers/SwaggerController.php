@@ -315,22 +315,48 @@ class SwaggerController extends MiniEngine_Controller
      * 產生給 AI Agent 讀的完整 API 說明（Markdown），內容從 CCAPI_Type/*.php
      * 自動掃描產生，跟 swagger.yaml 用同一份 type 定義，兩者不會脫節。
      */
+    /**
+     * 格式依循 ~/work/openfun-data-portal/docs/api-skill-standard.md 這份跨服務標準
+     * （data.openfun.tw portal 要能直接 proxy 各服務自己的 /skill.md，不能依賴外部
+     * knowledge repo 補資訊），必要段落：開頭（含 slug）／開始之前（Base URL、認證、
+     * Device Authorization Grant 固定範本、禁止 WebFetch 警告）／業務警告／端點與查詢
+     * 說明／快速參考表。認證測 Bearer Token 的部分是 data.openfun.tw 統一核發、由
+     * nginx gateway 驗證（見 OpenFunAPIHelper 那次整合），不是 ccapi 自己的認證系統。
+     */
     protected function generateSkillMd(): string
     {
         $host = $_SERVER['HTTP_HOST'] ?? 'all.cc.govapi.tw';
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $postfix = getenv('CCAPI_DOMAIN_POSTFIX') ?: '.cc.govapi.tw';
+        $slug = 'tw.openfun~api~tw.ccapi';
 
-        $md = "# CCAPI — 地方議會開放 API\n\n";
-        $md .= "台灣地方議會（直轄市議會、縣（市）議會）的開放資料 API，涵蓋議會、屆期、議員、"
-             . "會期、場次、委員會、逐字稿等資料。所有回應皆為 JSON，欄位名稱使用繁體中文（UTF-8，未跳脫）。\n\n";
-        $md .= "> 這份文件只講 API 怎麼呼叫。呼叫前建議先讀 `{$scheme}://{$host}/knowledge.md`——"
-             . "裡面說明「議會」「議員」等詞在這個 API 裡的精確定義，避免用一般政治制度的既有知識"
-             . "（例如跟國會、其他國家的地方議會搞混）誤判資料意義。\n\n";
+        $md = "# 地方議會開放 API（CCAPI）— `{$slug}`\n\n";
+        $md .= "給 AI 閱讀的使用指引。人類可在 https://data.openfun.tw/datasets/{$slug} 看到資料集說明。\n\n";
 
-        $md .= "## 存取方式：子網域決定查詢範圍\n\n";
-        $md .= "- `https://{議會代碼}{$postfix}` — 只查詢該議會的資料（自動加上議會代碼 filter，不需要自己帶）\n";
-        $md .= "- `https://all{$postfix}` — 跨議會查詢，不限單一議會\n";
+        $md .= "## ⚠️ 開始之前（AI agent 必讀）\n\n";
+        $md .= "**Base URL**：`{$scheme}://{$host}/api`（依子網域決定查詢範圍，見下方「子網域決定查詢範圍」一節）\n";
+        $md .= "**認證**：使用 data.openfun.tw 核發的 Bearer Token 可解除流量限制；不帶 Token 仍可呼叫，但可能因超過流量門檻被擋（門檻隨時調整，不保證特定數字）。\n";
+        $md .= "**回應格式**：一律 `application/json`，CORS 完全開放（前端可直接呼叫）。\n\n";
+        $md .= "最簡查詢範例：\n";
+        $md .= "```bash\ncurl -H \"Authorization: Bearer YOUR_TOKEN\" \\\n  \"{$scheme}://{$host}/api/councilors?limit=5\"\n```\n\n";
+        $md .= "**取得 Token 方式（Device Authorization Grant）：**\n";
+        $md .= "```bash\n# 步驟一：取得驗證連結\ncurl -X POST https://data.openfun.tw/api/v1/auth/device\n\n"
+             . "# 步驟二：在瀏覽器開啟回應中的 verification_uri_complete，用 Google 帳號登入授權\n\n"
+             . "# 步驟三：輪詢取得 Token（約 10-30 秒後成功）\ncurl -X POST https://data.openfun.tw/api/v1/auth/token \\\n  -d \"device_code=DEVICE_CODE_FROM_STEP1\"\n```\n";
+        $md .= "若無 Token，也可在 https://data.openfun.tw/user 登入後從 Dashboard 取得長效 API 金鑰。\n\n";
+        $md .= "禁止用 WebFetch 抓 HTML 頁面，請直接呼叫 API。\n\n";
+        $md .= "呼叫前建議先讀 `{$scheme}://{$host}/knowledge.md`——裡面說明「議會」「議員」等詞在這個 API 裡的精確定義，"
+             . "避免用一般政治制度的既有知識（例如跟國會、其他國家的地方議會搞混）誤判資料意義。\n\n";
+
+        $md .= "## ⚠️ 不是立法院（國會）\n\n";
+        $md .= "這是台灣「地方制度法」規範的地方議會（直轄市議會、縣（市）議會）開放資料，**不是立法院**。"
+             . "立法委員、國會的資料在另一個姊妹服務 `ly.govapi.tw`，資料完全不重疊、也不能互相查詢。"
+             . "看到「議員」不要當成「立法委員」，看到「議會」不要當成「國會」「Parliament」。"
+             . "完整背景知識（含「議會」定義範圍、跟鄉鎮市民代表會的差異等）見 `{$scheme}://{$host}/knowledge.md`。\n\n";
+
+        $md .= "## 子網域決定查詢範圍\n\n";
+        $md .= "- `https://{議會代碼}{$postfix}/api/...` — 只查詢該議會的資料（自動加上議會代碼 filter，不需要自己帶）\n";
+        $md .= "- `https://all{$postfix}/api/...` — 跨議會查詢，不限單一議會\n";
         $md .= "- 目前主機：`{$scheme}://{$host}`\n";
         $md .= "- 未知的議會代碼子網域會回傳 HTTP 404\n";
         $md .= "- CORS 全開（`Access-Control-Allow-Origin: *`），前端可直接呼叫\n\n";
@@ -371,6 +397,14 @@ class SwaggerController extends MiniEngine_Controller
         $md .= "## 單筆 API 回應格式\n\n";
         $md .= "找到：`{\"error\": false, \"data\": {...}}`；找不到：`{\"error\": true, \"message\": \"找不到資料\"}`（HTTP 200，用 `error` 欄位判斷，不是用 HTTP status）\n\n";
 
+        $md .= "## 範例查詢\n\n";
+        $md .= "```bash\n# 台北市議會第14屆議員名單\ncurl -H \"Authorization: Bearer YOUR_TOKEN\" \\\n"
+             . "  \"https://tpe{$postfix}/api/councilors?屆次=14\"\n```\n\n";
+        $md .= "```bash\n# 全國民主進步黨議員，依議會分群統計\ncurl -H \"Authorization: Bearer YOUR_TOKEN\" \\\n"
+             . "  \"https://all{$postfix}/api/councilors?黨籍=民主進步黨&agg=議會代碼\"\n```\n\n";
+        $md .= "```bash\n# 全文搜尋議案案由，依類別分群統計\ncurl -H \"Authorization: Bearer YOUR_TOKEN\" \\\n"
+             . "  \"https://all{$postfix}/api/bills?q=公共托育&agg=類別\"\n```\n\n";
+
         $md .= "## 型別一覽\n\n";
 
         $auto_gen_files = MINI_ENGINE_ROOT . '/libraries/CCAPI/Type/*.php';
@@ -382,6 +416,15 @@ class SwaggerController extends MiniEngine_Controller
             }
             $md .= $this->generateSkillSection($entity, $class_name);
         }
+
+        $md .= "## 快速參考\n\n";
+        $md .= "| 項目 | 說明 |\n|------|------|\n";
+        $md .= "| Base URL | `{$scheme}://{$host}/api` |\n";
+        $md .= "| 認證 | `Authorization: Bearer {token}` 可解除流量限制（不帶也能呼叫） |\n";
+        $md .= "| 取得 Token | https://data.openfun.tw/user |\n";
+        $md .= "| 子網域 | `{議會代碼}{$postfix}` 只查該議會；`all{$postfix}` 跨議會查詢，未知議會代碼回傳 404 |\n";
+        $md .= "| 背景知識 | `{$scheme}://{$host}/knowledge.md`（議會/議員等詞的精確定義，避免跟國會搞混） |\n";
+        $md .= "| 全文搜尋 | `q=` 參數，中文自動片語比對；命中時多回傳 `{欄位}:highlight` |\n";
 
         return $md;
     }
