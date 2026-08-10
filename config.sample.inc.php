@@ -5,6 +5,10 @@ putenv('ELASTIC_URL=');               // ES URL（必填）
 putenv('ELASTIC_USER=');              // ES 使用者（必填）
 putenv('ELASTIC_PREFIX=ccv1_');       // index 前綴，例如 ccv1_councilor
 putenv('CCAPI_DOMAIN_POSTFIX=.cc.govapi.tw');  // 子網域後綴
+// /info、/viewer 頁面渲染時對自己 API 發出的內部請求（CCAPI::apiQuery()）用的
+// token，繞過 nginx gateway 對匿名流量的 rate limit（見 CCAPI.php 說明）；
+// 只有伺服器內部呼叫會帶，不會透過任何頁面/log 外流給瀏覽器端
+putenv('CCAPI_TOKEN=');
 // 正式站務必設定：MiniEngine::defaultErrorHandler() 靠這個判斷要不要隱藏錯誤細節。
 // 沒設定時，路由找不到 controller（例如打到已移除的舊版無 /api/ 前綴路徑）或其他例外
 // 會回傳 200/完整檔案路徑＋stack trace（開發時方便除錯，正式站會洩漏伺服器路徑），
