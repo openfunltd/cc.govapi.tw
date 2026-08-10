@@ -190,8 +190,8 @@
 #### Phase 33 — `/skill.md` 改版符合跨服務標準 ✅（2026-08-06，commit `d0b6a42`）
 依循歐噴內部的 API skill.md 跨服務標準文件重寫，補上「開始之前」「Device Authorization Grant」等必填段落，讓 data.openfun.tw portal 可以直接 proxy。
 
-#### Phase 34 — CCAPI_TOKEN：內部 API 呼叫繞過 rate limit ✅（2026-08-06）
-正式站上了 rate limit 後，`/info` 頁面內部大量自呼叫被當成匿名流量擋掉（已知案例：台南市議會議員名單一度顯示空白）；`CCAPI::apiQuery()` 新增 `CCAPI_TOKEN` 環境變數繞過限制，故意跟 log 用的網址分開避免 token 外洩。
+#### Phase 34 — CCAPI_TOKEN：內部 API 呼叫繞過 rate limit ✅（2026-08-06，commit `fdeaa20`）
+正式站上了 rate limit 後，`/info` 頁面內部大量自呼叫被當成匿名流量擋掉（已知案例：台南市議會議員名單一度顯示空白）；`CCAPI::apiQuery()` 新增 `CCAPI_TOKEN` 環境變數繞過限制，用 `Authorization: Bearer` header 帶（跟姊妹專案 lawtrace 目前用的方式一致，原本是 `?token=` query string，已改成 header），不會出現在網址／log 裡。
 
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
