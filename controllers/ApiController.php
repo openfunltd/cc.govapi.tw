@@ -2,6 +2,17 @@
 
 class ApiController extends MiniEngine_Controller
 {
+    // cors_json() 本身也會設 Access-Control-Allow-Origin/Methods，這裡提前在
+    // init() 補上 Allow-Headers：改用 Authorization: Bearer header 帶 CCAPI_TOKEN
+    // 之後，跨網域用瀏覽器帶 Authorization header 呼叫 /api/* 會先送 CORS
+    // preflight（OPTIONS），沒有這行瀏覽器會擋掉，不讓 Authorization 過
+    public function init()
+    {
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Methods: GET, OPTIONS');
+        header('Access-Control-Allow-Headers: Authorization');
+    }
+
     public function collectionsAction($type)
     {
         OpenFunAPIHelper::checkUsage([
