@@ -10,6 +10,10 @@ putenv('CCAPI_DOMAIN_POSTFIX=.cc.govapi.tw');  // 子網域後綴
 // 會回傳 200/完整檔案路徑＋stack trace（開發時方便除錯，正式站會洩漏伺服器路徑），
 // 設定後才會改成乾淨的 404 / 500，不外洩任何細節
 putenv('ENV=production');
+// /info、/viewer 頁面渲染時對自己 API 發出的內部請求（CCAPI::apiQuery()）用的
+// token，繞過 nginx gateway 對匿名流量的 rate limit（見 CCAPI.php 說明）；
+// 只有伺服器內部呼叫會帶，不會透過任何頁面/log 外流給瀏覽器端
+putenv('CCAPI_TOKEN=');
 
 // 匯入資料來源路徑（可指定絕對路徑，供不同主機使用）
 putenv('IMPORT_COUNCIL_CSV=');        // 議會.csv 路徑，預設 {project}/議會.csv

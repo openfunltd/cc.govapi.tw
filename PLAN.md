@@ -172,87 +172,26 @@
 - 新增 `/info/candidate/{人物代碼}` 頁面：顯示某人歷年參選紀錄（含落選次數），每次參選都有候選人公報內容＋同選區得票比較表，若曾經當選過議員會附上連到 `/info/councilor/{人物代碼}` 的連結
 - 三個新的篩選/對照表子集（皆為原始檔案篩選後的小檔案，不在 crawl 流程重跑）：`得票數.jsonl`（1.7GB→13,205列）、`人物代碼.jsonl`（39MB→4,136列）、`當選註記.jsonl`（13,206列）
 
-#### Phase 28 — 搜尋分頁拆四種資料、匯入來源全面改指向原始檔案、每日自動偵測重新匯入 ✅
-- **`/info/search` 從「逐字稿／議案」兩個分頁擴充成四個獨立分頁：議員姓名／逐字稿／政見／議案**，四者是不同性質的資料，各自獨立搜尋、獨立篩選：
-  - 議員姓名：查 `councilor` 的「姓名」欄位（`query_fields=姓名`，只搜姓名不搜黨籍/簡歷），只收錄查得到議員記錄的人（當選過至少一次），facet 依議會／黨籍；結果連到 `/info/councilor/{人物代碼}`
-  - 政見：查 `candidate` 的「政見」欄位（`query_fields=政見`），包含落選的候選人，facet 依議會／是否當選（用 `當選` 欄位）；結果連到 `/info/candidate/{人物代碼}`
-  - 逐字稿／議案：沿用原本邏輯不變
-  - 四個分頁的前端邏輯收斂成共用的 `createSearchTab()` factory（狀態管理／查詢組裝／facet 與分頁渲染都共用），只有「打哪個 API、限定哪些欄位全文搜尋、怎麼畫一張結果卡片」是各分頁自己的設定，避免四份幾乎一樣的程式碼
-- `views/info/councilor.php` 頁首姓名（基本資料／發言記錄／提案記錄／選舉紀錄四個 tab 共用）補上連到 `/info/candidate/{人物代碼}` 的連結，但只在真的查得到候選人資料時才連（`InfoController::loadCouncilorProfile()` 內查一次 `/candidates?人物代碼=X&limit=1` 判斷），避免連到空頁面
-- **`config.inc.php` 的 `IMPORT_*` 環境變數全面改成直接指向 `/srv/open-forest/...` 原始檔案**（議會.csv／屆.csv／議員.jsonl／會期.csv／場次.csv／委員會 data.csv／逐字稿／議案.jsonl／bulletin.jsonl），不再把檔案複製進專案目錄——複製進來的本機快照會在原始資料更新後過期而不自知（已知案例：新北市 107/111 年候選人公報補齊後，`bulletin.jsonl` 本機複製版沒有跟著更新，得靠手動比對才發現）。專案目錄裡對應的本機複製檔（會期.csv／場次.csv／議案.jsonl／bulletin.jsonl）已刪除；`議會.csv`／`屆.csv` 例外——這兩個是有提交進 git 的小型參考資料（給沒有 `/srv/open-forest` 存取權的人 clone 專案時的預設資料），保留提交版本，但本機執行時一樣透過 `config.inc.php` 指向即時來源
-- 新增 `scripts/prepare-candidate-lookups.php`：把先前用一次性 shell/python 指令從三個大型原始來源（cand.csv／person.jsonl／候選人得票數，皆在 `mixed-tw.gov.cec.data-選舉資料庫`）篩選出 得票數.jsonl／人物代碼.jsonl／當選註記.jsonl 三個對照表子集的做法，改寫成正式、可重複執行的腳本。**這三個對照表過不過期的性質不同**：得票數／當選註記是用獨立規則篩選（不會過期），但人物代碼是「反查 bulletin.jsonl 目前的候選人清單」，bulletin.jsonl 一有新候選人就會出現查無人物代碼的缺口，必須整個重新產生、不能只重跑 `import-candidate.php`（已知案例同上，新北市 107/111 年候選人補齊後還要多這一步，候選人姓名超連結才會出現）
-- 新增 `scripts/auto-refresh.php`：每天排程用，自動偵測每個型別的來源檔案（mtime+size 簽章，記錄在 gitignored 的 `.auto-refresh-state.json`）有沒有變化，只有變化的型別才重新匯入（candidate 型別會先重跑 `prepare-candidate-lookups.php`），全部跑完後只要有任何型別更新過，就重跑 `generate-completeness.php`／`generate-council-overview.php`。預設用 upsert（不加 `--reset`），`--reset-all` 用於來源資料有刪除/更正、需要清掉舊資料時手動使用
+#### Phase 28 — 候選人得票資料整合、候選人歷年參選頁 ✅（2026-08-04，commit `0bd5ce2`、`b142913`）
+議員頁面串連候選人得票數/得票率；新增 `/info/candidate/{人物代碼}` 落選者歷年參選頁；「是否當選」改用中選會當選註記判斷，不用 councilor 資料是否存在推論（議員中途離職會讓 councilor 記錄消失，之前會誤判成沒當選）。
 
-#### Phase 29 — 候選人來源整合 OCR（cell-image-vision）資料 ✅
-- 候選人來源 `bulletin.jsonl` 更新，把原本比對不到候選人名冊、只能整頁掃描的公報也
-  納入：改成逐格裁圖後用 AI 視覺模型辨識文字，新增 `學歷來源`／`經歷來源`／
-  `欄位圖片` 欄位，`政見來源`（現在 學歷來源／經歷來源 也一樣）多一個列舉值
-  `cell-image-vision`（AI 視覺辨識文字，不是 PDF 文字層，但仍是可用文字，只是準確度
-  可能略低）；`code_match` 多一個列舉值 `cell-image-row-anchor`（靠姓名 OCR 命中
-  名單當錨點、依列序推算候選人代碼，可信度較低）
-- **fix：`政見來源`（含新的 學歷來源／經歷來源）判斷可用文字的邏輯只認 `text`，沒把
-  新的 `cell-image-vision` 算進去**——這批候選人（189 筆）原本會被誤判成沒有政見/
-  學歷/經歷，直接改用共用的 `info_candidate_text_ok()` helper（`views/info/index.php`）
-- **fix：這批候選人來源沒有算出 `選舉代碼`／`行政區代碼`**（因為沒比對到候選人名冊），
-  但候選人代碼本身有（靠姓名 OCR 錨點對出來的）——`import-candidate.php` 改成缺值時
-  從候選人代碼反解（格式固定 `{選舉代碼}:{行政區代碼}-{選區}:{號次}`），不然「同選區
-  得票比較」這個功能對這批候選人會整個查不到同一場選舉的其他候選人
-- `欄位圖片`（每個欄位裁切送去辨識的原始小圖）跟「相片路徑」「政見圖路徑」原始路徑
-  慣例不同（沒有 `files/image/` 前綴），但實測 `https://lydata.ronny-s3.click/bulletin/
-  {原始路徑}` 一樣是有效公開圖片，`bulletin_cell_image_url()` 轉成公開網址存入 ES；
-  `views/info/candidate.php`、`views/info/councilor_elections.php` 的學歷/經歷/政見
-  在 `cell-image-vision` 時提供「查看原圖／查看文字」切換按鈕，方便使用者核對辨識
-  文字跟原圖是否一致
-- `人物代碼.jsonl` 對照表隨這次資料更新一起用 `prepare-candidate-lookups.php` 重新
-  產生（bulletin.jsonl 候選人代碼從 6,019 增加到 6,273，全部 100% 比對成功）
+#### Phase 29 — 搜尋分頁拆四種資料、匯入來源改指向原始檔案 ✅（2026-08-04，commit `884e562`）
+`/info/search` 拆成議員姓名／逐字稿／政見／議案四個獨立分頁；`config.inc.php` 的 `IMPORT_*` 改指向 `/srv/open-forest` 原始檔案，不再複製進專案（複製進來的快照會過期而不自知）；新增 `scripts/auto-refresh.php` 每日自動偵測重新匯入。
 
-#### Phase 30 — 議員個人頁歷屆紀錄改依選舉日期排序 ✅
-- **fix：議員個人頁（`/info/councilor/{人物代碼}` 歷屆紀錄表格、`/elections` 選舉紀錄
-  分頁）原本依「屆次」數字由大到小排序，但同一人跨兩個議會代碼時屆次數字不能拿來
-  跨議會比較新舊**（例：桃園縣議會 `tao-1952` 屆次可以編到 17，改制直轄市後的桃園市
-  議會 `tao` 屆次又從 1 重新起算，`tao-1952` 屆次 17（2010~2014）數字比 `tao` 屆次 3
-  （2022~2026）大，純依屆次數字排序會把比較新的 `tao` 兩屆排到最後面）。已知案例：
-  徐景文（人物代碼 `ELC-T2-91:10003-7:26`）同時有 `tao-1952` 17/16/15 屆跟 `tao` 3/2
-  屆的記錄
-  - 新增 `InfoController::attachTermInfo()`：批次查每個議會代碼的屆期資料（`/terms?議會代碼=X`）
-    取得投票日／就職日／任期屆滿日，改依「投票日」（缺值退回就職日）由新到舊排序，
-    純屆次數字只當同日期時的 tie-breaker
-  - 歷屆紀錄表格新增「任期」欄（YYYY-YYYY，任期尚未結束顯示「YYYY-至今」）
-  - 選舉紀錄分頁每屆卡片標題從「第17屆」改成「第17屆桃園縣議員(2010-2014)」，同時
-    顯示議會名稱（`議會名稱` 尾字「議會」代換成「議員」）跟任期年份，不然看不出來
-    是哪個縣市、任期是什麼時候
+#### Phase 30 — 候選人資料整合 OCR、議員歷屆紀錄改依選舉日期排序 ✅（2026-08-04，commit `a31c500`）
+候選人來源整合 AI 視覺辨識（`cell-image-vision`）批次資料，修正可用文字判斷邏輯／選舉代碼反解／圖片網址；議員個人頁歷屆紀錄改依實際投票日排序（原本用屆次數字排序，同一人跨議會代碼時會排錯，如桃園縣→桃園市改制的案例）。
 
-#### Phase 31 — 整合 OpenFunAPIHelper（token 驗證／用量記錄）✅
-- **`libraries/OpenFunAPIHelper.php` 原本存在但完全沒被任何 controller 呼叫**，而且是舊版設計（直接用 PDO 查 Postgres 做 token 驗證跟計數，`checkUsage()` 裡用量上限檢查還是 `// TODO` 沒寫完）。參考姊妹專案 `ly.govapi.tw-v2` 目前用的新版設計整個換掉：
-  - token 驗證交給前端 nginx gateway（`verify_token.lua`）處理，驗證結果透過 `X-Token-Info` header（Base64URL 編碼 JSON）傳進來；PHP 這邊只讀這個 header 做 scope（`allowed_services`）／來源（`allowed_origins`，僅 `frontend` 型 token 檢查）比對，沒有 header 時當 guest 直接放行（流量限制交給 nginx）
-  - 用量記錄改成寫 JSONL log（`/srv/data/cc.govapi.tw/usage/{日期}.log`），不寫資料庫
-  - 這份類別是跟 `ly.govapi.tw-v2` 共用的逐字複製版本，之後要調整驗證/記錄邏輯要兩邊一起同步，不要各自演化
-- `controllers/ApiController.php` 的 `collectionsAction()`／`itemAction()` 開頭加 `OpenFunAPIHelper::checkUsage(['service' => 'ccapi', 'class' => ...])`，回傳前加 `apiDone(['size' => ...])`，跟 ly 的 `ApiController.php` 是同一個接法
-- `init.inc.php` 新增 `OpenFunAPIHelper::setUsageLogPath('/srv/data/cc.govapi.tw/usage')`（路徑寫死，不透過環境變數，跟 ly 一致）
-- **fix：`apiDone()` 的 `record_count` 一直都是 0**——`ly.govapi.tw-v2` 原始的 `ApiController.php` 本身就沒有把 `'count'` 選項傳進去（這份 helper 逐字複製過來自然也是同樣的缺口）。`collectionsAction()` 補上 `countCollectionRecords()`（用 `CCAPI_Type::run($type,'getReturnKey')` 抓實際回傳陣列的筆數）；`itemAction()` 補上 `countItemRecords()`（單筆詳情算 1 筆，找不到算 0 筆，若未來 relation 是子集合形狀就抓那個陣列的筆數——目前 ccapi 沒有任何型別定義 `getRelations()`，這個分支是保留給以後用的）
+#### Phase 31 — 整合 OpenFunAPIHelper（nginx gateway token 驗證／用量記錄）✅（2026-08-06，commit `f2d806a`、`fc49d8b`）
+換掉原本沒被使用、舊版 PDO 設計的 `OpenFunAPIHelper`，改用跟姊妹專案一致的新版（nginx gateway 驗證 token、寫 JSONL 用量 log）；修正 `record_count` 一直是 0 的問題。
 
-#### Phase 32 — 準備上 Anubis 擋爬蟲：`/api/` 前綴、robots.txt、OG 分享資訊 ✅
-- **API 型別路由全面加上 `/api/` 前綴**（例：`/councilors` → `/api/councilors`），跟人類可讀頁面（`/info/*`、`/viewer/*`）用路徑就能明確區分，讓 Anubis／robots.txt 規則只要寫一條 `/api/*` 就好，不用列 11 種型別、22 條路徑。專案還沒正式對外公開、沒有相容性負擔，**直接只留新路徑，沒有保留舊的無前綴路徑**：
-  - `index.php`：`/api/` 開頭才會丟進 `CCAPI_Helper::getApiType()` 解析，其餘（含裸路徑如 `/councilors`）一律不比對，會落到 MiniEngine 預設的「Controller not found」錯誤
-  - `libraries/CCAPI.php::apiQuery()`、`libraries/TypeHelper.php::getApiUrl()`：內部呼叫自己 API 的兩個共用入口點統一補上 `/api` 前綴，`/info`、`/viewer` 等頁面內部呼叫的地方完全不用改
-  - `controllers/SwaggerController.php`：`getEndPointPath()`（Swagger UI／swagger.yaml 的 paths）、`generateSkillSection()`（skill.md 的範例網址）都補上前綴，三份文件（swagger.yaml／skill.md／Swagger UI）自動保持一致
-  - `views/about/index.php`、`PLAN.md` 的範例網址一併更新成 `/api/...`
-  - **附帶發現**：改完之後測試舊的裸路徑（`/councilors`）會觸發 `MiniEngine_Controller_NotFound`，但 `MiniEngine::defaultErrorHandler()` 在沒設定 `ENV=production` 時會回傳 HTTP 200（不是 404）且內容包含完整伺服器檔案路徑（資訊洩漏）。這是既有框架行為、不是這次改動造成的 bug，但因為以前很少被觸發過。**確認 `ENV=production` 就是既有的解法**（框架本來就有判斷這個環境變數，設定後改成乾淨的 404/500、不外洩任何細節），已在本機實測驗證，`config.sample.inc.php` 補上這個環境變數的說明；正式站的 `/srv/config/cc.govapi.tw.inc.php` 需要確認有沒有設定
-- **新增 `/robots.txt`**（`AboutController::robotsAction()`）：擋 `/api/`（純資料 API，沒有 SEO 價值）跟 `/info/search`、`/info/{屆}/bills`（純前端 JS fetch 渲染、初始 HTML 沒有實際內容的兩個頁面，注意不是 `/info/{屆}/bill/{代碼}` 議案詳情頁，那個有內容要留給搜尋引擎）；因為路徑都收斂到 `/api/` 前綴，規則只要 3 行；另加 `Crawl-delay: 3`。**已知問題**：這個路由目前在 dev tunnel domain 上會被 Apache 在 vhost 層級直接擋掉（回應是 Apache 原生 404，根本沒進到 PHP），推測是這台開發機的共用 vhost 設定，不在這個 git repo 裡——正式站需要另外確認會不會有同樣狀況
-- **新增 OG 分享／SEO meta tags**（`og:title`／`og:description`／`og:url`／`twitter:card`／`name="description"`）：
-  - `views/info/index.php`：`InfoController::setOg()` 依頁面類型動態產生內容——議員個人頁顯示「{姓名} — {議會}第{屆次}屆議員」+ 黨籍/選區/任職屆數；候選人歷年參選頁顯示「{姓名} — 候選人歷年參選紀錄」+ 參選/當選次數；議案詳情頁顯示案由；屆次頁顯示「{議會}第{屆}屆・{tab 名稱}」；其餘（含 `/info/search`）用通用的網站介紹當 fallback
-  - `views/about/index.php`、`views/layout/app.php`（`/viewer`、`/collection` 共用）：固定的通用內容
-  - 目前**沒有 `og:image`**——專案裡沒有適合當分享縮圖的圖片素材（`static/` 只有一個 favicon.ico），沒有勉強塞一張不合適的圖進去，之後如果有分享卡片縮圖的需求需要另外準備素材
+#### Phase 32 — API 路由全面改 `/api/` 前綴、新增 robots.txt、補上 OG 分享資訊 ✅（2026-08-06，commit `4504d66`、`a83c2a7`）
+準備上 Anubis 擋爬蟲：所有 API 型別路由統一掛 `/api/` 前綴、不留舊路徑；新增 `/robots.txt`；`/info/*` 主要頁面補上 OG/SEO meta tags。附帶發現並確認 `ENV=production` 是既有框架機制，可避免路由錯誤時洩漏伺服器檔案路徑。
 
-#### Phase 33 — `/skill.md` 改版符合跨服務標準 ✅
-- 依循 `~/work/openfun-data-portal/docs/api-skill-standard.md`（data.openfun.tw portal 要能直接 proxy 各服務自己的 `/skill.md`，不能依賴外部 knowledge repo 補資訊）重寫 `SwaggerController::generateSkillMd()`：
-  - 開頭改成標準格式：`# 地方議會開放 API（CCAPI）— \`{slug}\`` + 指向 portal 資料集頁的說明句（slug 是 `tw.openfun~api~tw.ccapi`，一定要用反引號包住，不然 `~...~` 會被當成刪除線渲染）
-  - 新增「⚠️ 開始之前」段落：Base URL（`/api` 前綴，上次 Phase 32 剛好鋪好路）、認證（固定措辭，講清楚 Bearer Token 解除流量限制、不帶也能呼叫）、最簡 curl 範例、Device Authorization Grant 固定三步驟範本、禁止用 WebFetch 抓 HTML 的警告——這些都是跨服務共用的固定格式，不是 ccapi 自己發明的
-  - 新增「⚠️ 不是立法院（國會）」業務警告段落（標準文件裡明確舉這個當範例），因為 skill.md 必須能獨立閱讀，不能只把這個警告留在 `/knowledge.md`
-  - 新增「範例查詢」：3 個實測過、帶 `Authorization: Bearer` 的完整 curl 範例（議員名單依屆次篩選、依黨籍篩選+分群統計、議案全文搜尋+分群統計）
-  - 新增「快速參考」表格（Base URL／認證／取得 Token／子網域／背景知識／全文搜尋）
-  - 既有的「子網域決定查詢範圍」「共用查詢參數」「列表/單筆 API 回應格式」「型別一覽」（自動掃描 Type 產生）都保留，只是往後挪位置配合新的段落順序
-  - 驗收：實測 `/skill.md` 同時符合標準文件的自動檢查條件（HTTP 200、`text/markdown`、包含「開始之前」「Bearer Token」「auth/device」字串）
+#### Phase 33 — `/skill.md` 改版符合跨服務標準 ✅（2026-08-06，commit `d0b6a42`）
+依循歐噴內部的 API skill.md 跨服務標準文件重寫，補上「開始之前」「Device Authorization Grant」等必填段落，讓 data.openfun.tw portal 可以直接 proxy。
+
+#### Phase 34 — CCAPI_TOKEN：內部 API 呼叫繞過 rate limit ✅（2026-08-06）
+正式站上了 rate limit 後，`/info` 頁面內部大量自呼叫被當成匿名流量擋掉（已知案例：台南市議會議員名單一度顯示空白）；`CCAPI::apiQuery()` 新增 `CCAPI_TOKEN` 環境變數繞過限制，故意跟 log 用的網址分開避免 token 外洩。
 
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
