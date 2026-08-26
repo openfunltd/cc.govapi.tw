@@ -67,6 +67,8 @@ foreach ($groups as $g) {
             <?php endif; ?>
           </p>
 
+          <?= info_candidate_source_links($c) ?>
+
           <?= info_candidate_field_html('h2', '學歷', $c, '學歷') ?>
           <?= info_candidate_field_html('h2', '經歷', $c, '經歷') ?>
           <?= info_candidate_field_html('h2', '政見', $c, '政見', '政見圖路徑') ?>

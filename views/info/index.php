@@ -105,6 +105,30 @@ function info_candidate_field_html($tag, $label, $c, $field, $fallback_image_fie
     }
     return $html;
 }
+
+// 候選人「來源」欄位（中選會公報官方 PDF 直連網址 + 頁碼，一位候選人資料橫跨多頁時
+// 會有多筆）渲染成一串小連結，方便直接跳去原始公報那幾頁核對剖析是否正確。
+// #page=N 是瀏覽器內建 PDF 檢視器的慣例寫法（Chrome／Firefox 都支援，其他環境不吃
+// 這個 hash 也無害，就是打開檔案第一頁）
+function info_candidate_source_links($c) {
+    $sources = $c->{'來源'} ?? null;
+    if (!$sources || !is_array($sources)) {
+        return '';
+    }
+    $links = [];
+    foreach ($sources as $s) {
+        $url = $s->{'官方網址'} ?? null;
+        if (!$url) continue;
+        $page = $s->{'檔案頁碼'} ?? null;
+        $label = $page ? "第{$page}頁" : '原始公報';
+        $href = $url . ($page ? '#page=' . urlencode($page) : '');
+        $links[] = '<a href="' . htmlspecialchars($href) . '" target="_blank" rel="noopener">' . htmlspecialchars($label) . '</a>';
+    }
+    if (!$links) {
+        return '';
+    }
+    return '<p class="small text-body-secondary mb-2">資料來源（原始公報）：' . implode('、', $links) . '</p>';
+}
 ?>
 <script>
 // 候選人學歷/經歷/政見「查看原圖」切換鈕共用邏輯（見 info_candidate_field_html()）：

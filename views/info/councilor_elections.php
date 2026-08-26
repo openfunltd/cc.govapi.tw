@@ -52,6 +52,8 @@ $groups = $this->election_groups ?? [];
           <?php endif; ?>
         </p>
 
+        <?= info_candidate_source_links($c) ?>
+
         <?= info_candidate_field_html('h3', '學歷', $c, '學歷') ?>
         <?= info_candidate_field_html('h3', '經歷', $c, '經歷') ?>
         <?= info_candidate_field_html('h3', '政見', $c, '政見', '政見圖路徑') ?>

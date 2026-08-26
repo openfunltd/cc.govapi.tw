@@ -193,6 +193,9 @@
 #### Phase 34 — CCAPI_TOKEN：內部 API 呼叫繞過 rate limit ✅（2026-08-06，commit `fdeaa20`）
 正式站上了 rate limit 後，`/info` 頁面內部大量自呼叫被當成匿名流量擋掉（已知案例：台南市議會議員名單一度顯示空白）；`CCAPI::apiQuery()` 新增 `CCAPI_TOKEN` 環境變數繞過限制，用 `Authorization: Bearer` header 帶（跟姊妹專案 lawtrace 目前用的方式一致，原本是 `?token=` query string，已改成 header），不會出現在網址／log 裡。
 
+#### Phase 35 — 候選人／議案頁面加上原始來源連結 ✅（2026-08-26）
+候選人歷年參選頁、議員選舉紀錄分頁的候選人卡片新增「資料來源（原始公報）」連結（用新的 `來源` 陣列，多頁時列出多個連結，PDF 網址加 `#page=N` 直接跳頁）；議案詳情頁的「來源檔案」文字改成連到 `來源網址` 的連結。共用邏輯放在 `views/info/index.php` 的 `info_candidate_source_links()`。
+
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
 - `scripts/import-council.php` CSV 第一欄 header 因 UTF-8 BOM（`\xEF\xBB\xBF`）導致 `Undefined array key "代碼"`，已修正

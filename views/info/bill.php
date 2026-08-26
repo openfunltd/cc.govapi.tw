@@ -77,9 +77,16 @@ $sections = [
 <?php endforeach; ?>
 
 <p class="text-body-secondary small">
-  來源檔案：<?= htmlspecialchars($b->{'來源檔案'} ?? '—') ?>
-  <?php if ($b->{'來源頁碼'} ?? null): ?>
-  （第 <?= htmlspecialchars($b->{'來源頁碼'}) ?> 頁）
+  來源檔案：
+  <?php $source_url = $b->{'來源網址'} ?? null; ?>
+  <?php $source_page = $b->{'來源頁碼'} ?? null; ?>
+  <?php if ($source_url): ?>
+  <a href="<?= htmlspecialchars($source_url . ($source_page ? '#page=' . urlencode($source_page) : '')) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($b->{'來源檔案'} ?? '原始檔案') ?></a>
+  <?php else: ?>
+  <?= htmlspecialchars($b->{'來源檔案'} ?? '—') ?>
+  <?php endif; ?>
+  <?php if ($source_page): ?>
+  （第 <?= htmlspecialchars($source_page) ?> 頁）
   <?php endif; ?>
 </p>
 
