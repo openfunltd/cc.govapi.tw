@@ -6,11 +6,18 @@
  *   php scripts/import-candidate.php            # 匯入資料（upsert）
  *   php scripts/import-candidate.php --reset    # 先刪除 index 再重建並匯入
  *
- * 來源：bulletin.jsonl（每行一位候選人，欄位：來源PDF/來源頁碼/選舉類型/縣市/
+ * 來源：bulletin.jsonl（每行一位候選人，欄位：來源PDF/來源頁碼/來源/選舉類型/縣市/
  * 選舉名稱/候選人代碼/選舉代碼/行政區代碼/選區別/code_match/姓名/號次/候選人別/
  * 學歷/學歷來源/經歷/經歷來源/政見/政見來源/欄位圖片/其他欄位/note/extract_method/
  * 相片路徑/政見圖路徑）
  * 所有來源欄位直接沿用原始名稱匯入 ES
+ *
+ * 來源（陣列，每筆候選人可能對應一到多筆——內容橫跨好幾頁公報時各自記錄一筆）：
+ * [{檔名, 官方網址, 檔案頁碼, 印刷頁碼, 印刷總頁數}, ...]，是「檔案內來源」的正式
+ * 結構化版本，`官方網址` 是中選會公報伺服器（bulletin.cec.gov.tw）的直連 PDF 網址，
+ * 實測可以直接下載，能直接拿來做線上預覽比對用；跟舊的 `來源PDF`／`來源頁碼`
+ * （只能表示單一頁、沒有官方網址）並存，舊欄位繼續保留是因為 import_candidate_doc()
+ * 產生無候選人代碼記錄的合成 ID 還在用（見下方 $no_code_records 的說明）
  *
  * 學歷來源／經歷來源／政見來源（欄位內容是否為可用文字，見 Candidate.php 說明）：
  * 除了原本的 text／text-garbled，新增 cell-image-vision——來源把公報逐格裁圖後改用
@@ -116,7 +123,22 @@ $index_mapping = [
     'properties' => [
         // 來源欄位（原始名稱）
         '來源PDF'   => ['type' => 'keyword'],
-        '來源頁碼'   => ['type' => 'integer'],
+        // 來源頁碼原本是純數字（single int），來源改版後變成字串，且候選人資料橫跨
+        // 多頁時會用「；」分隔多個頁碼（例："1；3"），不再保證是單一整數，型別改
+        // keyword（實測若沿用 integer，ES 會直接 400 拒絕整份文件更新，不是只有那個
+        // 欄位失敗；`來源`（見上方新欄位）陣列版本才是精準的每頁分開記錄，這個舊欄位
+        // 保留只是為了 $no_code_records 合成 ID 相容，不建議依賴它做精確頁碼查詢）
+        '來源頁碼'   => ['type' => 'keyword'],
+        '來源'       => [
+            'type' => 'object',
+            'properties' => [
+                '檔名'      => ['type' => 'keyword'],
+                '官方網址'   => ['type' => 'keyword', 'index' => false],
+                '檔案頁碼'   => ['type' => 'integer'],
+                '印刷頁碼'   => ['type' => 'integer'],
+                '印刷總頁數' => ['type' => 'integer'],
+            ],
+        ],
         '選舉類型'   => ['type' => 'keyword'],
         '縣市'       => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         '選舉名稱'   => ['type' => 'keyword'],
@@ -154,7 +176,7 @@ $index_mapping = [
 ];
 
 $known_source_keys = [
-    '來源PDF', '來源頁碼', '選舉類型', '縣市', '選舉名稱', '候選人代碼', '選舉代碼',
+    '來源PDF', '來源頁碼', '來源', '選舉類型', '縣市', '選舉名稱', '候選人代碼', '選舉代碼',
     '行政區代碼', '選區別', 'code_match', '姓名', '號次', '候選人別',
     '學歷', '學歷來源', '經歷', '經歷來源', '政見', '政見來源', '欄位圖片',
     '其他欄位', 'note', 'extract_method', '相片路徑', '政見圖路徑',
