@@ -105,7 +105,7 @@
     <!-- ── 2. 什麼是地方議會 ── -->
     <section id="background" class="section-anchor mb-5">
       <h2 class="h4 fw-semibold mb-3">2. 什麼是地方議會</h2>
-      <p>台灣的地方民意機關依<strong>地方制度法</strong>成立，分為三個層級：</p>
+      <p>台灣的地方民意機關依<strong><a href="https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=A0040003" target="_blank" rel="noopener">地方制度法</a></strong>成立，分為三個層級：</p>
       <table class="table table-sm table-bordered bg-white mb-3">
         <thead class="table-light">
           <tr><th>層級</th><th>機關名稱</th><th>成員稱謂</th><th>主持人</th></tr>
@@ -125,7 +125,7 @@
         </thead>
         <tbody>
           <tr><td>定期會</td><td>每半年一次（每年2次）</td><td>直轄市 ≤ 70 天；縣市 ≤ 30～40 天</td></tr>
-          <tr><td>臨時會</td><td>有需要時召開</td><td>直轄市每次 ≤ 10 天，每年 ≤ 8 次</td></tr>
+          <tr><td>臨時會</td><td>有需要時召開</td><td>直轄市每次 ≤ 10 天，每年 ≤ 8 次；縣市每次 ≤ 5 天，每年 ≤ 6 次</td></tr>
           <tr><td>成立大會</td><td>每屆 1 次</td><td>無規定</td></tr>
         </tbody>
       </table>
@@ -352,6 +352,15 @@
         </tbody>
       </table>
       <a href="/viewer/collection/completeness" class="btn btn-outline-secondary btn-sm">查看完整度總覽 →</a>
+    </section>
+
+    <!-- ── 法源依據 ── -->
+    <section id="legal-basis" class="section-anchor mb-5">
+      <h2 class="h4 fw-semibold mb-3">法源依據</h2>
+      <p class="small text-body-secondary mb-2">CCAPI 收錄的直轄市議會、縣（市）議會是依下列法規設立、運作：</p>
+      <ul class="small mb-0">
+        <li><a href="https://law.moj.gov.tw/LawClass/LawAll.aspx?pcode=A0040003" target="_blank" rel="noopener">地方制度法</a>（全國法規資料庫）——地方自治團體、地方立法機關（議會）的組織、職權與運作的基本法律</li>
+      </ul>
     </section>
 
     <!-- CTA -->
