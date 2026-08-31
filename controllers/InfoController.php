@@ -89,12 +89,17 @@ class InfoController extends MiniEngine_Controller
             return;
         }
 
-        if (!$term_no) {
-            // 沒帶屆次 → 查最新一屆，導向該屆的議員名單頁
+        if (!$term_no || $term_no === 'latest') {
+            // 沒帶屆次，或帶 latest 佔位字（議會切換器改用這個，避免帶著別議會的屆次號
+            // 跳過去，跳到不存在或對不上的屆） → 查最新一屆，導向該屆對應頁面
             $overview = CCAPI::apiQuery('/overview/' . rawurlencode($cc_code), '本議會現況資料（決定最新屆）');
             $latest_term = $overview->data->{'屆次'} ?? null;
             if ($latest_term) {
-                header('Location: /info/' . $latest_term . '/councilors', true, 302);
+                $target = '/info/' . $latest_term . '/' . ($tab ?: 'councilors');
+                if ($sub_id) {
+                    $target .= '/' . $sub_id;
+                }
+                header('Location: ' . $target, true, 302);
                 exit;
             }
             $this->view->term_no = null;

@@ -7,6 +7,9 @@ $_home_url = 'https://all' . $_postfix . '/about';
 $_nav_cc_code = $cc_code ?? CouncilHelper::getCurrentCode();
 $_nav_council_name = $council_name ?? CouncilHelper::getName($_nav_cc_code);
 $_nav_path = strtok($_SERVER['REQUEST_URI'] ?? '/', '?');
+// 切換議會時，路徑裡的屆次號對別的議會不見得有意義（甚至可能不存在），
+// 一律換成 latest 佔位字，由 InfoController 導向該議會真正的最新屆
+$_nav_path = preg_replace('#^/info/\d+(?=/|$)#', '/info/latest', $_nav_path);
 ?>
 <nav class="navbar navbar-expand-md navbar-dark bg-dark px-3">
   <a class="navbar-brand fw-semibold" href="<?= htmlspecialchars($_home_url) ?>">
