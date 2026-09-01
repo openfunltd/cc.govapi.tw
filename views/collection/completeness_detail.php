@@ -6,7 +6,9 @@ if (!$c): ?>
 
 $types = $c->types;
 
-function detail_cell($count, $status) {
+// $type_obj：types.{type} 物件，只有議案／逐字稿有 upstream_status/upstream_note（上游
+// 提供的原因說明），其餘型別傳 null 即可
+function detail_cell($count, $status, $type_obj = null) {
     if ($status === 'ok') {
         $color = 'text-success'; $icon = '✅';
     } elseif ($status === 'incomplete') {
@@ -14,7 +16,14 @@ function detail_cell($count, $status) {
     } else {
         $color = 'text-danger'; $icon = '❌';
     }
-    return '<span class="' . $color . ' font-weight-bold">' . $count . ' ' . $icon . '</span>';
+    $html = '<span class="' . $color . ' font-weight-bold">' . $count . ' ' . $icon . '</span>';
+    $note = $type_obj->upstream_note ?? null;
+    if ($status !== 'ok' && $note) {
+        $badge = (($type_obj->upstream_status ?? null) === 'infeasible') ? '官方無法提供' : '規劃中';
+        $html .= ' <span class="badge badge-secondary" style="cursor: help;" title="' .
+            htmlspecialchars($note) . '">' . $badge . '</span>';
+    }
+    return $html;
 }
 ?>
 
@@ -91,8 +100,8 @@ function detail_cell($count, $status) {
                     <td class="text-center"><?= detail_cell($t->{'councilor_count'}, $t->{'councilor_status'}) ?></td>
                     <td class="text-center"><?= detail_cell($t->{'session_count'}, $t->{'session_status'}) ?></td>
                     <td class="text-center"><?= detail_cell($t->{'sitting_count'} ?? 0, $t->{'sitting_status'} ?? 'missing') ?></td>
-                    <td class="text-center"><?= detail_cell($t->{'transcript_count'} ?? 0, $t->{'transcript_status'} ?? 'missing') ?></td>
-                    <td class="text-center"><?= detail_cell($t->{'bill_count'} ?? 0, $t->{'bill_status'} ?? 'missing') ?></td>
+                    <td class="text-center"><?= detail_cell($t->{'transcript_count'} ?? 0, $t->{'transcript_status'} ?? 'missing', $types->transcript ?? null) ?></td>
+                    <td class="text-center"><?= detail_cell($t->{'bill_count'} ?? 0, $t->{'bill_status'} ?? 'missing', $types->bill ?? null) ?></td>
                 </tr>
             <?php endforeach; ?>
             </tbody>

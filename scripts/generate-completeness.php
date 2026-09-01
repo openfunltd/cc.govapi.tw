@@ -18,6 +18,12 @@
  * 本來就抓不到、資料發布在別處」——維持跟其他項目同一套判斷邏輯，不特殊處理。
  * 議案目前只有少數議會有資料（持續擴充中的實驗性補充資料），且「屆」是從來源
  * 檔名解析出來的推測值，不是正式關聯欄位，這裡直接沿用這個推測值做屆次分組。
+ *
+ * 上游額外提供「完整度狀態」對照表（IMPORT_COMPLETENESS_STATUS_CSV），針對逐字稿／
+ * 議案這兩種還沒有把關做到位的型別，補充「done / pending（規劃中，我們這邊還沒做）
+ * / infeasible（官方沒有可用的原始資料，技術上做不到）」的原因說明，寫進
+ * types.{type}.upstream_status／upstream_note，純粹補充資訊用，不影響上面既有的
+ * status（ok/incomplete/missing）判斷邏輯。
  */
 
 include(__DIR__ . '/../init.inc.php');
@@ -230,6 +236,33 @@ foreach ($bill_agg->aggregations->by_council->buckets as $cb) {
 }
 error_log("Loaded bill counts for " . count($bill_counts) . " councils");
 
+// ── 6.6. 上游完整度狀態對照表（議案／逐字稿：done / pending / infeasible + 說明）──
+
+$csv_type_to_key = ['議案' => 'bill', '逐字稿' => 'transcript'];
+$upstream_status = [];   // [cc_code][type_key] = {status, note, updated_at}
+
+$status_csv_path = getenv('IMPORT_COMPLETENESS_STATUS_CSV');
+if ($status_csv_path && file_exists($status_csv_path)) {
+    $fh = fopen($status_csv_path, 'r');
+    $headers = fgetcsv($fh);
+    while (($row = fgetcsv($fh)) !== false) {
+        $rec = array_combine($headers, $row);
+        $type_key = $csv_type_to_key[$rec['資料類型']] ?? null;
+        if (!$type_key) {
+            continue;   // 上游之後如果擴充到其他型別，這裡先忽略，不中止匯入
+        }
+        $upstream_status[$rec['議會代碼']][$type_key] = [
+            'status'     => $rec['狀態'],
+            'note'       => $rec['說明'] ?: null,
+            'updated_at' => $rec['更新日期'] ?: null,
+        ];
+    }
+    fclose($fh);
+    error_log("讀取完整度狀態對照表：" . count($upstream_status) . " 個議會");
+} else {
+    error_log("完整度狀態對照表不存在，略過（不影響既有完整度計算）：{$status_csv_path}");
+}
+
 // ── 7. 計算完整度並寫入 ES ──────────────────────────────────────────────────
 
 function calc_status($count, $type, $term_info, $is_current, $gap_days = 90)
@@ -259,6 +292,19 @@ function calc_status($count, $type, $term_info, $is_current, $gap_days = 90)
     }
 
     return 'ok';
+}
+
+// 有上游狀態資料才附加 upstream_status/upstream_note，沒有就不加這兩個欄位
+function upstream_status_fields($upstream_status, $cc, $type_key)
+{
+    $info = $upstream_status[$cc][$type_key] ?? null;
+    if (!$info) {
+        return [];
+    }
+    return [
+        'upstream_status' => $info['status'],
+        'upstream_note'   => $info['note'],
+    ];
 }
 
 $today_str = $today->format('Y-m-d');
@@ -377,18 +423,18 @@ foreach ($councils as $cc => $council) {
                 'total_terms'     => $total_terms,
                 'status'          => $sitting_type_status,
             ],
-            'transcript' => [
+            'transcript' => array_merge([
                 'total'           => $transcript_total,
                 'terms_with_data' => $transcript_terms_with_data,
                 'total_terms'     => $total_terms,
                 'status'          => $transcript_type_status,
-            ],
-            'bill' => [
+            ], upstream_status_fields($upstream_status, $cc, 'transcript')),
+            'bill' => array_merge([
                 'total'           => $bill_total,
                 'terms_with_data' => $bill_terms_with_data,
                 'total_terms'     => $total_terms,
                 'status'          => $bill_type_status,
-            ],
+            ], upstream_status_fields($upstream_status, $cc, 'bill')),
         ],
         'terms'      => $term_docs,
         'updated_at' => $today_str,
