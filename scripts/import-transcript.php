@@ -22,6 +22,11 @@
  * 目前資料來源涵蓋 13 個議會、約 7,200 個場次（占全部場次約 2 成），其餘議會多為
  * 結構性缺口（逐字稿另外公布在別處、上游場次資料本身對不上、或圖片尚待 OCR），
  * 並非匯入疏漏。
+ *
+ * 加速機制：每個代碼組裝前先算「來源簽章」（該代碼底下每筆索引列 + 對應檔案的
+ * mtime/size 組出來的 md5），跟 ES 裡既有的來源簽章比對，沒變就整組跳過（連檔案內容
+ * 都不用讀），只有真的有變的場次才重新組裝、重新寫入。--reset 時 ES 是空的，等於
+ * 全部視為有變化，會重新處理每一筆。
  */
 
 include(__DIR__ . '/../init.inc.php');
@@ -46,6 +51,7 @@ $index_mapping = [
         '字數'       => ['type' => 'integer'],
         // 分段內容（依來源分類/委員會分組），供前端分 tab 顯示
         '分段'       => ['type' => 'nested', 'dynamic' => true],
+        '來源簽章'   => ['type' => 'keyword', 'index' => false],
         'updated_at' => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
     ],
 ];
@@ -57,6 +63,15 @@ if ($reset) {
 
 try { Elastic::createIndex('transcript', $index_mapping); error_log("Created index: transcript"); }
 catch (Exception $e) { error_log("Index exists: " . $e->getMessage()); }
+
+// index 已存在時（非 --reset）也嘗試更新 mapping，讓新增的來源欄位（例：來源簽章）
+// 套用正確型別（ES 允許為既有 index 補新欄位定義，不影響既有欄位，重複執行也安全）
+try {
+    $prefix = getenv('ELASTIC_PREFIX');
+    Elastic::dbQuery("/{$prefix}transcript/_mapping", 'PUT', json_encode($index_mapping));
+} catch (Exception $e) {
+    error_log("Mapping update skipped: " . $e->getMessage());
+}
 
 // ── 讀取來源路徑 ─────────────────────────────────────────────────────────────
 
@@ -152,13 +167,50 @@ function derive_sitting_context($code)
     ];
 }
 
-// ── 3. 逐代碼組裝內容並寫入 ──────────────────────────────────────────────────
+// ── 3. 讀取既有的來源簽章（判斷哪些代碼可以整組跳過不重新處理）─────────────────
+
+$existing_sig = [];
+try {
+    $prefix = getenv('ELASTIC_PREFIX');
+    $ret = Elastic::dbQuery("/{$prefix}transcript/_search", 'POST', json_encode([
+        'size' => 10000,
+        '_source' => ['代碼', '來源簽章'],
+        'query' => (object)['match_all' => (object)[]],
+    ]));
+    foreach ($ret->hits->hits as $hit) {
+        if (isset($hit->_source->{'來源簽章'})) {
+            $existing_sig[$hit->_source->{'代碼'}] = $hit->_source->{'來源簽章'};
+        }
+    }
+    error_log("讀取既有來源簽章：" . count($existing_sig) . " 筆");
+} catch (Exception $e) {
+    error_log("讀取既有來源簽章失敗（視為全部重新處理）：" . $e->getMessage());
+}
+
+// ── 4. 逐代碼組裝內容並寫入 ──────────────────────────────────────────────────
 
 $count = 0;
 $skipped_files = 0;
+$skipped_unchanged = 0;
 $processed = 0;
 
 foreach ($groups as $code => $rows) {
+    // 來源簽章：每筆索引列本身的內容 + 對應檔案的 mtime/size，兩者都沒變才跳過，
+    // 涵蓋「檔案內容改了」跟「索引列改分類/順序但檔案沒動」兩種情況
+    $sig_parts = [];
+    foreach ($rows as $row) {
+        $full_path = $base_dir . '/' . $row['檔案路徑'];
+        $file_stat = file_exists($full_path) ? (filemtime($full_path) . ':' . filesize($full_path)) : 'missing';
+        $sig_parts[] = json_encode($row) . ':' . $file_stat;
+    }
+    sort($sig_parts);
+    $signature = md5(implode('|', $sig_parts));
+
+    if (($existing_sig[$code] ?? null) === $signature) {
+        $skipped_unchanged++;
+        continue;
+    }
+
     // 先依（來源分類, 委員會）分組，組內再依順序排序
     $by_group = [];   // "{來源分類}|{委員會}" => [row, ...]
     foreach ($rows as $row) {
@@ -223,6 +275,7 @@ foreach ($groups as $code => $rows) {
         '檔案數'     => $file_count,
         '字數'       => mb_strlen($content),
         '分段'       => $sections,
+        '來源簽章'   => $signature,
         'updated_at' => $today_str,
     ];
 
@@ -237,4 +290,4 @@ foreach ($groups as $code => $rows) {
 }
 
 Elastic::dbBulkCommit('transcript');
-error_log("Done. Imported: {$count}, 讀取失敗檔案數: {$skipped_files}");
+error_log("Done. Imported: {$count}, 來源未變跳過: {$skipped_unchanged}, 讀取失敗檔案數: {$skipped_files}");
