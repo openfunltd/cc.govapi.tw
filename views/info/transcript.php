@@ -21,7 +21,13 @@ $session_code = $transcript->{'會期代碼'} ?? $sitting->{'會期代碼'} ?? n
   <span class="badge bg-secondary"><?= htmlspecialchars($sitting->{'場次類別'} ?? '') ?></span>
 </h2>
 <?php if ($sitting->{'議程說明'} ?? null): ?>
-<p class="text-body-secondary small" style="white-space: pre-wrap;"><?= htmlspecialchars($sitting->{'議程說明'}) ?></p>
+<p class="text-body-secondary small mb-1" style="white-space: pre-wrap;"><?= htmlspecialchars($sitting->{'議程說明'}) ?></p>
+<?php endif; ?>
+<?php if ($sitting->{'來源網址'} ?? null): ?>
+<p class="text-body-secondary small">
+  原始會議紀錄：
+  <a href="<?= htmlspecialchars($sitting->{'來源網址'}) ?>" target="_blank" rel="noopener">議會官網公告頁 →</a>
+</p>
 <?php endif; ?>
 
 <?php if (!$transcript || empty($transcript->{'分段'})): ?>
