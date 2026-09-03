@@ -157,6 +157,10 @@ class InfoController extends MiniEngine_Controller
                 $this->resolveAgendaPeople($agenda);
                 $this->view->agenda_detail = $agenda;
                 if ($agenda) {
+                    $page = max(1, (int)($_GET['page'] ?? 1));
+                    $speech_result = $this->loadAgendaSpeeches($agenda->{'代碼'}, $page);
+                    $this->resolveSpeechPeople($speech_result->speeches ?? []);
+                    $this->view->speech_result = $speech_result;
                     $this->setOg(
                         ($agenda->{'議程類型'} ?? '議程詳情') . '・' . ($agenda->{'委員會或名稱'} ?? ''),
                         $this->view->council_name . '第' . ($agenda->{'屆'} ?? $term_no) . '屆・' . ($agenda->{'時間資訊'} ?? '')
@@ -554,6 +558,68 @@ class InfoController extends MiniEngine_Controller
 
         foreach ($agenda->{'參與議員結構'} ?? [] as $p) {
             $p->{'人物代碼'} = $person_code_by_code[$p->{'議員代碼'} ?? ''] ?? null;
+        }
+    }
+
+    /**
+     * 議程的逐句發言，改用伺服器端 CCAPI::apiQuery() 分頁載入（原本用瀏覽器端 JS
+     * fetch，改成這樣有兩個好處：一、跟頁面其他資料一樣會出現在頁尾「本頁使用 API」
+     * 清單，使用者/除錯時看得到；二、失敗時走現有的 $r->error 判斷方式，不會像
+     * JS fetch 失敗時整頁靜默空白、沒有任何提示）。單一議程可能有上萬筆發言（例：
+     * 「一天一議程」做法的議會），所以還是要分頁，用 URL 的 ?page= 參數控制。
+     */
+    protected function loadAgendaSpeeches($agenda_code, $page, $limit = 500)
+    {
+        $r = CCAPI::apiQuery(
+            '/speeches?' . urlencode('議程代碼') . '=' . urlencode($agenda_code)
+                . '&limit=' . (int)$limit . '&page=' . (int)$page,
+            '議程逐句發言'
+        );
+        return (object)[
+            'speeches'   => $r->speeches ?? [],
+            'total'      => $r->total ?? 0,
+            'total_page' => $r->total_page ?? 0,
+            'page'       => $page,
+            'limit'      => $limit,
+        ];
+    }
+
+    /**
+     * 逐句發言裡「對應代碼類型」是議員的，批次查一次 councilor 換「人物代碼」
+     * （連到議員個人頁）跟「照片」（頭像），比照 resolveAgendaPeople() 的做法，
+     * 一次查詢批次處理，不逐筆查避免 N+1。直接把結果掛在每筆發言物件上
+     * （`_人物代碼`／`_照片`），view 端不用再處理對照表。
+     */
+    protected function resolveSpeechPeople($speeches)
+    {
+        $codes = [];
+        foreach ($speeches as $s) {
+            if (($s->{'對應代碼類型'} ?? null) === '議員' && ($s->{'對應代碼'} ?? null)) {
+                $codes[$s->{'對應代碼'}] = true;
+            }
+        }
+        if (!$codes) {
+            return;
+        }
+
+        $qs = '';
+        foreach (array_keys($codes) as $code) {
+            $qs .= '&' . urlencode('代碼') . '=' . urlencode($code);
+        }
+        $r = CCAPI::apiQuery(
+            '/councilors?limit=' . count($codes) . $qs,
+            '議程逐句發言對應議員資料'
+        );
+
+        $by_code = [];
+        foreach (($r->councilors ?? []) as $c) {
+            $by_code[$c->{'代碼'}] = ['person_code' => $c->{'人物代碼'} ?? null, 'photo' => $c->{'照片'} ?? null];
+        }
+
+        foreach ($speeches as $s) {
+            $info = $by_code[$s->{'對應代碼'} ?? ''] ?? null;
+            $s->{'_人物代碼'} = $info['person_code'] ?? null;
+            $s->{'_照片'} = $info['photo'] ?? null;
         }
     }
 

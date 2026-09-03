@@ -1,5 +1,6 @@
 <?php
 $a = $this->agenda_detail ?? null;
+$sr = $this->speech_result ?? null;
 
 // 「參與議員結構」有人物代碼時連到議員個人頁，沒有就顯示純文字姓名（比照 bill.php
 // 的 bill_person_links()）
@@ -16,6 +17,39 @@ function agenda_person_links($structured) {
             : $name;
     }
     return implode('、', $parts);
+}
+
+// 發言者姓名（議員且比對到人物代碼時連到議員個人頁；機關發言優先顯示對應單位全名）
+function speech_speaker_html($s) {
+    $name = htmlspecialchars($s->{'姓名'} ?? $s->{'原始標記'} ?? '');
+    $title = $s->{'職稱'} ?? null ? '（' . htmlspecialchars($s->{'職稱'}) . '）' : '';
+    if (($s->{'對應代碼類型'} ?? null) === '議員') {
+        $person_code = $s->{'_人物代碼'} ?? null;
+        if ($person_code) {
+            return '<a href="/info/councilor/' . urlencode($person_code) . '">' . $name . '</a>' . $title;
+        }
+    } elseif ($s->{'對應單位全名'} ?? null) {
+        return htmlspecialchars($s->{'對應單位全名'}) . $title;
+    }
+    return $name . $title;
+}
+
+// 民代（議員）：有照片就用照片，沒有就用姓名首字當佔位頭像；非民代（機關／官員）
+// 目前一律用機關佔位圖示，之後補上真實頭像時只要在這裡換掉即可
+function speech_avatar_html($s) {
+    $name = $s->{'姓名'} ?? $s->{'原始標記'} ?? '';
+    if (($s->{'對應代碼類型'} ?? null) === '議員') {
+        $photo = $s->{'_照片'} ?? null;
+        if ($photo) {
+            return '<img class="speech-avatar" src="' . htmlspecialchars($photo) . '" alt="">';
+        }
+        return '<div class="speech-avatar">' . htmlspecialchars(mb_substr($name, 0, 1)) . '</div>';
+    }
+    return '<div class="speech-avatar">🏛</div>';
+}
+
+function agenda_page_url($page) {
+    return '?page=' . (int)$page;
 }
 ?>
 
@@ -49,7 +83,17 @@ function agenda_person_links($structured) {
   <?php endif; ?>
 </p>
 
-<div id="agenda-sections" class="mb-3"></div>
+<?php if (!empty($a->{'小節清單'})): ?>
+<div class="mb-3">
+  <div class="small text-body-secondary mb-1">本議程小節：</div>
+  <?php foreach ($a->{'小節清單'} as $sec): ?>
+  <?php $sec_page = intdiv((int)($sec->{'起始順序'} ?? 0), (int)($sr->limit ?? 500)) + 1; ?>
+  <a href="<?= htmlspecialchars(agenda_page_url($sec_page)) ?>" class="badge bg-light text-dark border me-1 mb-1 text-decoration-none">
+    <?= htmlspecialchars($sec->{'名稱'} ?? '') ?>
+  </a>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
 
 <style>
 /* 逐句發言：比照 SayIt 平台「發言者頭像＋內容」的呈現方式，額外把「民代」（議員）
@@ -66,9 +110,56 @@ function agenda_person_links($structured) {
 .role-other .speech-bubble { background: #e7f1ff; }
 </style>
 
-<div id="speech-summary" class="small text-body-secondary mb-2"></div>
-<div id="speech-list"></div>
-<div id="speech-pagination" class="d-flex justify-content-center align-items-center gap-2 my-3"></div>
+<div class="small text-body-secondary mb-2">共 <?= (int)($sr->total ?? 0) ?> 筆發言</div>
+
+<?php if (empty($sr->speeches)): ?>
+<div class="alert alert-light border">本議程尚無逐句發言資料</div>
+<?php else: ?>
+
+<div>
+  <?php foreach ($sr->speeches as $s): ?>
+  <?php $is_rep = ($s->{'對應代碼類型'} ?? null) === '議員'; /* 民代放左邊、非民代放右邊 */ ?>
+  <?php
+    // 「來源頁碼」是 PDF 檔案實際的頁碼位置（#page= 導覽要用這個，已用真實 PDF 驗證過：
+    // 檔案內來源頁碼跟 pdftotext 撈出來的頁面內容吻合），可能是「1112-1113」這種範圍格式，
+    // #page= 只能吃單一整數，取第一個數字；「印刷頁碼」是印在頁面上、人看的頁碼，兩者
+    // 常常對不上（合訂本前面常有目錄等沒編頁的內容，兩邊會有偏移量），顯示給人看時優先用
+    // 印刷頁碼，沒有才退回顯示來源頁碼；不是每個議會都有印刷頁碼（例：雲林縣目前沒有）
+    $source_link = '';
+    if (($s->{'來源網址'} ?? null) && ($s->{'來源頁碼'} ?? null)) {
+        $nav_page = preg_replace('/[^0-9].*$/', '', (string)$s->{'來源頁碼'});
+        $display_page = $s->{'印刷頁碼'} ?? $s->{'來源頁碼'};
+        $source_link = ' <a class="small" href="' . htmlspecialchars($s->{'來源網址'} . '#page=' . urlencode($nav_page)) . '" target="_blank" rel="noopener">（第' . htmlspecialchars($display_page) . '頁）</a>';
+    }
+    $bubble = '<div class="speech-bubble">'
+        . '<div class="small fw-semibold">' . speech_speaker_html($s) . $source_link . '</div>'
+        . '<div class="small" style="white-space: pre-wrap;">' . htmlspecialchars($s->{'發言內容'} ?? '') . '</div>'
+        . '</div>';
+    $avatar = speech_avatar_html($s);
+  ?>
+  <div class="speech-row <?= $is_rep ? 'role-rep' : 'role-other' ?>">
+    <?= $is_rep ? ($avatar . $bubble) : ($bubble . $avatar) ?>
+  </div>
+  <?php endforeach; ?>
+</div>
+
+<?php if (($sr->total_page ?? 0) > 1): ?>
+<div class="d-flex justify-content-center align-items-center gap-2 my-3">
+  <?php if ($sr->page > 1): ?>
+  <a class="btn btn-sm btn-outline-secondary" href="<?= htmlspecialchars(agenda_page_url($sr->page - 1)) ?>">&larr; 上一頁</a>
+  <?php else: ?>
+  <button class="btn btn-sm btn-outline-secondary" disabled>&larr; 上一頁</button>
+  <?php endif; ?>
+  <span class="small"><?= (int)$sr->page ?> / <?= (int)$sr->total_page ?></span>
+  <?php if ($sr->page < $sr->total_page): ?>
+  <a class="btn btn-sm btn-outline-secondary" href="<?= htmlspecialchars(agenda_page_url($sr->page + 1)) ?>">下一頁 &rarr;</a>
+  <?php else: ?>
+  <button class="btn btn-sm btn-outline-secondary" disabled>下一頁 &rarr;</button>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<?php endif; ?>
 
 <?php if ($a->{'來源網址'} ?? null): ?>
 <p class="text-body-secondary small">
@@ -76,165 +167,5 @@ function agenda_person_links($structured) {
   <a href="<?= htmlspecialchars($a->{'來源網址'}) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($a->{'來源檔案'} ?? '原始檔案') ?></a>
 </p>
 <?php endif; ?>
-
-<script>
-(function () {
-  var agendaCode = <?= json_encode($a->{'代碼'}) ?>;
-  var sections = <?= json_encode($a->{'小節清單'} ?? []) ?>;
-  var pageSize = 500;
-  var state = { page: 1 };
-  var personCache = {};   // 對應代碼 => {人物代碼, 照片}（查過沒有對到就存 null）
-
-  function escapeHtml(s) {
-    var div = document.createElement('div');
-    div.textContent = s == null ? '' : s;
-    return div.innerHTML;
-  }
-
-  function fetchJson(url) {
-    return fetch(url).then(function (r) { return r.json(); });
-  }
-
-  function goToPage(page) {
-    state.page = page;
-    run();
-    window.scrollTo({ top: document.getElementById('speech-list').offsetTop - 80, behavior: 'smooth' });
-  }
-
-  function renderSections() {
-    var el = document.getElementById('agenda-sections');
-    if (!sections || !sections.length) {
-      el.innerHTML = '';
-      return;
-    }
-    var html = '<div class="small text-body-secondary mb-1">本議程小節：</div>';
-    sections.forEach(function (s) {
-      var page = Math.floor((s['起始順序'] || 0) / pageSize) + 1;
-      html += '<span class="badge bg-light text-dark border me-1 mb-1" style="cursor:pointer" data-page="' + page + '">'
-        + escapeHtml(s['名稱']) + '</span> ';
-    });
-    el.innerHTML = html;
-    el.querySelectorAll('[data-page]').forEach(function (badge) {
-      badge.addEventListener('click', function () { goToPage(parseInt(badge.dataset.page, 10)); });
-    });
-  }
-
-  // 對應代碼類型=議員 的發言者批次查一次 councilor 換人物代碼，才能連到議員個人頁
-  // （比照 resolveBillPeople() 的做法，一次查詢批次處理，不逐筆查避免 N+1）
-  function resolvePeople(list) {
-    var codes = [];
-    list.forEach(function (s) {
-      if (s['對應代碼類型'] === '議員' && s['對應代碼'] && !(s['對應代碼'] in personCache)) {
-        codes.push(s['對應代碼']);
-      }
-    });
-    if (!codes.length) {
-      return Promise.resolve();
-    }
-    var qs = codes.map(function (c) { return encodeURIComponent('代碼') + '=' + encodeURIComponent(c); }).join('&');
-    return fetchJson('/api/councilors?limit=' + codes.length + '&' + qs).then(function (d) {
-      (d.councilors || []).forEach(function (c) {
-        personCache[c['代碼']] = { personCode: c['人物代碼'] || null, photo: c['照片'] || null };
-      });
-      codes.forEach(function (c) {
-        if (!(c in personCache)) personCache[c] = { personCode: null, photo: null };
-      });
-    });
-  }
-
-  function speakerHtml(s) {
-    var name = escapeHtml(s['姓名'] || s['原始標記'] || '');
-    var title = s['職稱'] ? '（' + escapeHtml(s['職稱']) + '）' : '';
-    if (s['對應代碼類型'] === '議員') {
-      var info = personCache[s['對應代碼']];
-      if (info && info.personCode) {
-        return '<a href="/info/councilor/' + encodeURIComponent(info.personCode) + '">' + name + '</a>' + title;
-      }
-    } else if (s['對應單位全名']) {
-      return escapeHtml(s['對應單位全名']) + title;
-    }
-    return name + title;
-  }
-
-  // 民代（議員）：有照片就用照片，沒有就用姓名首字當佔位頭像；非民代（機關／官員）
-  // 目前一律用機關佔位圖示，之後補上真實頭像時只要在這裡換掉即可
-  function avatarHtml(s) {
-    var name = s['姓名'] || s['原始標記'] || '';
-    if (s['對應代碼類型'] === '議員') {
-      var info = personCache[s['對應代碼']];
-      if (info && info.photo) {
-        return '<img class="speech-avatar" src="' + escapeHtml(info.photo) + '" alt="">';
-      }
-      return '<div class="speech-avatar">' + escapeHtml(name.substr(0, 1)) + '</div>';
-    }
-    return '<div class="speech-avatar">🏛</div>';
-  }
-
-  function renderResults(data) {
-    var summary = document.getElementById('speech-summary');
-    var results = document.getElementById('speech-list');
-    var pagination = document.getElementById('speech-pagination');
-
-    summary.textContent = '共 ' + data.total + ' 筆發言';
-    var list = data.speeches || [];
-    if (!list.length) {
-      results.innerHTML = '<div class="alert alert-light border">本議程尚無逐句發言資料</div>';
-      pagination.innerHTML = '';
-      return;
-    }
-
-    resolvePeople(list).then(function () {
-      var html = '';
-      list.forEach(function (s) {
-        var isRep = s['對應代碼類型'] === '議員';   // 民代放左邊、非民代放右邊
-        var sourceLink = (s['來源網址'] && s['來源頁碼'])
-          ? ' <a class="small" href="' + escapeHtml(s['來源網址']) + '#page=' + encodeURIComponent(s['來源頁碼']) + '" target="_blank" rel="noopener">（第' + escapeHtml(s['來源頁碼']) + '頁）</a>'
-          : '';
-        var bubble = '<div class="speech-bubble">'
-          + '<div class="small fw-semibold">' + speakerHtml(s) + sourceLink + '</div>'
-          + '<div class="small" style="white-space: pre-wrap;">' + escapeHtml(s['發言內容']) + '</div>'
-          + '</div>';
-        var avatar = avatarHtml(s);
-        html += '<div class="speech-row ' + (isRep ? 'role-rep' : 'role-other') + '">'
-          + (isRep ? (avatar + bubble) : (bubble + avatar))
-          + '</div>';
-      });
-      results.innerHTML = html;
-
-      var totalPages = Math.max(1, Math.ceil(data.total / pageSize));
-      pagination.innerHTML = '';
-      if (totalPages > 1) {
-        var prev = document.createElement('button');
-        prev.className = 'btn btn-sm btn-outline-secondary';
-        prev.textContent = '← 上一頁';
-        prev.disabled = state.page <= 1;
-        prev.addEventListener('click', function () { state.page--; run(); });
-        pagination.appendChild(prev);
-
-        var info = document.createElement('span');
-        info.className = 'small';
-        info.textContent = state.page + ' / ' + totalPages;
-        pagination.appendChild(info);
-
-        var next = document.createElement('button');
-        next.className = 'btn btn-sm btn-outline-secondary';
-        next.textContent = '下一頁 →';
-        next.disabled = state.page >= totalPages;
-        next.addEventListener('click', function () { state.page++; run(); });
-        pagination.appendChild(next);
-      }
-    });
-  }
-
-  function run() {
-    var qs = encodeURIComponent('議程代碼') + '=' + encodeURIComponent(agendaCode)
-      + '&limit=' + pageSize + '&page=' + state.page;
-    fetchJson('/api/speeches?' + qs).then(renderResults);
-  }
-
-  renderSections();
-  run();
-})();
-</script>
 
 <?php endif; ?>
