@@ -39,6 +39,7 @@ $sittings = $this->session_sittings ?? [];
               <th>類別</th>
               <th>內容</th>
               <th>逐字稿</th>
+              <th>議程</th>
             </tr>
           </thead>
           <tbody>
@@ -52,6 +53,12 @@ $sittings = $this->session_sittings ?? [];
               <td class="text-center">
                 <?php if (!empty($this->sittings_with_transcript[$s->{'代碼'}])): ?>
                 <a href="/info/<?= $this->term_no ?>/transcript/<?= urlencode($s->{'代碼'}) ?>" title="查看逐字稿">📄</a>
+                <?php endif; ?>
+              </td>
+              <td class="text-center">
+                <?php $agenda_count = $this->sittings_agenda_count[$s->{'代碼'}] ?? 0; ?>
+                <?php if ($agenda_count): ?>
+                <a href="/info/<?= $this->term_no ?>/agendas/<?= urlencode($s->{'代碼'}) ?>" title="查看議程">🗂 <?= (int)$agenda_count ?></a>
                 <?php endif; ?>
               </td>
             </tr>

@@ -81,7 +81,7 @@ class CCAPI_Type_Speech extends CCAPI_Type
 
     public static function sortFields()
     {
-        return [];
+        return ['順序<'];
     }
 
     /**

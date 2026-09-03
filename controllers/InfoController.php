@@ -107,8 +107,9 @@ class InfoController extends MiniEngine_Controller
         }
 
         $term_no = (int)$term_no;
-        // 'transcript'／'bill' 是從各自列表頁連結進去的單筆詳情子頁面，不放進主要 tab 導覽列
-        $valid_tabs = array_merge(array_keys($this->tabs), ['transcript', 'bill']);
+        // 'transcript'／'bill'／'agendas'／'agenda' 是從各自列表頁連結進去的詳情子頁面，
+        // 不放進主要 tab 導覽列
+        $valid_tabs = array_merge(array_keys($this->tabs), ['transcript', 'bill', 'agendas', 'agenda']);
         $tab = ($tab && in_array($tab, $valid_tabs)) ? $tab : 'councilors';
 
         $this->view->term_no = $term_no;
@@ -145,6 +146,20 @@ class InfoController extends MiniEngine_Controller
                     $this->setOg(
                         ($bill->{'案由'} ?? '議案詳情'),
                         $this->view->council_name . '第' . ($bill->{'屆'} ?? $term_no) . '屆・' . ($bill->{'案號'} ?? '')
+                    );
+                }
+                break;
+            case 'agendas':
+                $this->loadAgendasForSitting($sub_id);
+                break;
+            case 'agenda':
+                $agenda = $this->loadAgendaDetail($sub_id);
+                $this->resolveAgendaPeople($agenda);
+                $this->view->agenda_detail = $agenda;
+                if ($agenda) {
+                    $this->setOg(
+                        ($agenda->{'議程類型'} ?? '議程詳情') . '・' . ($agenda->{'委員會或名稱'} ?? ''),
+                        $this->view->council_name . '第' . ($agenda->{'屆'} ?? $term_no) . '屆・' . ($agenda->{'時間資訊'} ?? '')
                     );
                 }
                 break;
@@ -331,6 +346,7 @@ class InfoController extends MiniEngine_Controller
             $this->view->session_status = null;   // 指定歷史會期，不需要進行中/已結束標記
             $this->view->session_sittings = $this->loadSittingsForSession($session_code);
             $this->view->sittings_with_transcript = $this->loadSittingsWithTranscript($session_code);
+            $this->view->sittings_agenda_count = $this->loadSittingsWithAgendaCount($session_code);
             return;
         }
 
@@ -340,6 +356,7 @@ class InfoController extends MiniEngine_Controller
         $this->view->session_status = $status;
         $this->view->session_sittings = $sittings;
         $this->view->sittings_with_transcript = $meta ? $this->loadSittingsWithTranscript($meta->{'代碼'}) : [];
+        $this->view->sittings_agenda_count = $meta ? $this->loadSittingsWithAgendaCount($meta->{'代碼'}) : [];
     }
 
     protected function findCurrentSessionInTerm($cc_code, $term_no)
@@ -420,6 +437,10 @@ class InfoController extends MiniEngine_Controller
      * 不需要像「整個會期全部場次」那樣分批載入（那樣做曾經把伺服器打爆過）。
      * 同一場次若有多種來源（大會會議紀錄、各委員會審查會議事錄等），用匯入時
      * 已經分好的「分段」陣列各自顯示一個 tab。
+     *
+     * 注意：這是舊版（整場次一筆文字）逐字稿資料，跟新版「議程／逐句發言」
+     * （見 loadAgendasForSitting()／loadAgendaDetail()）是並存的兩套資料，
+     * 互不影響、也互不取代。
      */
     protected function loadTranscriptTab($cc_code, $term_no, $sitting_code)
     {
@@ -435,6 +456,105 @@ class InfoController extends MiniEngine_Controller
 
         $transcript = CCAPI::apiQuery('/transcript/' . rawurlencode($sitting_code), '場次逐字稿');
         $this->view->transcript = ($transcript->error ?? true) ? null : $transcript->data;
+    }
+
+    /**
+     * 用一次聚合查詢拿到「本會期哪些場次代碼有議程資料、各有幾筆」，避免對每個
+     * 場次各別查一次（N+1）。跟 loadSittingsWithTranscript() 不同的是這裡回傳的
+     * 是數量（一個場次可能對應多個議程），不是單純的存在與否。
+     */
+    protected function loadSittingsWithAgendaCount($session_code)
+    {
+        $r = CCAPI::apiQuery(
+            '/sitting_agendas?limit=0&' . urlencode('會期代碼') . '=' . urlencode($session_code)
+                . '&agg=' . urlencode('場次代碼'),
+            '本會期各場次的議程數'
+        );
+        $counts = [];
+        foreach (($r->aggs[0]->buckets ?? []) as $b) {
+            $code = $b->{'場次代碼'} ?? null;
+            if ($code) {
+                $counts[$code] = $b->count;
+            }
+        }
+        return $counts;
+    }
+
+    /**
+     * 場次的議程清單：一個場次可能對應多個議程（實測最多 10~13 個），跟逐字稿
+     * 1:1 不同，所以是先列清單讓使用者選，不是直接進單一議程頁。
+     */
+    protected function loadAgendasForSitting($sitting_code)
+    {
+        if (!$sitting_code) {
+            $this->view->sitting_meta = null;
+            $this->view->sitting_agendas = [];
+            return;
+        }
+        $sitting_code = urldecode($sitting_code);
+
+        $sitting = CCAPI::apiQuery('/sitting/' . rawurlencode($sitting_code), '場次資料');
+        $this->view->sitting_meta = $sitting->data ?? (object)['代碼' => $sitting_code];
+
+        $agendas = CCAPI::apiQuery(
+            '/sitting_agendas?limit=50&' . urlencode('場次代碼') . '=' . urlencode($sitting_code),
+            '本場次議程清單'
+        );
+        $this->view->sitting_agendas = $agendas->sitting_agendas ?? [];
+    }
+
+    /**
+     * 議程單筆詳情：對應單一議程代碼，不需要屆/場次巢狀資訊（比照 loadBillDetail()）。
+     * 逐句發言不在這裡一次撈完（單一議程可能有上萬筆發言，例如「一天一議程」做法
+     * 的議會），改由前端分頁呼叫 /api/speeches。
+     */
+    protected function loadAgendaDetail($agenda_code)
+    {
+        if (!$agenda_code) {
+            return null;
+        }
+        $agenda_code = urldecode($agenda_code);
+        $r = CCAPI::apiQuery('/sitting_agenda/' . rawurlencode($agenda_code), '議程詳情');
+        return ($r->error ?? true) ? null : $r->data;
+    }
+
+    /**
+     * 議程的「參與議員結構」裡的「議員代碼」對應到 councilor 的「代碼」欄位，
+     * 要連到議員個人頁需要先查一次換成「人物代碼」（跟 resolveBillPeople() 是
+     * 同一種做法，一次查詢批次處理，不逐筆查避免 N+1）。
+     */
+    protected function resolveAgendaPeople($agenda)
+    {
+        if (!$agenda) {
+            return;
+        }
+        $codes = [];
+        foreach ($agenda->{'參與議員結構'} ?? [] as $p) {
+            if ($p->{'議員代碼'} ?? null) {
+                $codes[$p->{'議員代碼'}] = true;
+            }
+        }
+        if (!$codes) {
+            return;
+        }
+
+        $qs = '';
+        foreach (array_keys($codes) as $code) {
+            $qs .= '&' . urlencode('代碼') . '=' . urlencode($code);
+        }
+        $r = CCAPI::apiQuery(
+            '/councilors?limit=' . count($codes) . $qs,
+            '議程參與議員對應議員資料'
+        );
+
+        $person_code_by_code = [];
+        foreach (($r->councilors ?? []) as $c) {
+            $person_code_by_code[$c->{'代碼'}] = $c->{'人物代碼'} ?? null;
+        }
+
+        foreach ($agenda->{'參與議員結構'} ?? [] as $p) {
+            $p->{'人物代碼'} = $person_code_by_code[$p->{'議員代碼'} ?? ''] ?? null;
+        }
     }
 
     /**
