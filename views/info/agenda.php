@@ -81,7 +81,7 @@ function agenda_person_links($structured) {
 (function () {
   var agendaCode = <?= json_encode($a->{'代碼'}) ?>;
   var sections = <?= json_encode($a->{'小節清單'} ?? []) ?>;
-  var pageSize = 30;
+  var pageSize = 500;
   var state = { page: 1 };
   var personCache = {};   // 對應代碼 => {人物代碼, 照片}（查過沒有對到就存 null）
 
