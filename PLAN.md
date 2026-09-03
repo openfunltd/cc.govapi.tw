@@ -218,7 +218,10 @@
 候選人資料、`CouncilHelper`、`CCAPI_Council` 三處各自硬寫的縣市→議會代碼對照表裡有兩處把嘉義縣（`cyq`）跟嘉義市（`cyi`）寫反，抽成 `CountyCodeHelper` 共用避免再次不同步。
 
 #### Phase 43 — 新增議程（sitting_agenda）／逐句發言（speech）資料型別 ✅（2026-09-03，commit `a335acd`）
-上游把逐字稿改版成議程+逐句發言兩層結構（14,240 筆議程、511 萬 8,550 筆逐句發言），新增對應匯入腳本／ES 型別／auto-refresh 整合；發言的「對應代碼」可精確比對到 `councilor`，一併解決逐字稿頁碼/來源網址的舊待辦。過程中修正 `Elastic::dbBulkInsert()` 一個既有的靜默資料遺失 bug（`json_encode()` 遇不合法 UTF-8 會整筆消失不報錯）。這次只做資料層，未動現有 `transcript` 型別與 `/info` 頁面。
+上游把逐字稿改版成議程+逐句發言兩層結構（14,240 筆議程、511 萬 8,550 筆逐句發言），新增對應匯入腳本／ES 型別／auto-refresh 整合；發言的「對應代碼」可精確比對到 `councilor`，一併解決逐字稿頁碼/來源網址的舊待辦。過程中修正 `Elastic::dbBulkInsert()` 一個既有的靜默資料遺失 bug（`json_encode()` 遇不合法 UTF-8 會整筆消失不報錯）。這次只做資料層，未動現有 `transcript` 型別與 `/info` 頁面。之後上游又補上「小節清單」欄位（議程底下更細的段落標記），已同步更新 `import-sitting-agenda.php` 支援（commit `05ff589`）。
+
+#### Phase 44 — 新增 `/info/{屆}/agenda` 議程詳情頁 ✅（2026-09-03，commit `fb5b03a`）
+用 Phase 43 的議程/逐句發言資料新增獨立瀏覽頁面，跟既有 `/info/{屆}/transcript` 並存、完全不互相影響：`/info/{屆}/agendas/{場次代碼}`（單一場次的議程清單）、`/info/{屆}/agenda/{議程代碼}`（議程詳情，逐句發言前端 JS 分頁載入，避免「一天一議程」議會單一議程上萬筆發言塞爆頁面）；發言列表比照 SayIt 平台頭像呈現，民代（議員）放左邊、非民代（機關首長，先用佔位圖示）放右邊；`sessions.php` 場次列表新增「🗂 N」議程數量徽章。
 
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
