@@ -270,6 +270,68 @@ class TypeHelper
                     'data' => '候選人資料',
                 ],
             ],
+            'sitting_agenda' => [
+                'name' => '議程',
+                'icon' => 'fas fa-fw fa-list-ol',
+                'cols' => [
+                    'all' => [
+                        '議會代碼',
+                        '屆',
+                        '議程類型',
+                        '委員會或名稱',
+                        '時間資訊',
+                    ],
+                    'single' => [
+                        '屆',
+                        '議程類型',
+                        '委員會或名稱',
+                        '時間資訊',
+                    ],
+                ],
+                'default_aggs' => [
+                    'all' => [
+                        '議會代碼',
+                        '議程類型',
+                    ],
+                    'single' => [
+                        '議程類型',
+                    ],
+                ],
+                'item_features' => [
+                    'data' => '議程資料',
+                ],
+            ],
+            'speech' => [
+                'name' => '發言',
+                'icon' => 'fas fa-fw fa-comment-dots',
+                'cols' => [
+                    'all' => [
+                        '議會代碼',
+                        '日期',
+                        '姓名',
+                        '職稱',
+                        '身分類別',
+                    ],
+                    'single' => [
+                        '日期',
+                        '姓名',
+                        '職稱',
+                        '身分類別',
+                    ],
+                ],
+                'default_aggs' => [
+                    'all' => [
+                        '議會代碼',
+                        '身分類別',
+                    ],
+                    'single' => [
+                        '身分類別',
+                    ],
+                ],
+                'item_features' => [
+                    'data' => '發言內容',
+                ],
+            ],
         ];
     }
 

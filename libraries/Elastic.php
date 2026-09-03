@@ -80,6 +80,10 @@ class Elastic
             'doc_as_upsert' => true,
         ]);
         if (!$encdata) {
+            // json_encode 失敗最常見原因是來源資料裡有不合法的 UTF-8 位元組（實測
+            // 案例：逐字稿姓名欄位被來源截斷到一個多位元組字元中間）；以前這裡直接
+            // return，這筆資料會整筆消失又不會有任何錯誤訊息，call site 完全看不出來
+            error_log("dbBulkInsert: json_encode 失敗，略過 {$mapping}/{$id}：" . json_last_error_msg());
             return;
         }
         self::$_db_bulk_pool[$mapping] .=

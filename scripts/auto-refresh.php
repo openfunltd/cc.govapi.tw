@@ -111,6 +111,18 @@ $jobs = [
         'watch'  => [getenv('IMPORT_BILL_JSONL') ?: ($dir . '/../議案.jsonl')],
         'import' => ["{$php_bin} {$dir}/import-bill.php"],
     ],
+    'sitting_agenda' => [
+        'watch'  => [getenv('IMPORT_SITTING_AGENDA_CSV') ?: ($dir . '/../議程.csv')],
+        'import' => ["{$php_bin} {$dir}/import-sitting-agenda.php"],
+    ],
+    // speech 的來源是依議會+年月拆成的一堆檔案（目前約 869 個），watch 簽章是全部檔案
+    // mtime/size 的組合雜湊，任何一個檔案變動整體簽章就會變、觸發 import-speech.php
+    // 重跑——但 import-speech.php 內部有自己的檔案層級跳過機制（.speech-import-state.json），
+    // 實際重跑時只會處理真的有變動的檔案，不會每次都重掃全部 511 萬筆
+    'speech' => [
+        'watch'  => glob((getenv('IMPORT_SPEECH_CSV_DIR') ?: ($dir . '/..')) . '/逐字稿-*.csv') ?: [],
+        'import' => ["{$php_bin} {$dir}/import-speech.php"],
+    ],
     'candidate' => [
         'watch' => [
             getenv('IMPORT_CANDIDATE_JSONL') ?: ($dir . '/../bulletin.jsonl'),
