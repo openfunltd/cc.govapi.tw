@@ -58,15 +58,20 @@ class CCAPI_SearchAction
             return;
         }
         self::$_params = array_map(function($t) {
-            if (strpos($t, '=') !== false) {
-                return array_map('urldecode', explode('=', $t, 2));
+            // 先把整個 key(:/=)value 片段解碼，再判斷是 range（:）還是一般（=）語法——
+            // 有些呼叫端（例如自動組 URL 的工具）會把 : 跟 , 也做 percent-encode
+            // （例：日期:2024-01-01,2024-12-31 變成 %e6%97%a5%e6%9c%9f%3a2024-01-01%2c2024-12-31），
+            // 如果只解碼「先切再解」會因為原始片段裡看不到字面上的 : 而誤判成不支援的格式
+            $decoded = urldecode($t);
+            if (strpos($decoded, '=') !== false) {
+                return explode('=', $decoded, 2);
             }
-            if (strpos($t, ':') !== false) {
-                list($k, $range) = explode(':', $t, 2);
+            if (strpos($decoded, ':') !== false) {
+                list($k, $range) = explode(':', $decoded, 2);
                 $range = explode(',', $range);
-                return [urldecode($k), $range];
+                return [$k, $range];
             }
-            throw new Exception("不支援的參數格式：{$t}");
+            throw new Exception("不支援的參數格式：{$decoded}");
         }, explode('&', $query_string));
     }
 
