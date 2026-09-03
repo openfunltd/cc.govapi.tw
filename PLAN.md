@@ -199,6 +199,27 @@
 #### Phase 36 — 會期／場次補上來源網址 ✅（2026-08-26）
 `auto-refresh.php` 偵測到 `data.csv`（會期）／`track.csv`（場次）都新增「來源網址」欄位（各議會官網公告/議事日程頁連結），依安全機制正確擋下未知欄位、沒有靜默漏匯；`import-session.php`／`import-sitting.php` 補上欄位設定後重新匯入成功（1,982 筆會期、37,898 筆場次，皆 0 error）。網頁上還沒加顯示連結。
 
+#### Phase 37 — `/about` 補上法源依據段落 ✅（2026-08-27，commit `da96161`）
+連結全國法規資料庫的地方制度法，並修正「法定會議類型」表格臨時會列漏列縣市議會上限的問題。
+
+#### Phase 38 — 議會切換器改用 latest 佔位字 ✅（2026-08-31，commit `9db67ff`）
+切換議會時原本會原封不動保留路徑上的屆次號，導致切到別的議會時可能落到不存在或對不上的屆；改成切換時把屆次號換成 `latest`，由 `InfoController` 查該議會實際最新屆再導向。
+
+#### Phase 39 — 逐字稿匯入加速 ✅（2026-09-01，commit `753d468`）
+`import-transcript.php` 每個場次先算來源簽章（索引列+檔案 mtime/size 的 md5），沒變就整組跳過不重新讀檔組裝，全量重跑從約 50 分鐘降到 37 秒。
+
+#### Phase 40 — 完整度頁面顯示官方無法提供／規劃中原因 ✅（2026-09-01，commit `a438926`）
+上游提供議案／逐字稿完整度狀態對照表（done/pending/infeasible + 原因說明），`generate-completeness.php` 讀入後附加到 `types.{type}.upstream_status`／`upstream_note`，完整度總覽跟單一議會詳情頁在「缺」旁邊顯示對應徽章跟 tooltip。
+
+#### Phase 41 — 逐字稿頁面加上原始會議紀錄連結 ✅（2026-09-01，commit `413c9e7`）
+逐字稿場次跟 sitting 一對一，直接沿用 sitting 的「來源網址」欄位顯示連結。
+
+#### Phase 42 — 修正嘉義縣/市議會代碼寫反的 bug ✅（2026-09-03，commit `584a897`）
+候選人資料、`CouncilHelper`、`CCAPI_Council` 三處各自硬寫的縣市→議會代碼對照表裡有兩處把嘉義縣（`cyq`）跟嘉義市（`cyi`）寫反，抽成 `CountyCodeHelper` 共用避免再次不同步。
+
+#### Phase 43 — 新增議程（sitting_agenda）／逐句發言（speech）資料型別 ✅（2026-09-03，commit `a335acd`）
+上游把逐字稿改版成議程+逐句發言兩層結構（14,240 筆議程、511 萬 8,550 筆逐句發言），新增對應匯入腳本／ES 型別／auto-refresh 整合；發言的「對應代碼」可精確比對到 `councilor`，一併解決逐字稿頁碼/來源網址的舊待辦。過程中修正 `Elastic::dbBulkInsert()` 一個既有的靜默資料遺失 bug（`json_encode()` 遇不合法 UTF-8 會整筆消失不報錯）。這次只做資料層，未動現有 `transcript` 型別與 `/info` 頁面。
+
 ### 已知 Bug 修正紀錄
 - `getFieldMap()` 誤用 `(object)[...]`（stdClass），應為 `[...]`（array）→ 造成 `array_key_exists` 錯誤，已修正 Council、Councilor、Type 基底
 - `scripts/import-council.php` CSV 第一欄 header 因 UTF-8 BOM（`\xEF\xBB\xBF`）導致 `Undefined array key "代碼"`，已修正
@@ -307,6 +328,8 @@ cc.govapi.tw/
 │   │                                   # + 當選註記.jsonl → ccv1_candidate
 │   ├── prepare-candidate-lookups.php  # 從 person.jsonl/cand.csv/候選人得票數原始來源
 │   │                                   # 重新產生上面三個對照表子集
+│   ├── import-sitting-agenda.php      # 議程.csv → ccv1_sitting_agenda
+│   ├── import-speech.php              # 逐字稿-*.csv（依議會+年月拆檔）→ ccv1_speech
 │   ├── generate-completeness.php      # 彙整計算 → ccv1_completeness（議員/會期/場次/逐字稿四維度）
 │   ├── generate-council-overview.php  # 彙整計算 → ccv1_overview（供 /info 全國卡片牆用，需在資料重新匯入後手動重跑）
 │   └── auto-refresh.php               # 排程用：偵測各型別來源檔案有沒有變化，有才重新匯入
@@ -328,7 +351,8 @@ cc.govapi.tw/
 ├── 議會.csv, 屆.csv                    # 進版控管的來源資料
 └── （git-ignored：議員.jsonl, 會期.csv, data.csv, 場次.csv, 逐字稿索引.csv, 逐字稿/,
     議案.jsonl, bulletin.jsonl, 得票數.jsonl, 人物代碼.jsonl, 當選註記.jsonl,
-    縣市界.geojson, config.inc.php, datacc.openfun.app/）
+    縣市界.geojson, config.inc.php, datacc.openfun.app/,
+    .auto-refresh-state.json, .speech-import-state.json）
 ```
 
 ---
@@ -346,6 +370,8 @@ cc.govapi.tw/
 | `ccv1_committee` | `Type/Committee.php` | `data.csv` | 代碼本身（例 `tpe-c1`） |
 | `ccv1_bill` | `Type/Bill.php` | `議案.jsonl` | 代碼本身，重複時加 `-dup{N}` 後綴 |
 | `ccv1_candidate` | `Type/Candidate.php` | `bulletin.jsonl` + `得票數.jsonl` + `人物代碼.jsonl` + `當選註記.jsonl` | 候選人代碼；缺值時用來源PDF/頁碼/號次/姓名組合替代 ID |
+| `ccv1_sitting_agenda` | `Type/SittingAgenda.php` | `議程.csv` | 代碼本身 |
+| `ccv1_speech` | `Type/Speech.php` | `逐字稿-*.csv`（依議會+年月拆檔，約 869 個檔案） | 代碼本身 |
 | `ccv1_overview` | `Type/Overview.php` | 由 `generate-council-overview.php` 彙整其他 index 算出 | 議會代碼（例 `tpe`） |
 | `ccv1_completeness` | `Type/Completeness.php` | 由 `generate-completeness.php` 彙整其他 index 算出 | 議會代碼（例 `tpe`） |
 
@@ -420,6 +446,14 @@ https://all.cc.govapi.tw/knowledge.md
   （例：`議事錄_上冊目錄封面-6定_p213-p217.txt` 的 `p213-p217`），不同議會/年份的命名慣例
   可能不一致，用字串規則猜容易漏判。請上游直接加「起始頁」「結束頁」結構化欄位，不要靠
   檔名反解；另外目前完全沒有官方來源網址欄位
+  - [x] **議程／逐句發言資料層**（2026-09-02，commit `a335acd`）：上游把逐字稿改版成
+    「議程」（`sitting_agenda`，14,240 筆／15 議會／18 種類型）+ 逐句發言（`speech`，
+    511 萬 8,550 筆，依議會＋年月拆成 869 個檔案）兩層結構，已新增對應的匯入腳本／
+    ES 型別／auto-refresh 整合。逐句發言的「對應代碼」在身分類別＝議員時可精確比對到
+    `councilor` 的「代碼」欄位，「來源頁碼」「來源網址」都是結構化欄位，一併解決了
+    本項待辦。**這次只做資料層，還沒動 `/info/{屆}/transcript` 頁面／
+    `councilor_speeches.php`**（後者目前仍是關鍵字猜測發言者），下次要用新資料改造
+    這些既有頁面時，要先決定顯示上怎麼呈現「同一議程底下的多筆發言」
 - [x] **會期（Session）／場次（Sitting）**（2026-08-26）：都補上「來源網址」了（各議會
   官網的公告/議事日程頁連結，會期涵蓋率 99.6%、場次 99.99%）；同一會期底下的場次常常
   共用同一個連結（該議會的議事日程列表頁，不是每場次各自的深連結），實測部分議會網站
