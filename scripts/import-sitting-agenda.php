@@ -7,10 +7,15 @@
  *   php scripts/import-sitting-agenda.php --reset    # 先刪除 index 再重建並匯入
  *
  * 來源：議程.csv（欄位：代碼, 縣市, 場次代碼, 議程類型, 委員會或名稱, 質詢對象機關,
- * 參與議員結構, 時間資訊, 來源檔案, 來源網址）
- * 所有來源欄位直接沿用原始名稱匯入 ES；「參與議員結構」是 CSV 儲存格內的 JSON 陣列
- * 字串（[{姓名, 議員代碼}, ...]），先 decode 再存成 nested 陣列，「議員代碼」對應到
- * councilor 的「代碼」欄位（跟 bill 的「提案人結構」是同一種設計，比照辦理）
+ * 參與議員結構, 時間資訊, 來源檔案, 來源網址, 小節清單）
+ * 所有來源欄位直接沿用原始名稱匯入 ES；「參與議員結構」「小節清單」都是 CSV 儲存格內的
+ * JSON 陣列字串，先 decode 再存成 nested 陣列（跟 bill 的「提案人結構」是同一種設計，
+ * 比照辦理）：
+ *   參與議員結構：[{姓名, 議員代碼}, ...]，「議員代碼」對應到 councilor 的「代碼」欄位
+ *   小節清單：[{名稱, 提案人, 議案代碼, 起始順序}, ...]，議程底下更細的段落標記（不是
+ *     每個議程都有），「起始順序」對應 speech 的「順序」欄位，消費端要抓某個小節的
+ *     發言時用「順序 BETWEEN 這個小節的起始順序 AND 下一個小節的起始順序-1」查詢，
+ *     不是靠獨立的 section_code；「議案代碼」能連的話對應到 bill 的「代碼」欄位
  * 衍生欄位：
  *   議會代碼：從「縣市」欄位對照（CountyCodeHelper::getMap()）
  *   屆／會期代碼：「場次代碼」有值時查既有 sitting index 取得（沿用
@@ -36,6 +41,7 @@ $index_mapping = [
         '委員會或名稱' => ['type' => 'keyword'],
         '質詢對象機關' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         '參與議員結構' => ['type' => 'nested', 'dynamic' => true],
+        '小節清單'   => ['type' => 'nested', 'dynamic' => true],
         // 實測「時間資訊」不保證是日期——多數議程類型是日期（yyyy-MM-dd），但「部門質詢
         // 分組」「市政總質詢」等類型是「N位/N分鐘」的參與人數/時長摘要（例："3位/54分鐘"），
         // 用 date 型別會讓 ES 拒絕整份文件寫入（bulk API 裡單筆失敗不會拋例外，容易silent
@@ -52,7 +58,7 @@ $index_mapping = [
 
 $known_source_keys = [
     '代碼', '縣市', '場次代碼', '議程類型', '委員會或名稱', '質詢對象機關',
-    '參與議員結構', '時間資訊', '來源檔案', '來源網址',
+    '參與議員結構', '時間資訊', '來源檔案', '來源網址', '小節清單',
 ];
 
 if ($reset) {
@@ -69,6 +75,15 @@ try {
     error_log("Created index: sitting_agenda");
 } catch (Exception $e) {
     error_log("Index exists or created: " . $e->getMessage());
+}
+
+// index 已存在時（非 --reset）也嘗試更新 mapping，讓新增的來源欄位（例：小節清單）
+// 套用正確型別（ES 允許為既有 index 補新欄位定義，不影響既有欄位，重複執行也安全）
+try {
+    $prefix = getenv('ELASTIC_PREFIX');
+    Elastic::dbQuery("/{$prefix}sitting_agenda/_mapping", 'PUT', json_encode($index_mapping));
+} catch (Exception $e) {
+    error_log("Mapping update skipped: " . $e->getMessage());
 }
 
 $csv_path = getenv('IMPORT_SITTING_AGENDA_CSV') ?: (__DIR__ . '/../議程.csv');
@@ -120,9 +135,11 @@ while (($row = fgetcsv($fh)) !== false) {
 
     $doc = $data;
 
-    // 參與議員結構：CSV 儲存格內的 JSON 陣列字串，decode 成陣列
+    // 參與議員結構／小節清單：CSV 儲存格內的 JSON 陣列字串，decode 成陣列
     $participants = json_decode($data['參與議員結構'] ?? '', true);
     $doc['參與議員結構'] = is_array($participants) ? $participants : [];
+    $sections = json_decode($data['小節清單'] ?? '', true);
+    $doc['小節清單'] = is_array($sections) ? $sections : [];
 
     // 空白時間資訊轉 null（ES date 型別不接受空字串）
     if (isset($doc['時間資訊']) && trim($doc['時間資訊']) === '') {
