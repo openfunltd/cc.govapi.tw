@@ -108,16 +108,8 @@ include(__DIR__ . '/../init.inc.php');
 
 $reset = in_array('--reset', $argv ?? []);
 
-// 縣市名稱 → ccapi 議會代碼（見上方註解，桃園縣是唯一的歷史特例）
-$county_to_cc_code = [
-    '臺北市' => 'tpe', '新北市' => 'nwt', '臺中市' => 'txg', '臺南市' => 'tnn',
-    '高雄市' => 'khh', '桃園市' => 'tao', '宜蘭縣' => 'ila', '新竹縣' => 'hsq',
-    '新竹市' => 'hsz', '基隆市' => 'kee', '苗栗縣' => 'mia', '彰化縣' => 'cha',
-    '南投縣' => 'nan', '雲林縣' => 'yun', '嘉義縣' => 'cyi', '嘉義市' => 'cyq',
-    '屏東縣' => 'pif', '臺東縣' => 'ttt', '花蓮縣' => 'hua', '澎湖縣' => 'pen',
-    '金門縣' => 'kin', '連江縣' => 'lie',
-    '桃園縣' => 'tao-1952',
-];
+// 縣市名稱 → ccapi 議會代碼（見 CountyCodeHelper 說明，桃園縣是唯一的歷史特例）
+$county_to_cc_code = CountyCodeHelper::getMap();
 
 $index_mapping = [
     'properties' => [
