@@ -108,6 +108,7 @@ function agenda_page_url($page) {
 }
 .speech-bubble { max-width: 75%; background: #f1f3f5; border-radius: 0.75rem; padding: 0.5rem 0.75rem; }
 .role-other .speech-bubble { background: #e7f1ff; }
+.speech-row:target .speech-bubble { outline: 2px solid #fd7e14; }
 </style>
 
 <div class="small text-body-secondary mb-2">共 <?= (int)($sr->total ?? 0) ?> 筆發言</div>
@@ -131,13 +132,19 @@ function agenda_page_url($page) {
         $display_page = $s->{'印刷頁碼'} ?? $s->{'來源頁碼'};
         $source_link = ' <a class="small" href="' . htmlspecialchars($s->{'來源網址'} . '#page=' . urlencode($nav_page)) . '" target="_blank" rel="noopener">（第' . htmlspecialchars($display_page) . '頁）</a>';
     }
+    // 「代碼」是這則發言在 speech index 的 doc id（來源已保證唯一），拿來當本頁錨點，
+    // 方便分享時直接連到 ?page=N#speech-{代碼} 跳到這一句
+    $speech_code = $s->{'代碼'} ?? '';
+    $permalink = $speech_code
+        ? ' <a class="small text-decoration-none" href="' . htmlspecialchars(agenda_page_url($sr->page ?? 1) . '#speech-' . $speech_code) . '" title="複製連結分享這則發言">#</a>'
+        : '';
     $bubble = '<div class="speech-bubble">'
-        . '<div class="small fw-semibold">' . speech_speaker_html($s) . $source_link . '</div>'
+        . '<div class="small fw-semibold">' . speech_speaker_html($s) . $source_link . $permalink . '</div>'
         . '<div class="small" style="white-space: pre-wrap;">' . htmlspecialchars($s->{'發言內容'} ?? '') . '</div>'
         . '</div>';
     $avatar = speech_avatar_html($s);
   ?>
-  <div class="speech-row <?= $is_rep ? 'role-rep' : 'role-other' ?>">
+  <div class="speech-row <?= $is_rep ? 'role-rep' : 'role-other' ?>"<?= $speech_code ? ' id="speech-' . htmlspecialchars($speech_code) . '"' : '' ?>>
     <?= $is_rep ? ($avatar . $bubble) : ($bubble . $avatar) ?>
   </div>
   <?php endforeach; ?>
