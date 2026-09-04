@@ -17,6 +17,9 @@ $sittings = $this->session_sittings ?? [];
           <?php if ($session->{'開始日期'} ?? null): ?>
           <span class="text-body-secondary small ms-1"><?= htmlspecialchars($session->{'開始日期'}) ?> ~ <?= htmlspecialchars($session->{'結束日期'} ?? '進行中') ?></span>
           <?php endif; ?>
+          <?php if ($session->{'來源網址'} ?? null): ?>
+          <a class="small ms-1" href="<?= htmlspecialchars($session->{'來源網址'}) ?>" target="_blank" rel="noopener">議會官網公告頁 →</a>
+          <?php endif; ?>
         </div>
         <div>
           <?php if ($status === 'ongoing'): ?>
