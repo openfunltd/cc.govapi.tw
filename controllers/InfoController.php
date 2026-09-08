@@ -107,9 +107,10 @@ class InfoController extends MiniEngine_Controller
         }
 
         $term_no = (int)$term_no;
-        // 'transcript'／'bill'／'agendas'／'agenda' 是從各自列表頁連結進去的詳情子頁面，
-        // 不放進主要 tab 導覽列
-        $valid_tabs = array_merge(array_keys($this->tabs), ['transcript', 'bill', 'agendas', 'agenda']);
+        // 'transcript'／'bill'／'agendas'／'agenda'／'sitting' 是從各自列表頁連結進去的
+        // 詳情子頁面，不放進主要 tab 導覽列。'transcript'／'agendas' 是舊版分開的場次
+        // 詳情頁，保留給既有連結相容用，新的統一場次頁是 'sitting'（見 loadSittingTab()）
+        $valid_tabs = array_merge(array_keys($this->tabs), ['transcript', 'bill', 'agendas', 'agenda', 'sitting']);
         $tab = ($tab && in_array($tab, $valid_tabs)) ? $tab : 'councilors';
 
         $this->view->term_no = $term_no;
@@ -151,6 +152,16 @@ class InfoController extends MiniEngine_Controller
                 break;
             case 'agendas':
                 $this->loadAgendasForSitting($sub_id);
+                break;
+            case 'sitting':
+                $this->loadSittingTab($sub_id);
+                if ($this->view->sitting_meta ?? null) {
+                    $s = $this->view->sitting_meta;
+                    $this->setOg(
+                        ($s->{'日期'} ?? '') . '・' . ($s->{'場次類別'} ?? '場次詳情'),
+                        $this->view->council_name . '第' . $term_no . '屆・' . ($s->{'委員會名稱'} ?? $s->{'議程說明'} ?? '')
+                    );
+                }
                 break;
             case 'agenda':
                 $agenda = $this->loadAgendaDetail($sub_id);
@@ -419,18 +430,26 @@ class InfoController extends MiniEngine_Controller
     }
 
     /**
-     * 用一次聚合查詢拿到「本會期哪些場次代碼有逐字稿」，避免對每個場次各別查一次（N+1）
+     * 用一次聚合查詢拿到「本會期哪些場次代碼有逐字稿資料」，並標出其中哪些場次
+     * 已經判定為真的有逐字對話（'有逐字稿' 欄位，見 scripts/import-transcript.php
+     * 的 is_verbatim_segment()）——只要這筆 transcript 存在，不管是不是被判定為
+     * 逐字對話，都代表這場次至少有速記/摘要/書面質詢全文可以看。回傳
+     * {場次代碼 => 是否逐字對話}，呼叫端用 isset() 判斷「有沒有這份 transcript」、
+     * 用值本身判斷「是不是逐字」
      */
     protected function loadSittingsWithTranscript($session_code)
     {
+        // output_fields 要各自成一個 query 參數（&output_fields=a&output_fields=b），
+        // 不能用逗號串成一個值——SearchAction 是逐一收集同名參數，逗號分隔的單一
+        // 字串會被當成一個（不存在的）欄位名稱，導致 _source 過濾整個查不到欄位
         $r = CCAPI::apiQuery(
             '/transcripts?limit=200&' . urlencode('會期代碼') . '=' . urlencode($session_code)
-                . '&output_fields=' . urlencode('代碼'),
-            '本會期哪些場次有逐字稿'
+                . '&output_fields=' . urlencode('代碼') . '&output_fields=' . urlencode('有逐字稿'),
+            '本會期哪些場次有逐字稿/速記'
         );
         $codes = [];
         foreach (($r->transcripts ?? []) as $t) {
-            $codes[$t->{'代碼'}] = true;
+            $codes[$t->{'代碼'}] = (bool)($t->{'有逐字稿'} ?? false);
         }
         return $codes;
     }
@@ -485,8 +504,38 @@ class InfoController extends MiniEngine_Controller
     }
 
     /**
+     * 統一的「場次」詳情頁：把原本分開的「逐字稿」「議程」兩個子頁面合併成同一頁
+     * 的兩個頁籤，避免使用者誤以為「議程」只是議程表、不知道裡面其實是比舊版
+     * 逐字稿更完整的逐句發言資料。/info/{屆}/sitting/{場次代碼}
+     */
+    protected function loadSittingTab($sitting_code)
+    {
+        if (!$sitting_code) {
+            $this->view->sitting_meta = null;
+            $this->view->sitting_agendas = [];
+            $this->view->transcript = null;
+            return;
+        }
+        $sitting_code = urldecode($sitting_code);
+
+        $sitting = CCAPI::apiQuery('/sitting/' . rawurlencode($sitting_code), '場次資料');
+        $this->view->sitting_meta = $sitting->data ?? (object)['代碼' => $sitting_code];
+
+        $agendas = CCAPI::apiQuery(
+            '/sitting_agendas?limit=50&' . urlencode('場次代碼') . '=' . urlencode($sitting_code),
+            '本場次議程清單'
+        );
+        $this->view->sitting_agendas = $agendas->sitting_agendas ?? [];
+
+        $transcript = CCAPI::apiQuery('/transcript/' . rawurlencode($sitting_code), '場次逐字稿');
+        $this->view->transcript = ($transcript->error ?? true) ? null : $transcript->data;
+    }
+
+    /**
      * 場次的議程清單：一個場次可能對應多個議程（實測最多 10~13 個），跟逐字稿
      * 1:1 不同，所以是先列清單讓使用者選，不是直接進單一議程頁。
+     *
+     * @deprecated 保留給舊連結相容用，新頁面請用 loadSittingTab()
      */
     protected function loadAgendasForSitting($sitting_code)
     {

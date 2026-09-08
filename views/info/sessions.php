@@ -41,12 +41,23 @@ $sittings = $this->session_sittings ?? [];
               <th>時段</th>
               <th>類別</th>
               <th>內容</th>
-              <th>逐字稿</th>
-              <th>議程</th>
+              <th class="text-center">速記</th>
+              <th class="text-center">逐字稿</th>
+              <th class="text-center">議程</th>
             </tr>
           </thead>
           <tbody>
             <?php foreach ($sittings as $s): ?>
+            <?php
+              $code = $s->{'代碼'};
+              // sittings_with_transcript 現在是 {代碼 => 是否逐字}，key 存不存在才代表
+              // 「有沒有transcript資料」，值本身才是「是不是逐字對話」——不能只看
+              // !empty()，那樣會把「有速記但不是逐字」誤判成「完全沒有」
+              $has_transcript_doc = array_key_exists($code, $this->sittings_with_transcript);
+              $is_verbatim = $this->sittings_with_transcript[$code] ?? false;
+              $agenda_count = $this->sittings_agenda_count[$code] ?? 0;
+              $sitting_url = '/info/' . $this->term_no . '/sitting/' . urlencode($code);
+            ?>
             <tr>
               <td class="text-nowrap"><?= htmlspecialchars($s->{'日期'} ?? '') ?></td>
               <td><?= htmlspecialchars($s->{'星期'} ?? '') ?></td>
@@ -54,14 +65,18 @@ $sittings = $this->session_sittings ?? [];
               <td><?= htmlspecialchars($s->{'場次類別'} ?? '') ?></td>
               <td class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($s->{'委員會名稱'} ?? $s->{'議程說明'} ?? '') ?></td>
               <td class="text-center">
-                <?php if (!empty($this->sittings_with_transcript[$s->{'代碼'}])): ?>
-                <a href="/info/<?= $this->term_no ?>/transcript/<?= urlencode($s->{'代碼'}) ?>" title="查看逐字稿">📄</a>
+                <?php if ($has_transcript_doc): ?>
+                <a href="<?= htmlspecialchars($sitting_url) ?>" title="有速記/摘要式紀錄">✓</a>
                 <?php endif; ?>
               </td>
               <td class="text-center">
-                <?php $agenda_count = $this->sittings_agenda_count[$s->{'代碼'}] ?? 0; ?>
+                <?php if ($has_transcript_doc && $is_verbatim): ?>
+                <a href="<?= htmlspecialchars($sitting_url) ?>" title="有逐字對話紀錄">✓</a>
+                <?php endif; ?>
+              </td>
+              <td class="text-center">
                 <?php if ($agenda_count): ?>
-                <a href="/info/<?= $this->term_no ?>/agendas/<?= urlencode($s->{'代碼'}) ?>" title="查看議程">🗂 <?= (int)$agenda_count ?></a>
+                <a href="<?= htmlspecialchars($sitting_url) ?>" title="查看議程"><?= (int)$agenda_count ?></a>
                 <?php endif; ?>
               </td>
             </tr>
