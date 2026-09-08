@@ -49,8 +49,21 @@ $index_mapping = [
         '來源分類'   => ['type' => 'keyword'],
         '檔案數'     => ['type' => 'integer'],
         '字數'       => ['type' => 'integer'],
+        // 是否至少有一個分段判定為逐字對話（見下方 is_verbatim_segment()）；
+        // 沒有任何分段達標時，這份 transcript 仍然存在（至少是速記/摘要/書面
+        // 質詢全文），所以「有速記」不需要另開欄位，等於「這份 doc 存在」
+        '有逐字稿'   => ['type' => 'boolean'],
         // 分段內容（依來源分類/委員會分組），供前端分 tab 顯示
-        '分段'       => ['type' => 'nested', 'dynamic' => true],
+        '分段'       => [
+            'type' => 'nested',
+            'dynamic' => true,
+            'properties' => [
+                '標籤'     => ['type' => 'keyword'],
+                '內容'     => ['type' => 'text'],
+                '字數'     => ['type' => 'long'], // 既有 dynamic mapping 已推斷成 long，維持一致避免 mapping 更新被拒
+                '是否逐字' => ['type' => 'boolean'],
+            ],
+        ],
         '來源簽章'   => ['type' => 'keyword', 'index' => false],
         'updated_at' => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
     ],
@@ -106,6 +119,27 @@ while (($row = fgetcsv($fh)) !== false) {
 }
 fclose($fh);
 error_log("讀取逐字稿索引：" . count($groups) . " 個場次代碼");
+
+// 「速記 vs 逐字稿」分類版本號：改變判斷規則時要跟著改這個字串，讓下面的
+// 來源簽章連帶失效，逼所有既有場次重新分類一次（規則沒變時只有內容真的變動
+// 過的場次會被重新處理）
+const CLASSIFIER_VERSION = 'verbatim-v1-label-count-5';
+
+// 判斷一段文字是不是「逐字對話」（相對於摘要式會議紀錄或書面質詢全文）：
+// 數獨佔一行、以冒號結尾的「XX：」發言標記數量（跟 open-forest 上游解析
+// 逐字稿用的同一套規則），實測校準（400 個分段抽樣）發現真正有逐字對話的
+// 分段標記數是幾十到幾百筆，摘要式會議紀錄／書面質詢全文則是 0~4 筆，
+// 中間沒有太多灰色地帶，門檻定在 5 筆
+function count_speaker_labels($text)
+{
+    preg_match_all('/^[ \t]*[一-鿿（）() A-Za-z．·\']{2,25}[：:][ \t]*\r?$/mu', $text, $m);
+    return count($m[0]);
+}
+
+function is_verbatim_segment($text)
+{
+    return count_speaker_labels($text) >= 5;
+}
 
 // ── 2. HTML 去標籤取文字（來源檔案有 .txt 也有 .html 兩種格式）──────────────
 
@@ -204,7 +238,7 @@ foreach ($groups as $code => $rows) {
         $sig_parts[] = json_encode($row) . ':' . $file_stat;
     }
     sort($sig_parts);
-    $signature = md5(implode('|', $sig_parts));
+    $signature = md5(CLASSIFIER_VERSION . '|' . implode('|', $sig_parts));
 
     if (($existing_sig[$code] ?? null) === $signature) {
         $skipped_unchanged++;
@@ -246,9 +280,10 @@ foreach ($groups as $code => $rows) {
         $label = trim($source_type . ($committee ? "・{$committee}" : '')) ?: '逐字稿';
 
         $sections[] = [
-            '標籤' => $label,
-            '內容' => $section_content,
-            '字數' => mb_strlen($section_content),
+            '標籤'     => $label,
+            '內容'     => $section_content,
+            '字數'     => mb_strlen($section_content),
+            '是否逐字' => is_verbatim_segment($section_content),
         ];
         if ($source_type) {
             $source_types[$source_type] = true;
@@ -258,6 +293,14 @@ foreach ($groups as $code => $rows) {
 
     if (!$sections) {
         continue;   // 這個代碼所有分組都讀不到檔案，跳過
+    }
+
+    $has_verbatim = false;
+    foreach ($sections as $sec) {
+        if ($sec['是否逐字']) {
+            $has_verbatim = true;
+            break;
+        }
     }
 
     $content = implode("\n\n----\n\n", $content_parts);
@@ -272,6 +315,7 @@ foreach ($groups as $code => $rows) {
         '年'         => $context['年'],
         '內容'       => $content,
         '來源分類'   => array_keys($source_types),
+        '有逐字稿'   => $has_verbatim,
         '檔案數'     => $file_count,
         '字數'       => mb_strlen($content),
         '分段'       => $sections,
