@@ -2,6 +2,7 @@
 $session = $this->session_meta ?? null;
 $status = $this->session_status ?? null;
 $sittings = $this->session_sittings ?? [];
+$meets_by_sitting = $this->meets_by_sitting ?? [];
 ?>
 
 <div class="row g-3">
@@ -43,43 +44,41 @@ $sittings = $this->session_sittings ?? [];
               <th>內容</th>
               <th class="text-center">速記</th>
               <th class="text-center">逐字稿</th>
-              <th class="text-center">議程</th>
             </tr>
           </thead>
           <tbody>
             <?php foreach ($sittings as $s): ?>
             <?php
               $code = $s->{'代碼'};
-              // sittings_with_transcript 現在是 {代碼 => 是否逐字}，key 存不存在才代表
-              // 「有沒有transcript資料」，值本身才是「是不是逐字對話」——不能只看
-              // !empty()，那樣會把「有速記但不是逐字」誤判成「完全沒有」
-              $has_transcript_doc = array_key_exists($code, $this->sittings_with_transcript);
-              $is_verbatim = $this->sittings_with_transcript[$code] ?? false;
-              $agenda_count = $this->sittings_agenda_count[$code] ?? 0;
-              $sitting_url = '/info/' . $this->term_no . '/sitting/' . urlencode($code);
+              $meets = $meets_by_sitting[$code] ?? [];
+              // 沒有meet資料的場次（例如尚未涵蓋新pipeline的縣市）還是照樣列出一行，
+              // 只是沒有速記/逐字稿勾勾、也沒有連結可點；有分組審查時一個場次代碼
+              // 對應多筆meet，每筆各自渲染一列（同一天的日期/星期/時段會重複出現）
+              $rows = $meets ?: [null];
+            ?>
+            <?php foreach ($rows as $meet): ?>
+            <?php
+              $content = ($meet->{'委員會或主旨'} ?? null) ?: ($s->{'委員會名稱'} ?? $s->{'議程說明'} ?? '');
+              $meet_url = $meet ? ('/info/' . $this->term_no . '/meet/' . urlencode($meet->{'代碼'})) : null;
             ?>
             <tr>
               <td class="text-nowrap"><?= htmlspecialchars($s->{'日期'} ?? '') ?></td>
               <td><?= htmlspecialchars($s->{'星期'} ?? '') ?></td>
               <td><?= htmlspecialchars($s->{'時段'} ?? '全天') ?></td>
               <td><?= htmlspecialchars($s->{'場次類別'} ?? '') ?></td>
-              <td class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($s->{'委員會名稱'} ?? $s->{'議程說明'} ?? '') ?></td>
+              <td class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($content) ?></td>
               <td class="text-center">
-                <?php if ($has_transcript_doc): ?>
-                <a href="<?= htmlspecialchars($sitting_url) ?>" title="有速記/摘要式紀錄">✓</a>
+                <?php if ($meet && ($meet->{'有速記'} ?? false)): ?>
+                <a href="<?= htmlspecialchars($meet_url) ?>" title="有速記/摘要式紀錄">✓</a>
                 <?php endif; ?>
               </td>
               <td class="text-center">
-                <?php if ($has_transcript_doc && $is_verbatim): ?>
-                <a href="<?= htmlspecialchars($sitting_url) ?>" title="有逐字對話紀錄">✓</a>
-                <?php endif; ?>
-              </td>
-              <td class="text-center">
-                <?php if ($agenda_count): ?>
-                <a href="<?= htmlspecialchars($sitting_url) ?>" title="查看議程"><?= (int)$agenda_count ?></a>
+                <?php if ($meet && ($meet->{'有逐字稿'} ?? false)): ?>
+                <a href="<?= htmlspecialchars($meet_url) ?>" title="有逐字對話紀錄">✓</a>
                 <?php endif; ?>
               </td>
             </tr>
+            <?php endforeach; ?>
             <?php endforeach; ?>
           </tbody>
         </table>
