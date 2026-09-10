@@ -51,6 +51,14 @@ $index_mapping = [
         '有速記'     => ['type' => 'boolean'],
         '有逐字稿'   => ['type' => 'boolean'],
         '小節清單'   => ['type' => 'nested', 'dynamic' => true],
+        // 目前只有南投縣的parse_nan_meets()會帶值，其餘縣市固定空字串，跟
+        // 「時間資訊」一樣用keyword不用date/time型別
+        '散會時間'   => ['type' => 'keyword'],
+        // 從「時間資訊」／「散會時間」再抽出的24小時制HH:MM結構化版本，跟
+        // sitting既有的「開始時間」／「結束時間」欄位同一種格式慣例；目前
+        // 只有南投縣有值，其餘縣市固定空字串
+        '開始時間'   => ['type' => 'keyword'],
+        '結束時間'   => ['type' => 'keyword'],
         // 衍生欄位
         '議會代碼'   => ['type' => 'keyword'],
         '屆'         => ['type' => 'integer'],
@@ -60,7 +68,8 @@ $index_mapping = [
 
 $known_source_keys = [
     '代碼', '縣市', '場次代碼', '委員會或主旨', '日期', '時間資訊', '地點',
-    '來源檔案', '來源網址', '有速記', '有逐字稿', '小節清單',
+    '來源檔案', '來源網址', '有速記', '有逐字稿', '小節清單', '散會時間',
+    '開始時間', '結束時間',
 ];
 
 if ($reset) {
@@ -151,7 +160,7 @@ while (($row = fgetcsv($fh)) !== false) {
     if (isset($doc['時間資訊']) && trim($doc['時間資訊']) === '') {
         $doc['時間資訊'] = null;
     }
-    foreach (['場次代碼', '委員會或主旨', '地點'] as $f) {
+    foreach (['場次代碼', '委員會或主旨', '地點', '散會時間', '開始時間', '結束時間'] as $f) {
         if (isset($doc[$f]) && trim($doc[$f]) === '') {
             $doc[$f] = null;
         }

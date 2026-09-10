@@ -64,7 +64,12 @@ $meets_by_sitting = $this->meets_by_sitting ?? [];
             <tr>
               <td class="text-nowrap"><?= htmlspecialchars($s->{'日期'} ?? '') ?></td>
               <td><?= htmlspecialchars($s->{'星期'} ?? '') ?></td>
-              <td><?= htmlspecialchars($s->{'時段'} ?? '全天') ?></td>
+              <td>
+                <?= htmlspecialchars($s->{'時段'} ?? '全天') ?>
+                <?php if ($meet && (($meet->{'開始時間'} ?? null) || ($meet->{'結束時間'} ?? null))): ?>
+                <div class="small text-body-secondary text-nowrap"><?= htmlspecialchars($meet->{'開始時間'} ?? '') ?>～<?= htmlspecialchars($meet->{'結束時間'} ?? '') ?></div>
+                <?php endif; ?>
+              </td>
               <td><?= htmlspecialchars($s->{'場次類別'} ?? '') ?></td>
               <td class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($content) ?></td>
               <td class="text-center">

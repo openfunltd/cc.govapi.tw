@@ -109,6 +109,12 @@ function meet_speech_avatar_html($s) {
         <?php if ($meet->{'地點'} ?? null): ?>
         <tr><th class="text-body-secondary fw-normal">地點</th><td><?= htmlspecialchars($meet->{'地點'}) ?></td></tr>
         <?php endif; ?>
+        <?php if (($meet->{'開始時間'} ?? null) || ($meet->{'結束時間'} ?? null)): ?>
+        <tr><th class="text-body-secondary fw-normal">開始～結束時間</th><td><?= htmlspecialchars($meet->{'開始時間'} ?? '') ?>～<?= htmlspecialchars($meet->{'結束時間'} ?? '') ?></td></tr>
+        <?php endif; ?>
+        <?php if ($meet->{'散會時間'} ?? null): ?>
+        <tr><th class="text-body-secondary fw-normal">散會時間</th><td><?= htmlspecialchars($meet->{'散會時間'}) ?></td></tr>
+        <?php endif; ?>
         <?php if ($meet->{'委員會或主旨'} ?? null): ?>
         <tr><th class="text-body-secondary fw-normal">委員會或主旨</th><td><?= htmlspecialchars($meet->{'委員會或主旨'}) ?></td></tr>
         <?php endif; ?>
