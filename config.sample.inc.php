@@ -28,6 +28,10 @@ putenv('IMPORT_BILL_JSONL=');         // 議案.jsonl 路徑，預設 {project}/
 putenv('IMPORT_SITTING_AGENDA_CSV=');// 議程.csv 路徑，預設 {project}/議程.csv
 putenv('IMPORT_SPEECH_CSV_DIR=');    // 逐字稿-*.csv 所在目錄（依議會+年月拆檔），
                                        // 預設 {project}
+putenv('IMPORT_MEET_CSV=');           // meet.csv 路徑，預設 {project}/meet.csv
+putenv('IMPORT_MEET_NOTE_CSV=');      // meet_notes.csv 路徑，預設 {project}/meet_notes.csv
+putenv('IMPORT_MEET_TRANSCRIPT_CSV=');// meet_transcripts.csv 路徑，預設
+                                       // {project}/meet_transcripts.csv
 putenv('IMPORT_CANDIDATE_JSONL=');    // bulletin.jsonl 路徑，預設 {project}/bulletin.jsonl
 putenv('IMPORT_CANDIDATE_VOTES_JSONL=');// 得票數.jsonl 路徑（已篩選縣市/直轄市議員、
                                        // 縣市層級得票數的子集），預設 {project}/得票數.jsonl

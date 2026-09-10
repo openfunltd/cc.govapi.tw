@@ -332,6 +332,94 @@ class TypeHelper
                     'data' => '發言內容',
                 ],
             ],
+            'meet' => [
+                'name' => '會議',
+                'icon' => 'fas fa-fw fa-people-group',
+                'cols' => [
+                    'all' => [
+                        '議會代碼',
+                        '屆',
+                        '委員會或主旨',
+                        '日期',
+                        '有速記',
+                        '有逐字稿',
+                    ],
+                    'single' => [
+                        '屆',
+                        '委員會或主旨',
+                        '日期',
+                        '有速記',
+                        '有逐字稿',
+                    ],
+                ],
+                'default_aggs' => [
+                    'all' => [
+                        '議會代碼',
+                        '有逐字稿',
+                    ],
+                    'single' => [
+                        '有逐字稿',
+                    ],
+                ],
+                'item_features' => [
+                    'data' => '會議資料',
+                ],
+            ],
+            'meet_note' => [
+                'name' => '會議摘要',
+                'icon' => 'fas fa-fw fa-note-sticky',
+                'cols' => [
+                    'all' => [
+                        '議會代碼',
+                        '屆',
+                        '日期',
+                    ],
+                    'single' => [
+                        '屆',
+                        '日期',
+                    ],
+                ],
+                'default_aggs' => [
+                    'all' => [
+                        '議會代碼',
+                    ],
+                    'single' => [],
+                ],
+                'item_features' => [
+                    'data' => '摘要內容',
+                ],
+            ],
+            'meet_transcript' => [
+                'name' => '會議逐字稿',
+                'icon' => 'fas fa-fw fa-comment-dots',
+                'cols' => [
+                    'all' => [
+                        '議會代碼',
+                        '日期',
+                        '姓名',
+                        '職稱',
+                        '身分類別',
+                    ],
+                    'single' => [
+                        '日期',
+                        '姓名',
+                        '職稱',
+                        '身分類別',
+                    ],
+                ],
+                'default_aggs' => [
+                    'all' => [
+                        '議會代碼',
+                        '身分類別',
+                    ],
+                    'single' => [
+                        '身分類別',
+                    ],
+                ],
+                'item_features' => [
+                    'data' => '發言內容',
+                ],
+            ],
         ];
     }
 
