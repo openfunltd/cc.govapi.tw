@@ -107,11 +107,11 @@ class InfoController extends MiniEngine_Controller
         }
 
         $term_no = (int)$term_no;
-        // 'transcript'／'bill'／'agendas'／'agenda'／'sitting'／'meet' 是從各自列表頁
-        // 連結進去的詳情子頁面，不放進主要 tab 導覽列。'transcript'／'agendas'／
-        // 'sitting' 是舊版場次詳情頁，保留給既有連結相容用；新的統一會議詳情頁是
-        // 'meet'（見 loadMeetTab()），sessions.php 的表格已經改連到這裡
-        $valid_tabs = array_merge(array_keys($this->tabs), ['transcript', 'bill', 'agendas', 'agenda', 'sitting', 'meet']);
+        // 'bill'／'agenda'／'sitting'／'meet' 是從各自列表頁連結進去的詳情子頁面，
+        // 不放進主要 tab 導覽列。'agenda'／'sitting' 是舊版場次/議程詳情頁的代碼，
+        // 保留給既有連結相容用，但已經改成單純redirect到新的統一會議詳情頁
+        // 'meet'（見indexAction switch裡的處理），不再各自維護一整份頁面邏輯
+        $valid_tabs = array_merge(array_keys($this->tabs), ['bill', 'agenda', 'sitting', 'meet']);
         $tab = ($tab && in_array($tab, $valid_tabs)) ? $tab : 'councilors';
 
         $this->view->term_no = $term_no;
@@ -137,9 +137,6 @@ class InfoController extends MiniEngine_Controller
             case 'committees':
                 $this->view->committee_groups = $this->loadCommittees($cc_code);
                 break;
-            case 'transcript':
-                $this->loadTranscriptTab($cc_code, $term_no, $sub_id);
-                break;
             case 'bill':
                 $bill = $this->loadBillDetail($sub_id);
                 $this->resolveBillPeople($bill);
@@ -151,34 +148,24 @@ class InfoController extends MiniEngine_Controller
                     );
                 }
                 break;
-            case 'agendas':
-                $this->loadAgendasForSitting($sub_id);
-                break;
             case 'sitting':
-                $this->loadSittingTab($sub_id);
-                if ($this->view->sitting_meta ?? null) {
-                    $s = $this->view->sitting_meta;
-                    $this->setOg(
-                        ($s->{'日期'} ?? '') . '・' . ($s->{'場次類別'} ?? '場次詳情'),
-                        $this->view->council_name . '第' . $term_no . '屆・' . ($s->{'委員會名稱'} ?? $s->{'議程說明'} ?? '')
-                    );
-                }
+                // 舊版場次詳情頁已經整個retire，改成單純redirect到新的統一會議
+                // 頁面（見PLAN.md議程功能retire的說明），這裡直接處理完就return，
+                // 不會繼續往下執行view render
+                $this->redirectSittingToMeet($term_no, $sub_id);
                 break;
             case 'agenda':
-                $agenda = $this->loadAgendaDetail($sub_id);
-                $this->resolveAgendaPeople($agenda);
-                $this->view->agenda_detail = $agenda;
-                if ($agenda) {
-                    $page = max(1, (int)($_GET['page'] ?? 1));
-                    $speech_result = $this->loadAgendaSpeeches($agenda->{'代碼'}, $page);
-                    $this->resolveSpeechPeople($speech_result->speeches ?? []);
-                    $this->view->speech_result = $speech_result;
-                    $this->setOg(
-                        ($agenda->{'議程類型'} ?? '議程詳情') . '・' . ($agenda->{'委員會或名稱'} ?? ''),
-                        $this->view->council_name . '第' . ($agenda->{'屆'} ?? $term_no) . '屆・' . ($agenda->{'時間資訊'} ?? '')
-                    );
+                // 舊版議程詳情頁的代碼相容：9個「agenda代碼=meet代碼」的縣市
+                // （高雄/雲林/臺南/臺東/新竹縣/新竹市/連江/桃園/屏東）舊連結會
+                // 正確導頁；其餘6個委員會拆分縣市的舊agenda連結因為代碼對不起來
+                // 會導向不存在的meet、顯示「找不到會議資料」，這批連結數量少
+                // （多半是議程功能開發期間產生的測試連結），可接受
+                if ($sub_id) {
+                    header('Location: /info/' . $term_no . '/meet/' . urlencode($sub_id), true, 302);
+                } else {
+                    header('Location: /info/' . $term_no . '/sessions', true, 302);
                 }
-                break;
+                exit;
             case 'meet':
                 $this->loadMeetTab($sub_id);
                 if ($this->view->meet_meta ?? null) {
@@ -423,12 +410,14 @@ class InfoController extends MiniEngine_Controller
     }
 
     /**
-     * 用一次聚合查詢拿到「本屆哪些會期代碼有逐字稿」，避免對每個會期各別查一次（N+1）
+     * 用一次聚合查詢拿到「本屆哪些會期代碼有逐字稿」，避免對每個會期各別查一次
+     * （N+1）。改吃meet（有逐字稿=true時才算），取代舊版查/transcripts的做法
+     * （舊transcript pipeline已經整個retire）。
      */
     protected function loadSessionsWithTranscript($term_no)
     {
         $r = CCAPI::apiQuery(
-            '/transcripts?limit=0&' . urlencode('屆') . '=' . $term_no . '&agg=' . urlencode('會期代碼'),
+            '/meets?limit=0&' . urlencode('屆') . '=' . $term_no . '&' . urlencode('有逐字稿') . '=true&agg=' . urlencode('會期代碼'),
             '本屆哪些會期有逐字稿'
         );
         $codes = [];
@@ -462,58 +451,37 @@ class InfoController extends MiniEngine_Controller
     }
 
     /**
-     * 逐字稿 tab：對應單一場次（sitting），不是整個會期——單一場次的逐字稿全文
-     * 大小是安全的（實測平均 20 萬字、單筆 47 萬 bytes），可以一次整份撈回來，
-     * 不需要像「整個會期全部場次」那樣分批載入（那樣做曾經把伺服器打爆過）。
-     * 同一場次若有多種來源（大會會議紀錄、各委員會審查會議事錄等），用匯入時
-     * 已經分好的「分段」陣列各自顯示一個 tab。
-     *
-     * 注意：這是舊版（整場次一筆文字）逐字稿資料，跟新版「議程／逐句發言」
-     * （見 loadAgendasForSitting()／loadAgendaDetail()）是並存的兩套資料，
-     * 互不影響、也互不取代。
+     * 舊版場次詳情頁（/info/{屆}/sitting/{場次代碼}）相容用：整個retire掉舊的
+     * 逐字稿/議程並存頁面，改成單純redirect——查這個場次代碼對應到幾筆meet，
+     * 剛好1筆就直接導去該meet的新詳情頁；0筆或多筆（分組審查，不知道該導去
+     * 哪一筆）就退回導去所屬會期頁面，讓使用者自己從那邊挑
      */
-    protected function loadTranscriptTab($cc_code, $term_no, $sitting_code)
+    protected function redirectSittingToMeet($term_no, $sitting_code)
     {
         if (!$sitting_code) {
-            $this->view->sitting_meta = null;
-            $this->view->transcript = null;
-            return;
+            header('Location: /info/' . $term_no . '/sessions', true, 302);
+            exit;
         }
         $sitting_code = urldecode($sitting_code);
 
-        $sitting = CCAPI::apiQuery('/sitting/' . rawurlencode($sitting_code), '場次資料');
-        $this->view->sitting_meta = $sitting->data ?? (object)['代碼' => $sitting_code];
-
-        $transcript = CCAPI::apiQuery('/transcript/' . rawurlencode($sitting_code), '場次逐字稿');
-        $this->view->transcript = ($transcript->error ?? true) ? null : $transcript->data;
-    }
-
-    /**
-     * 統一的「場次」詳情頁：把原本分開的「逐字稿」「議程」兩個子頁面合併成同一頁
-     * 的兩個頁籤，避免使用者誤以為「議程」只是議程表、不知道裡面其實是比舊版
-     * 逐字稿更完整的逐句發言資料。/info/{屆}/sitting/{場次代碼}
-     */
-    protected function loadSittingTab($sitting_code)
-    {
-        if (!$sitting_code) {
-            $this->view->sitting_meta = null;
-            $this->view->sitting_agendas = [];
-            $this->view->transcript = null;
-            return;
-        }
-        $sitting_code = urldecode($sitting_code);
-
-        $sitting = CCAPI::apiQuery('/sitting/' . rawurlencode($sitting_code), '場次資料');
-        $this->view->sitting_meta = $sitting->data ?? (object)['代碼' => $sitting_code];
-
-        $agendas = CCAPI::apiQuery(
-            '/sitting_agendas?limit=50&' . urlencode('場次代碼') . '=' . urlencode($sitting_code),
-            '本場次議程清單'
+        $meets_r = CCAPI::apiQuery(
+            '/meets?limit=10&' . urlencode('場次代碼') . '=' . urlencode($sitting_code),
+            '場次對應的會議（舊連結轉址用）'
         );
-        $this->view->sitting_agendas = $agendas->sitting_agendas ?? [];
+        $meets = $meets_r->meets ?? [];
+        if (count($meets) === 1) {
+            header('Location: /info/' . $term_no . '/meet/' . urlencode($meets[0]->{'代碼'}), true, 302);
+            exit;
+        }
 
-        $transcript = CCAPI::apiQuery('/transcript/' . rawurlencode($sitting_code), '場次逐字稿');
-        $this->view->transcript = ($transcript->error ?? true) ? null : $transcript->data;
+        $sitting_r = CCAPI::apiQuery('/sitting/' . rawurlencode($sitting_code), '場次資料（舊連結轉址用）');
+        $session_code = $sitting_r->data->{'會期代碼'} ?? null;
+        if ($session_code) {
+            header('Location: /info/' . $term_no . '/sessions/' . urlencode($session_code), true, 302);
+        } else {
+            header('Location: /info/' . $term_no . '/sessions', true, 302);
+        }
+        exit;
     }
 
     /**
@@ -548,8 +516,8 @@ class InfoController extends MiniEngine_Controller
     }
 
     /**
-     * 會議的逐字稿發言，比照 loadAgendaSpeeches() 用伺服器端分頁載入（單一會議
-     * 可能有數百筆發言，例如臺北市委員會分組審查案例，不能一次撈完）
+     * 會議的逐字稿發言，用伺服器端分頁載入（單一會議可能有數百筆發言，例如
+     * 臺北市委員會分組審查案例，不能一次撈完）
      */
     protected function loadMeetTranscripts($meet_code, $page, $limit = 500)
     {
@@ -569,8 +537,7 @@ class InfoController extends MiniEngine_Controller
 
     /**
      * 會議逐字稿裡「對應代碼類型」是議員的，批次查一次 councilor 換「人物代碼」
-     * （連到議員個人頁）跟「照片」（頭像），比照 resolveSpeechPeople() 的做法，
-     * 一次查詢批次處理，不逐筆查避免 N+1。
+     * （連到議員個人頁）跟「照片」（頭像），一次查詢批次處理，不逐筆查避免 N+1。
      */
     protected function resolveMeetTranscriptPeople($transcripts)
     {
@@ -599,147 +566,6 @@ class InfoController extends MiniEngine_Controller
         }
 
         foreach ($transcripts as $s) {
-            $info = $by_code[$s->{'對應代碼'} ?? ''] ?? null;
-            $s->{'_人物代碼'} = $info['person_code'] ?? null;
-            $s->{'_照片'} = $info['photo'] ?? null;
-        }
-    }
-
-    /**
-     * 場次的議程清單：一個場次可能對應多個議程（實測最多 10~13 個），跟逐字稿
-     * 1:1 不同，所以是先列清單讓使用者選，不是直接進單一議程頁。
-     *
-     * @deprecated 保留給舊連結相容用，新頁面請用 loadSittingTab()
-     */
-    protected function loadAgendasForSitting($sitting_code)
-    {
-        if (!$sitting_code) {
-            $this->view->sitting_meta = null;
-            $this->view->sitting_agendas = [];
-            return;
-        }
-        $sitting_code = urldecode($sitting_code);
-
-        $sitting = CCAPI::apiQuery('/sitting/' . rawurlencode($sitting_code), '場次資料');
-        $this->view->sitting_meta = $sitting->data ?? (object)['代碼' => $sitting_code];
-
-        $agendas = CCAPI::apiQuery(
-            '/sitting_agendas?limit=50&' . urlencode('場次代碼') . '=' . urlencode($sitting_code),
-            '本場次議程清單'
-        );
-        $this->view->sitting_agendas = $agendas->sitting_agendas ?? [];
-    }
-
-    /**
-     * 議程單筆詳情：對應單一議程代碼，不需要屆/場次巢狀資訊（比照 loadBillDetail()）。
-     * 逐句發言不在這裡一次撈完（單一議程可能有上萬筆發言，例如「一天一議程」做法
-     * 的議會），改由前端分頁呼叫 /api/speeches。
-     */
-    protected function loadAgendaDetail($agenda_code)
-    {
-        if (!$agenda_code) {
-            return null;
-        }
-        $agenda_code = urldecode($agenda_code);
-        $r = CCAPI::apiQuery('/sitting_agenda/' . rawurlencode($agenda_code), '議程詳情');
-        return ($r->error ?? true) ? null : $r->data;
-    }
-
-    /**
-     * 議程的「參與議員結構」裡的「議員代碼」對應到 councilor 的「代碼」欄位，
-     * 要連到議員個人頁需要先查一次換成「人物代碼」（跟 resolveBillPeople() 是
-     * 同一種做法，一次查詢批次處理，不逐筆查避免 N+1）。
-     */
-    protected function resolveAgendaPeople($agenda)
-    {
-        if (!$agenda) {
-            return;
-        }
-        $codes = [];
-        foreach ($agenda->{'參與議員結構'} ?? [] as $p) {
-            if ($p->{'議員代碼'} ?? null) {
-                $codes[$p->{'議員代碼'}] = true;
-            }
-        }
-        if (!$codes) {
-            return;
-        }
-
-        $qs = '';
-        foreach (array_keys($codes) as $code) {
-            $qs .= '&' . urlencode('代碼') . '=' . urlencode($code);
-        }
-        $r = CCAPI::apiQuery(
-            '/councilors?limit=' . count($codes) . $qs,
-            '議程參與議員對應議員資料'
-        );
-
-        $person_code_by_code = [];
-        foreach (($r->councilors ?? []) as $c) {
-            $person_code_by_code[$c->{'代碼'}] = $c->{'人物代碼'} ?? null;
-        }
-
-        foreach ($agenda->{'參與議員結構'} ?? [] as $p) {
-            $p->{'人物代碼'} = $person_code_by_code[$p->{'議員代碼'} ?? ''] ?? null;
-        }
-    }
-
-    /**
-     * 議程的逐句發言，改用伺服器端 CCAPI::apiQuery() 分頁載入（原本用瀏覽器端 JS
-     * fetch，改成這樣有兩個好處：一、跟頁面其他資料一樣會出現在頁尾「本頁使用 API」
-     * 清單，使用者/除錯時看得到；二、失敗時走現有的 $r->error 判斷方式，不會像
-     * JS fetch 失敗時整頁靜默空白、沒有任何提示）。單一議程可能有上萬筆發言（例：
-     * 「一天一議程」做法的議會），所以還是要分頁，用 URL 的 ?page= 參數控制。
-     */
-    protected function loadAgendaSpeeches($agenda_code, $page, $limit = 500)
-    {
-        $r = CCAPI::apiQuery(
-            '/speeches?' . urlencode('議程代碼') . '=' . urlencode($agenda_code)
-                . '&limit=' . (int)$limit . '&page=' . (int)$page,
-            '議程逐句發言'
-        );
-        return (object)[
-            'speeches'   => $r->speeches ?? [],
-            'total'      => $r->total ?? 0,
-            'total_page' => $r->total_page ?? 0,
-            'page'       => $page,
-            'limit'      => $limit,
-        ];
-    }
-
-    /**
-     * 逐句發言裡「對應代碼類型」是議員的，批次查一次 councilor 換「人物代碼」
-     * （連到議員個人頁）跟「照片」（頭像），比照 resolveAgendaPeople() 的做法，
-     * 一次查詢批次處理，不逐筆查避免 N+1。直接把結果掛在每筆發言物件上
-     * （`_人物代碼`／`_照片`），view 端不用再處理對照表。
-     */
-    protected function resolveSpeechPeople($speeches)
-    {
-        $codes = [];
-        foreach ($speeches as $s) {
-            if (($s->{'對應代碼類型'} ?? null) === '議員' && ($s->{'對應代碼'} ?? null)) {
-                $codes[$s->{'對應代碼'}] = true;
-            }
-        }
-        if (!$codes) {
-            return;
-        }
-
-        $qs = '';
-        foreach (array_keys($codes) as $code) {
-            $qs .= '&' . urlencode('代碼') . '=' . urlencode($code);
-        }
-        $r = CCAPI::apiQuery(
-            '/councilors?limit=' . count($codes) . $qs,
-            '議程逐句發言對應議員資料'
-        );
-
-        $by_code = [];
-        foreach (($r->councilors ?? []) as $c) {
-            $by_code[$c->{'代碼'}] = ['person_code' => $c->{'人物代碼'} ?? null, 'photo' => $c->{'照片'} ?? null];
-        }
-
-        foreach ($speeches as $s) {
             $info = $by_code[$s->{'對應代碼'} ?? ''] ?? null;
             $s->{'_人物代碼'} = $info['person_code'] ?? null;
             $s->{'_照片'} = $info['photo'] ?? null;
@@ -910,58 +736,18 @@ class InfoController extends MiniEngine_Controller
     }
 
     /**
-     * 已知複姓（涵蓋目前議員資料裡出現過的 歐陽/上官，其餘為常見複姓，預先納入避免
-     * 未來新當選議員剛好是複姓卻被切錯）
-     */
-    protected static $compoundSurnames = [
-        '歐陽', '上官', '司馬', '諸葛', '東方', '皇甫', '尉遲', '公孫', '令狐', '太史',
-        '端木', '獨孤', '軒轅', '長孫', '宇文', '慕容', '夏侯', '萬俟', '司徒', '司空',
-        '拓跋', '赫連', '澹台', '公羊', '濮陽',
-    ];
-
-    /**
-     * 逐字稿裡的說話者標記格式是「姓+職稱+名」（例：侯議員漢廷），不是「職稱+全名」。
-     * 這是關鍵字比對的 heuristic，不是精確的逐句發言記錄——之後逐字稿清整成一句一句後
-     * 會有更準確的做法。
-     *
-     * 兩種已知例外，會 fallback 成直接比對全名（不插入職稱）：
-     *   1. 複姓：單純「取第一個字當姓」會切錯（例：「歐陽龍」切成「歐」+「陽龍」）
-     *   2. 原住民族名／羅馬拼音名（例：「夷將．拔路兒Icyang • Parod」）：不符合
-     *      漢名「姓+名」的慣例，套用規則會產生垃圾查詢字串
-     */
-    protected function buildSpeakerPattern($name, $title)
-    {
-        $title = $title ?: '議員';
-
-        if (preg_match('/[a-zA-Z．·‧•]/u', $name)) {
-            return $name;
-        }
-
-        $surname_len = 1;
-        foreach (self::$compoundSurnames as $cs) {
-            if (mb_substr($name, 0, mb_strlen($cs)) === $cs) {
-                $surname_len = mb_strlen($cs);
-                break;
-            }
-        }
-        $surname = mb_substr($name, 0, $surname_len);
-        $given = mb_substr($name, $surname_len);
-        if ($given === '') {
-            return $name;
-        }
-        return $surname . $title . $given;
-    }
-
-    /**
      * 發言記錄 tab：預設抓最新一屆（$records 已依屆次新到舊排序），可用 ?term= 指定
-     * 要看哪一屆（不同屆職稱可能不同，例如某屆是議員、某屆是議長，說話者標記也會不同）
+     * 要看哪一屆。改用meet_transcripts的「對應代碼」精確比對（議員自己的
+     * candidate/councilor代碼），取代舊版對/transcripts做「姓+職稱+名」關鍵字
+     * 猜測比對的做法——舊做法是因為舊transcript資料沒有逐句結構化發言者代碼
+     * 才需要的heuristic，meet_transcripts本身已經有結構化的「對應代碼」，
+     * 不需要再猜。
      */
     protected function loadCouncilorSpeeches($records, $requested_term = null)
     {
         $this->view->speech_term = null;
-        $this->view->speech_pattern = null;
         $this->view->speech_total = 0;
-        $this->view->speech_results = [];
+        $this->view->speech_groups = [];
 
         if (!$records) {
             return;
@@ -978,23 +764,26 @@ class InfoController extends MiniEngine_Controller
         }
 
         $term_no = $record->{'屆次'};
-        $pattern = $this->buildSpeakerPattern($record->{'姓名'}, $record->{'職稱'});
+        $councilor_code = $record->{'代碼'};
         $this->view->speech_term = $term_no;
-        $this->view->speech_pattern = $pattern;
 
         $r = CCAPI::apiQuery(
-            '/transcripts?limit=20&' . urlencode('屆') . '=' . $term_no . '&q=' . urlencode($pattern)
+            '/meet_transcripts?limit=20&' . urlencode('屆') . '=' . $term_no
+                . '&' . urlencode('對應代碼') . '=' . urlencode($councilor_code)
+                . '&' . urlencode('對應代碼類型') . '=' . urlencode('議員')
                 . '&sort=' . urlencode('日期>')
                 . '&output_fields=' . urlencode('代碼')
+                . '&output_fields=' . urlencode('會議代碼')
                 . '&output_fields=' . urlencode('會期代碼')
-                . '&output_fields=' . urlencode('日期'),
-            '該議員發言記錄（關鍵字比對，非精確逐句，依日期新到舊）'
+                . '&output_fields=' . urlencode('日期')
+                . '&output_fields=' . urlencode('發言內容'),
+            '該議員發言記錄（用對應代碼精確比對，依日期新到舊）'
         );
         $this->view->speech_total = $r->total ?? 0;
 
-        // 依會期分組，場次已經依日期新到舊排序，分組後第一次出現的會期自然就是最新的
+        // 依會期分組，發言已經依日期新到舊排序，分組後第一次出現的會期自然就是最新的
         $groups = [];
-        foreach (($r->transcripts ?? []) as $t) {
+        foreach (($r->meet_transcripts ?? []) as $t) {
             $session_code = $t->{'會期代碼'} ?? '';
             if (!isset($groups[$session_code])) {
                 $groups[$session_code] = (object)[
@@ -1006,32 +795,22 @@ class InfoController extends MiniEngine_Controller
             $groups[$session_code]->items[] = $t;
         }
 
-        // 補上每個場次的名稱（時段＋場次類別，委員會審查/分組審查時附上委員會名稱）；
-        // 每個會期只查一次該會期全部場次（loadSittingsForSession 已有），不逐筆查，避免 N+1
+        // 補上每筆發言所屬會議的委員會或主旨（分組審查時有意義），每個會期只查一次
+        // 該會期全部meet（loadMeetsForSession已有），不逐筆查，避免 N+1
         foreach ($groups as $group) {
-            $sittings_by_code = [];
-            foreach ($this->loadSittingsForSession($group->{'會期代碼'}) as $s) {
-                $sittings_by_code[$s->{'代碼'}] = $s;
+            $meets_by_code = [];
+            foreach ($this->loadMeetsForSession($group->{'會期代碼'}) as $meets_of_sitting) {
+                foreach ($meets_of_sitting as $m) {
+                    $meets_by_code[$m->{'代碼'}] = $m;
+                }
             }
             foreach ($group->items as $item) {
-                $sitting = $sittings_by_code[$item->{'代碼'}] ?? null;
-                $item->{'場次名稱'} = $sitting ? $this->buildSittingLabel($sitting) : null;
+                $meet = $meets_by_code[$item->{'會議代碼'} ?? ''] ?? null;
+                $item->{'會議主旨'} = $meet->{'委員會或主旨'} ?? null;
             }
         }
 
         $this->view->speech_groups = array_values($groups);
-    }
-
-    protected function buildSittingLabel($sitting)
-    {
-        $label = trim(implode(' ', array_filter([
-            $sitting->{'時段'} ?? null,
-            $sitting->{'場次類別'} ?? null,
-        ])));
-        if ($sitting->{'委員會名稱'} ?? null) {
-            $label .= ($label ? '・' : '') . $sitting->{'委員會名稱'};
-        }
-        return $label ?: null;
     }
 
     /**

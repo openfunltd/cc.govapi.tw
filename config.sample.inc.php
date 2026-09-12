@@ -22,12 +22,7 @@ putenv('IMPORT_COUNCILOR_JSONL=');    // 議員.jsonl 路徑，預設 {project}/
 putenv('IMPORT_SESSION_CSV=');        // 會期.csv 路徑，預設 {project}/會期.csv
 putenv('IMPORT_COMMITTEE_CSV=');      // 委員會 data.csv 路徑，預設 {project}/data.csv
 putenv('IMPORT_SITTING_CSV=');        // 場次.csv 路徑，預設 {project}/場次.csv
-putenv('IMPORT_TRANSCRIPT_CSV=');     // 逐字稿索引.csv 路徑，預設 {project}/逐字稿索引.csv
-putenv('IMPORT_TRANSCRIPT_BASE_DIR=');// 逐字稿原始檔案目錄（索引裡的相對路徑基準），預設 {project}/逐字稿
 putenv('IMPORT_BILL_JSONL=');         // 議案.jsonl 路徑，預設 {project}/議案.jsonl
-putenv('IMPORT_SITTING_AGENDA_CSV=');// 議程.csv 路徑，預設 {project}/議程.csv
-putenv('IMPORT_SPEECH_CSV_DIR=');    // 逐字稿-*.csv 所在目錄（依議會+年月拆檔），
-                                       // 預設 {project}
 putenv('IMPORT_MEET_CSV=');           // meet.csv 路徑，預設 {project}/meet.csv
 putenv('IMPORT_MEET_NOTE_CSV=');      // meet_notes.csv 路徑，預設 {project}/meet_notes.csv
 putenv('IMPORT_MEET_TRANSCRIPT_CSV=');// meet_transcripts.csv 路徑，預設

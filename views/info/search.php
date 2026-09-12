@@ -346,9 +346,9 @@ if (!in_array($initial_tab, $valid_tab_keys, true)) {
 
   function renderTranscriptCard(t) {
     var councilName = councilLabel(t['議會代碼']);
-    var href = (isAll ? ('https://' + t['議會代碼'] + postfix) : '') + '/info/' + t['屆'] + '/transcript/' + encodeURIComponent(t['代碼']);
+    var href = (isAll ? ('https://' + t['議會代碼'] + postfix) : '') + '/info/' + t['屆'] + '/meet/' + encodeURIComponent(t['會議代碼']) + '#speech-' + encodeURIComponent(t['代碼']);
     var html = '<div class="small text-body-secondary">' + councilName + ' ・ 第' + t['屆'] + '屆' + (t['年'] ? ' ・ ' + t['年'] + ' 年' : '') + '</div>';
-    html += '<div class="small mt-1">' + highlightOr(t, '內容', null) + '</div>';
+    html += '<div class="small mt-1">' + highlightOr(t, '發言內容', t['發言內容']) + '</div>';
     html += '<a href="' + href + '" target="_blank" class="small">查看完整逐字稿 →</a>';
     return html;
   }
@@ -394,14 +394,14 @@ if (!in_array($initial_tab, $valid_tab_keys, true)) {
     platform: renderPlatformCard,
     bill: renderBillCard,
   };
-  var resultsKeys = { name: 'councilors', transcript: 'transcripts', platform: 'candidates', bill: 'bills' };
+  var resultsKeys = { name: 'councilors', transcript: 'meet_transcripts', platform: 'candidates', bill: 'bills' };
   var queryFieldsByTab = { name: ['姓名'], platform: ['政見'] };
 
   tabsConfig.forEach(function (t) {
     createSearchTab({
       key: t.key,
       apiBase: <?= json_encode(array_combine(array_column($search_tabs, 'key'), array_map(function ($t) {
-          $type_map = ['name' => 'councilor', 'transcript' => 'transcript', 'platform' => 'candidate', 'bill' => 'bill'];
+          $type_map = ['name' => 'councilor', 'transcript' => 'meet_transcript', 'platform' => 'candidate', 'bill' => 'bill'];
           return TypeHelper::getApiUrl($type_map[$t['key']]);
       }, $search_tabs))) ?>[t.key],
       resultsKey: resultsKeys[t.key],

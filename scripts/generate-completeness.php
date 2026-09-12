@@ -195,7 +195,9 @@ $transcript_agg_query = [
         ],
     ],
 ];
-$transcript_agg = Elastic::dbQuery('/{prefix}transcript/_search', 'POST',
+// 舊transcript pipeline已經整個retire，改成查meet_transcript（欄位名稱相同，
+// 聚合邏輯不用改）
+$transcript_agg = Elastic::dbQuery('/{prefix}meet_transcript/_search', 'POST',
     json_encode($transcript_agg_query));
 
 // [cc_code][屆] = count

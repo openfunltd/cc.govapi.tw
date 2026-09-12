@@ -72,6 +72,11 @@ class CCAPI_Type_MeetTranscript extends CCAPI_Type
                 'description' => '發言當天日期',
                 'type' => 'string',
             ],
+            '年' => [
+                'es_field' => '年',
+                'description' => '發言當天日期的西元年（例: 2024），從日期衍生，供搜尋頁年份篩選用',
+                'type' => 'integer',
+            ],
         ];
     }
 

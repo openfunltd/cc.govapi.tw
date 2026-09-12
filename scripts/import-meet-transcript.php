@@ -50,6 +50,9 @@ $index_mapping = [
         '議會代碼'     => ['type' => 'keyword'],
         '屆'           => ['type' => 'integer'],
         '會期代碼'     => ['type' => 'keyword'],
+        // 從「日期」取前4碼，給搜尋頁「逐字稿」分頁的年份篩選用（取代舊
+        // transcript type的「年」欄位）
+        '年'           => ['type' => 'integer'],
     ],
 ];
 
@@ -162,6 +165,7 @@ while (($row = fgetcsv($fh)) !== false) {
     $context = derive_sitting_context($doc['場次代碼'], $sitting_context_cache);
     $doc['屆'] = $context['屆'];
     $doc['會期代碼'] = $context['會期代碼'];
+    $doc['年'] = $doc['日期'] ? (int)substr($doc['日期'], 0, 4) : null;
 
     $doc_id = $data['代碼'];
 
