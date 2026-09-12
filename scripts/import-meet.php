@@ -7,15 +7,16 @@
  *   php scripts/import-meet.php --reset    # 先刪除 index 再重建並匯入
  *
  * 來源：meet.csv（欄位：代碼, 縣市, 場次代碼, 委員會或主旨, 日期, 時間資訊, 地點,
- * 來源檔案, 來源網址, 有速記, 有逐字稿, 小節清單）
- * 所有來源欄位直接沿用原始名稱匯入 ES；「小節清單」是 CSV 儲存格內的 JSON 陣列字串，
- * 先 decode 再存成 nested 陣列（跟 sitting_agenda 的「小節清單」同一種設計，這個欄位
- * 就是從那邊搬過來的，只是「起始順序」現在對應 meet_transcript 的「順序」而不是舊的
- * speech）：
+ * 來源檔案, 來源網址, 有速記, 有逐字稿, 小節清單, 散會時間, 開始時間, 結束時間, 列席名單）
+ * 所有來源欄位直接沿用原始名稱匯入 ES；「小節清單」「列席名單」是 CSV 儲存格內的 JSON
+ * 陣列字串，先 decode 再存成 nested 陣列：
  *   小節清單：[{名稱, 提案人, 議案代碼, 起始順序}, ...]，會議底下更細的段落標記（目前
  *     只有臺北市委員會分組審查類型有實作偵測，不是每個meet都有），「起始順序」對應
  *     meet_transcript 的「順序」欄位，消費端用「順序 BETWEEN 這個小節的起始順序 AND
- *     下一個小節的起始順序-1」查詢
+ *     下一個小節的起始順序-1」查詢（這個欄位是從sitting_agenda搬過來的，同一種設計，
+ *     只是「起始順序」現在對應meet_transcript的「順序」而不是舊的speech）
+ *   列席名單：[{職稱, 姓名}, ...]，只有臺北市/基隆市/宜蘭縣有實作抽取（其餘縣市來源
+ *     文件的列席欄位大多只寫「XX處長等N人」，抓不到完整姓名），其餘縣市固定空陣列
  * 衍生欄位：
  *   議會代碼：從「縣市」欄位對照（CountyCodeHelper::getMap()）
  *   屆／會期代碼：「場次代碼」有值時查既有 sitting index 取得（沿用
@@ -59,6 +60,11 @@ $index_mapping = [
         // 只有南投縣有值，其餘縣市固定空字串
         '開始時間'   => ['type' => 'keyword'],
         '結束時間'   => ['type' => 'keyword'],
+        // 列席機關/職稱/姓名，目前只有臺北市/基隆市/宜蘭縣有實作抽取
+        // （見open-forest-scripts lib.php extract_attendee_roster()的
+        // 說明：其餘縣市來源文件的列席欄位大多只寫「XX處長等N人」，抓
+        // 不到完整姓名），其餘縣市固定空陣列
+        '列席名單'   => ['type' => 'nested', 'dynamic' => true],
         // 衍生欄位
         '議會代碼'   => ['type' => 'keyword'],
         '屆'         => ['type' => 'integer'],
@@ -69,7 +75,7 @@ $index_mapping = [
 $known_source_keys = [
     '代碼', '縣市', '場次代碼', '委員會或主旨', '日期', '時間資訊', '地點',
     '來源檔案', '來源網址', '有速記', '有逐字稿', '小節清單', '散會時間',
-    '開始時間', '結束時間',
+    '開始時間', '結束時間', '列席名單',
 ];
 
 if ($reset) {
@@ -150,6 +156,9 @@ while (($row = fgetcsv($fh)) !== false) {
 
     $sections = json_decode($data['小節清單'] ?? '', true);
     $doc['小節清單'] = is_array($sections) ? $sections : [];
+
+    $roster = json_decode($data['列席名單'] ?? '', true);
+    $doc['列席名單'] = is_array($roster) ? $roster : [];
 
     $doc['有速記'] = ($data['有速記'] ?? '0') === '1';
     $doc['有逐字稿'] = ($data['有逐字稿'] ?? '0') === '1';
