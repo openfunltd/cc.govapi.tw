@@ -204,13 +204,22 @@ function bulletin_image_url($path)
     return 'https://lydata.ronny-s3.click/bulletin/image/' . $encoded;
 }
 
-// 欄位圖片（cell-image-vision 那批的裁切小圖）路徑慣例跟「相片路徑」「政見圖路徑」
-// 不同，來源本身就是 cell/... 開頭（不用像 bulletin_image_url() 那樣先去掉
-// files/image/ 前綴），實測 https://lydata.ronny-s3.click/bulletin/{原始路徑}
-// 存在且是有效圖片（content-type: image/png），可以直接組出公開網址
+// 欄位圖片這個路徑慣例不只一種：cell-image-vision 那批是真的裁切小圖，
+// 來源本身就是 cell/... 開頭，實測 https://lydata.ronny-s3.click/bulletin/
+// {原始路徑} 存在且是有效圖片（content-type: image/png），可以直接組出
+// 公開網址；但 manifesto-image-vision／page-image-vision 這兩種沒有另外
+// 裁切小圖，lib.php直接把「欄位圖片.政見」設成跟「政見圖路徑」一樣的
+// files/image/... 路徑（整張圖本身就是辨識來源），這種情形要走跟
+// bulletin_image_url() 完全一樣的規則（去掉files/image/前綴、網址基底是
+// bulletin/image/）——一開始沒判斷這個分支，兩種路徑混用同一套URL規則，
+// 組出來的網址多了一層files/（bulletin/files/image/...是錯的，
+// bulletin/image/...才對）
 function bulletin_cell_image_url($path)
 {
     if (!$path) return null;
+    if (preg_match('#^files/image/#', $path)) {
+        return bulletin_image_url($path);
+    }
     $encoded = implode('/', array_map('rawurlencode', explode('/', $path)));
     return 'https://lydata.ronny-s3.click/bulletin/' . $encoded;
 }
