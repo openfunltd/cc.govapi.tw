@@ -196,32 +196,26 @@ if (!file_exists($jsonl_path)) {
     exit(1);
 }
 
+// 「相片路徑」「政見圖路徑」「欄位圖片」三種來源（後者又對應 cell-image-vision／
+// manifesto-image-vision／page-image-vision 三種辨識方式）現在統一都是相對於
+// block root、含 files/ 前綴的路徑（open-forest-scripts 那邊已統一成這個慣例，
+// 見 ocr-longtext.php／ocr-page.php／ocr-manifesto.php），只需要一條規則：
+// 去掉開頭的 files/，其餘接到 https://lydata.ronny-s3.click/bulletin/ 後面，
+// 實測不管是 image/... 或 cell/... 或 page/... 都能組出有效的公開網址
+// （content-type: image/png）。以前這裡分兩支函式各自處理，因為兩套路徑一度
+// 有沒有 files/ 前綴不一致，混用會讓網址多一層 files/，統一前綴後不再需要
+// 分開處理，bulletin_cell_image_url() 保留只是避免呼叫端要跟著改名。
 function bulletin_image_url($path)
 {
     if (!$path) return null;
-    $path = preg_replace('#^files/image/#', '', $path);
-    $encoded = implode('/', array_map('rawurlencode', explode('/', $path)));
-    return 'https://lydata.ronny-s3.click/bulletin/image/' . $encoded;
-}
-
-// 欄位圖片這個路徑慣例不只一種：cell-image-vision 那批是真的裁切小圖，
-// 來源本身就是 cell/... 開頭，實測 https://lydata.ronny-s3.click/bulletin/
-// {原始路徑} 存在且是有效圖片（content-type: image/png），可以直接組出
-// 公開網址；但 manifesto-image-vision／page-image-vision 這兩種沒有另外
-// 裁切小圖，lib.php直接把「欄位圖片.政見」設成跟「政見圖路徑」一樣的
-// files/image/... 路徑（整張圖本身就是辨識來源），這種情形要走跟
-// bulletin_image_url() 完全一樣的規則（去掉files/image/前綴、網址基底是
-// bulletin/image/）——一開始沒判斷這個分支，兩種路徑混用同一套URL規則，
-// 組出來的網址多了一層files/（bulletin/files/image/...是錯的，
-// bulletin/image/...才對）
-function bulletin_cell_image_url($path)
-{
-    if (!$path) return null;
-    if (preg_match('#^files/image/#', $path)) {
-        return bulletin_image_url($path);
-    }
+    $path = preg_replace('#^files/#', '', $path);
     $encoded = implode('/', array_map('rawurlencode', explode('/', $path)));
     return 'https://lydata.ronny-s3.click/bulletin/' . $encoded;
+}
+
+function bulletin_cell_image_url($path)
+{
+    return bulletin_image_url($path);
 }
 
 // ── 讀取得票數子集，算出每位候選人的得票數／同選區排名／得票率 ──────────────
