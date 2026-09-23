@@ -61,28 +61,30 @@ function info_election_status_badge($record) {
     return '<span class="badge bg-info text-dark">' . htmlspecialchars($status) . '</span>';
 }
 
-// 候選人學歷/經歷/政見是否為可用文字：text=公報文字層；cell-image-vision=AI 視覺
-// 模型辨識裁切後的欄位圖片得出的文字；manifesto-image-vision=政見整欄是一張圖時，
-// AI 視覺模型直接辨識整張圖得出的文字（政見欄最常見這種來源，尤其111年之後的
-// 公報）；page-image-vision=整頁都是掃描圖、逐頁辨識出來的文字。這三種都不是
-// 文字層本身，但都是可以顯示、可以核對原圖的可用文字；text-garbled（文字層是
-// 亂碼）跟缺值（圖片或空白）都不算可用
+// 候選人學歷/經歷/政見是否為可用文字：text=公報文字層；text-garbled=文字層是
+// 亂碼、缺值=圖片或空白，這兩種不算可用，其餘一律當可用文字。「其餘」目前包含
+// cell-image-vision／manifesto-image-vision／page-image-vision 三種 AI 視覺
+// 模型辨識來源（分別是：表格裁切後的欄位小圖／政見整欄本身就是一張圖／整頁
+// 掃描逐頁辨識），但這裡刻意用「排除法」而不是每種來源各自列舉——這三種都不是
+// PDF 文字層，可信度判斷方式一致（見 note 欄位），未來上游如果再新增第四種
+// 辨識來源，這裡不用跟著改，不然容易像實際發生過的那樣：新增來源時忘記同步
+// 更新這裡的允許清單，導致那批候選人的可用文字被誤判成不可用
 function info_candidate_text_ok($source) {
-    return in_array($source, ['text', 'cell-image-vision', 'manifesto-image-vision', 'page-image-vision'], true);
+    return $source && $source !== 'text-garbled';
 }
 
-// 候選人學歷/經歷/政見欄位的共用渲染：可用文字時顯示文字；來源是三種辨識方法
-// （cell-image-vision／manifesto-image-vision／page-image-vision，見上面
-// info_candidate_text_ok() 的說明）之一、且有對應的欄位圖片時，多顯示一個
-// 「查看原圖」切換鈕（跟 .ocr-toggle-btn 的click delegation配對，見本檔案下面
-// 的 <script>），方便使用者核對辨識文字跟原圖是否一致。$fallback_image_field
-// 只有「政見」會傳（政見圖路徑），沒有可用文字時退回顯示整欄政見圖片，或顯示
-// 「無資料」；學歷/經歷沒有這個fallback，沒有可用文字時整段（含標題）都不顯示
+// 候選人學歷/經歷/政見欄位的共用渲染：可用文字時顯示文字；有對應的欄位圖片時
+// （只有上面說的三種 AI 視覺辨識來源才會有，文字層本身的記錄這個欄位一定是空的，
+// 見 crawl.php 的說明)，多顯示一個「查看原圖」切換鈕（跟 .ocr-toggle-btn 的
+// click delegation配對，見本檔案下面的 <script>），方便使用者核對辨識文字跟
+// 原圖是否一致。$fallback_image_field 只有「政見」會傳（政見圖路徑），沒有可用
+// 文字時退回顯示整欄政見圖片，或顯示「無資料」；學歷/經歷沒有這個fallback，
+// 沒有可用文字時整段（含標題）都不顯示
 function info_candidate_field_html($tag, $label, $c, $field, $fallback_image_field = null) {
     $source = $c->{$field . '來源'} ?? null;
     $text = $c->{$field} ?? null;
     $ocr_image = $c->{'欄位圖片'}->{$field} ?? null;
-    $has_toggle = in_array($source, ['cell-image-vision', 'manifesto-image-vision', 'page-image-vision'], true) && $ocr_image;
+    $has_toggle = (bool) $ocr_image;
 
     if (info_candidate_text_ok($source) && $text) {
         $html = "<div class=\"ocr-field\"><{$tag} class=\"h6 fw-semibold mb-1\">" . htmlspecialchars($label);
