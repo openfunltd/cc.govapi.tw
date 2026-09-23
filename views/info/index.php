@@ -62,23 +62,27 @@ function info_election_status_badge($record) {
 }
 
 // 候選人學歷/經歷/政見是否為可用文字：text=公報文字層；cell-image-vision=AI 視覺
-// 模型辨識裁切後的欄位圖片得出的文字（不是文字層，但仍可當文字用）；text-garbled
-// （文字層是亂碼）跟缺值（圖片或空白）都不算可用
+// 模型辨識裁切後的欄位圖片得出的文字；manifesto-image-vision=政見整欄是一張圖時，
+// AI 視覺模型直接辨識整張圖得出的文字（政見欄最常見這種來源，尤其111年之後的
+// 公報）；page-image-vision=整頁都是掃描圖、逐頁辨識出來的文字。這三種都不是
+// 文字層本身，但都是可以顯示、可以核對原圖的可用文字；text-garbled（文字層是
+// 亂碼）跟缺值（圖片或空白）都不算可用
 function info_candidate_text_ok($source) {
-    return in_array($source, ['text', 'cell-image-vision'], true);
+    return in_array($source, ['text', 'cell-image-vision', 'manifesto-image-vision', 'page-image-vision'], true);
 }
 
-// 候選人學歷/經歷/政見欄位的共用渲染：可用文字時顯示文字；來源是 cell-image-vision
-// 且有對應的欄位裁切圖時，多顯示一個「查看原圖」切換鈕（跟 .ocr-toggle-btn 的
-// click delegation 配對，見本檔案下面的 <script>），方便使用者核對辨識文字跟
-// 原圖是否一致。$fallback_image_field 只有「政見」會傳（政見圖路徑），沒有可用
-// 文字時退回顯示整欄政見圖片，或顯示「無資料」；學歷/經歷沒有這個 fallback，
-// 沒有可用文字時整段（含標題）都不顯示
+// 候選人學歷/經歷/政見欄位的共用渲染：可用文字時顯示文字；來源是三種辨識方法
+// （cell-image-vision／manifesto-image-vision／page-image-vision，見上面
+// info_candidate_text_ok() 的說明）之一、且有對應的欄位圖片時，多顯示一個
+// 「查看原圖」切換鈕（跟 .ocr-toggle-btn 的click delegation配對，見本檔案下面
+// 的 <script>），方便使用者核對辨識文字跟原圖是否一致。$fallback_image_field
+// 只有「政見」會傳（政見圖路徑），沒有可用文字時退回顯示整欄政見圖片，或顯示
+// 「無資料」；學歷/經歷沒有這個fallback，沒有可用文字時整段（含標題）都不顯示
 function info_candidate_field_html($tag, $label, $c, $field, $fallback_image_field = null) {
     $source = $c->{$field . '來源'} ?? null;
     $text = $c->{$field} ?? null;
     $ocr_image = $c->{'欄位圖片'}->{$field} ?? null;
-    $has_toggle = ($source === 'cell-image-vision') && $ocr_image;
+    $has_toggle = in_array($source, ['cell-image-vision', 'manifesto-image-vision', 'page-image-vision'], true) && $ocr_image;
 
     if (info_candidate_text_ok($source) && $text) {
         $html = "<div class=\"ocr-field\"><{$tag} class=\"h6 fw-semibold mb-1\">" . htmlspecialchars($label);

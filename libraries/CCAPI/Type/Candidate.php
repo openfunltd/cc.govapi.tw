@@ -95,9 +95,9 @@ class CCAPI_Type_Candidate extends CCAPI_Type
             ],
             '政見來源' => [
                 'es_field' => '政見來源',
-                'description' => '「政見」欄位內容是否可用：text=可用；text-garbled=文字層抽出來是亂碼、不可當文字用；cell-image-vision=AI 視覺模型辨識裁切後的欄位圖片得出的文字（不是 PDF 文字層，仍可當文字用，但準確度可能略低，細節見 note）；沒有這個欄位代表政見是圖片或空白（見「政見圖路徑」）',
+                'description' => '「政見」欄位內容是否可用：text=可用；text-garbled=文字層抽出來是亂碼、不可當文字用；cell-image-vision=AI 視覺模型辨識裁切後的欄位圖片得出的文字；manifesto-image-vision=政見整欄是一張圖時，AI 視覺模型直接辨識整張圖得出的文字（政見欄最常見這種來源）；page-image-vision=整頁都是掃描圖、逐頁辨識出來的文字（以上三種辨識來源皆不是 PDF 文字層，仍可當文字用，但準確度可能略低，細節見 note）；沒有這個欄位代表政見是圖片或空白（見「政見圖路徑」）',
                 'type' => 'string',
-                'enum' => ['text', 'text-garbled', 'cell-image-vision'],
+                'enum' => ['text', 'text-garbled', 'cell-image-vision', 'manifesto-image-vision', 'page-image-vision'],
             ],
             '得票排名' => [
                 'es_field' => '得票排名',
