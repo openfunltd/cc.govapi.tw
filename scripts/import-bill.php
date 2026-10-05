@@ -65,7 +65,7 @@ $index_mapping = [
 $known_source_keys = [
     '代碼', '縣市', '類別', '案號', '提案單位', '提案人', '連署人',
     '案由', '說明', '辦法', '審查意見', '議決', '來源檔案', '來源頁碼', '來源網址', '備註',
-    '會議代碼', '提案人結構', '連署人結構',
+    '屆', '會議代碼', '提案人結構', '連署人結構',
 ];
 
 if ($reset) {
@@ -179,8 +179,11 @@ while (($line = fgets($fh)) !== false) {
     $cc_code_fixes = ['pin' => 'pif', 'kmt' => 'kin'];
     $cc_code = $cc_code_fixes[$cc_code] ?? $cc_code;
 
-    // 從「來源檔案」檔名解析屆次，解析不到就不寫入這個欄位
-    $term = extract_term_from_filename($record['來源檔案'] ?? '');
+    // 2026-10-05起優先使用來源直接提供的「屆」欄位（mixed-tw.gov-議會-議案的
+    // compute_bill_structured_extras() 解析「大會/會期」文字時就已經算出來，不用
+    // 再靠檔名猜）；來源沒有這個值（舊資料、或這份文件本身就沒有掛會期上下文）
+    // 才退而求其次從「來源檔案」檔名解析，解析不到就不寫入這個欄位
+    $term = ($record['屆'] ?? '') !== '' ? (int)$record['屆'] : extract_term_from_filename($record['來源檔案'] ?? '');
 
     $doc = ['議會代碼' => $cc_code];
     if ($term !== null) {
@@ -188,6 +191,7 @@ while (($line = fgets($fh)) !== false) {
     }
 
     foreach ($record as $key => $val) {
+        if ($key === '屆') continue; // 已經在上面處理過（優先用來源值，備援用檔名猜測），避免原始字串值蓋掉正確的整數值
         if ($val === '' || $val === null) continue;
         $doc[$key] = $val;
     }
