@@ -71,9 +71,9 @@ Swagger 文件。
 
 1. 複製 `config.sample.inc.php` 為 `config.inc.php`，填入 Elasticsearch 連線資訊
    （`ELASTIC_URL`／`ELASTIC_USER`／`ELASTIC_PASSWORD`／`ELASTIC_PREFIX`）。
-2. 準備各資源的來源檔案（`議會.csv`、`屆.csv` 已內附於本 repo；`議員.jsonl` 等其餘
-   來源檔案依 `config.inc.php` 裡 `IMPORT_*` 環境變數指到實際路徑，或放在專案根目錄
-   同名檔案）。
+2. 準備各資源的來源檔案：本 repo 只放程式碼，不內附資料檔案（`議會.csv`、`屆.csv`、
+   `議員.jsonl` 等），依 `config.inc.php` 裡對應的 `IMPORT_*` 環境變數指到實際路徑，
+   或放在專案根目錄同名檔案。資料集之後會另外同步到 HuggingFace 提供下載。
 3. 執行對應的 `scripts/import-*.php` 匯入 Elasticsearch（加 `--reset` 會先清空重建
    整個 index）：
 
@@ -89,5 +89,5 @@ Swagger 文件。
 ## 授權
 
 - **程式碼**：採 [BSD License](LICENSE)。
-- **資料**：`屆.csv`、`議會.csv` 等本 repo 內收錄的資料檔案，以及透過 API 提供的
-  內容，採「CC-BY 歐噴資料庫」授權。
+- **資料**：`議會.csv`、`屆.csv`、`議員.jsonl` 等來源資料檔案（之後透過 HuggingFace
+  提供下載），以及透過 API 提供的內容，採「CC-BY 歐噴資料庫」授權。
