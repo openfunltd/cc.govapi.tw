@@ -464,6 +464,54 @@ production ES驗證（總筆數152,293，含原有縣市）：
 `mixed-tw.gov-議會-議案/to-jsonl.php`順便補上欄位數異常時的防禦性略過（跟
 `import-meet-transcript.php`既有的做法一致），避免單一壞列讓整個轉換中斷。
 
+**延伸稽核第二輪：雲林縣議案一覽表（2026-10-07）**——使用者提供雲林縣議會
+官網一個議案清單頁連結（`cl.aspx?n=25458`），查證後發現這是一個獨立於
+既有「議事錄」之外的子分類來源（「議案一覽表」，依類別分成縣府提案/
+議員提案/三讀議案/臨時提案等各自獨立的PDF），只在第19~20屆才有，但內含
+乾淨的「提案人」欄位。下載連結本身會被來源網站擋下（`www.ylcc.gov.tw`
+的ASP.NET防護、`ws.yunlin.gov.tw`的Cloudflare防護都擋一般curl），改用
+`OFHelper_URL`既有的`browser_proxy`選項（`download:true`）繞過，新增
+`pure-tw.gov-雲林縣-議案`抓取，共108份PDF。
+
+**意外發現：雲林縣議事錄裡其實本來就有提案人欄位，但品質不可靠**——
+`mixed-tw.gov-議會-議案/lib.php`的`parse_yun_pdf_bills()`／
+`detect_yun_columns()`其實早就支援解析提案人欄位（議事錄本身內嵌了
+議案一覽表的表格），但`crawl.php`故意把這個值丟棄、寫死成空字串。
+全量稽核（1,704筆議事錄議案）發現284筆（16.7%）能解析出提案人，但抽樣
+發現其中議員多人聯署的案件常常把好幾個人的名字黏在一起、沒有分隔符號
+（例：`沈宗隆王鈺齊陳俊龍黃凱黃美瑤蔡明水`），沒辦法安全切開，證實當初
+捨棄這個欄位的判斷是對的。新的「議案一覽表」來源沒有這個問題（獨立單一
+提案一行一筆），因此第19~20屆改用新來源（涵蓋場次從議事錄裡排除避免
+重複），其餘屆別維持原樣（丟棄不信任的提案人）。
+
+production ES驗證（`議會代碼=yun`）：
+
+```
+修復前：1,704 筆，提案人 0(0%)
+修復後：2,147 筆，提案人 171(8.0%)，屆 2,147(100%，含import-bill.php的
+        檔名猜測後援機制)
+```
+
+**附帶優化：pdftotext結果加上快取**——稽核過程中發現全量重跑`crawl.php`
+耗時的主因：雲林/花蓮/屏東/桃園（`extract_bill_page_session_
+boundaries()`）跟連江/南投/宜蘭/澎湖（各自的PDF純文字解析）共8處呼叫
+`OFHelper_Converter::getTextFromPDF()`完全沒有快取，每次整批重跑都要
+對每份PDF重新呼叫一次`pdftotext`子行程（這個子行程的CPU time不會算在
+PHP父行程自己的`ps`統計裡，容易誤以為沒在跑）。新增`get_bill_pdf_text_
+cached()`（跟逐字稿block既有的`get_pdf_text_cached()`同一個做法，用
+mtime+size當key），來源PDF沒變動就跳過重新轉換。
+
+驗證過程中意外踩到兩個環境問題：(1) 部署新pure block後，production的
+`touch-depend-checked-at.php`（每小時排程）偵測到更新，自動觸發了
+`mixed-tw.gov-議會-議案`的crawl.php，跟手動測試的process同時寫同一個
+輸出檔案，資料因此被寫壞過一次（152,736筆被覆寫成117,915筆），排查後
+清掉衝突process、確認改動已`ofcli deploy`到production才重新跑乾淨的
+一輪；(2) 重新整理的那一輪裡，澎湖縣一份PDF的`pdftotext`子行程卡住
+（`OFHelper_Converter::getTextFromPDF()`沒有逾時保護，不像node-based
+table extractor那樣有逾時快取機制），手動kill掉子行程後crawl.php的
+try/catch正確接住例外、跳過這份檔案繼續完成，只損失這一份檔案的~100筆
+議案（可接受的個案損失，不影響整體修復結果）。
+
 ---
 
 ## 6. GitHub `屆.csv` 嘉義縣市代碼對調 —— ✅ 已修復
