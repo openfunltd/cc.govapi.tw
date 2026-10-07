@@ -51,6 +51,14 @@ $index_mapping = [
         '選舉區號' => ['type' => 'keyword'],
         '選區別'   => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         '當選狀態' => ['type' => 'keyword'],
+        // 卸任追蹤機制（PLAN-20261005-reporter.md B1項目）：open-forest-scripts
+        // 的 mixed-tw.gov-議會-議員資料/crawl.php 反查 CEC 當選名單跟官網「歷屆
+        // 議員」備註欄位得出，查無異動記錄的人這幾欄一律是空字串（因為上游
+        // 用空字串/預設「在任」表示沒有已知卸任記錄，不是故意不給值）
+        '現況'       => ['type' => 'keyword'],
+        '卸任日'     => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+        '卸任原因'   => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        '繼任人姓名' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         // 衍生欄位
         '屆次'     => ['type' => 'integer'],
     ],

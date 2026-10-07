@@ -24,6 +24,7 @@ $latest = $records[0];
       <span class="badge bg-warning text-dark"><?= htmlspecialchars($latest->{'職稱'}) ?></span>
       <?php endif; ?>
       <?= info_election_status_badge($latest) ?>
+      <?= info_departure_status_badge($latest) ?>
       ・<?= htmlspecialchars($latest->{'黨籍'} ?? '—') ?>
       ・<?= htmlspecialchars(info_district_label($latest) ?: '—') ?>
     </p>
@@ -69,6 +70,7 @@ $latest = $records[0];
         <th>職稱</th>
         <th>選區／區域</th>
         <th>當選狀態</th>
+        <th>異動</th>
         <th>得票數</th>
         <th>得票率</th>
       </tr>
@@ -85,6 +87,7 @@ $latest = $records[0];
         <td><?= htmlspecialchars($r->{'職稱'} ?? '') ?></td>
         <td><?= htmlspecialchars(info_district_label($r) ?: '—') ?></td>
         <td><?= info_election_status_badge($r) ?: '—' ?></td>
+        <td><?= info_departure_status_badge($r) ?: '—' ?></td>
         <td><?= ($r->{'得票數'} ?? null) !== null ? number_format($r->{'得票數'}) : '—' ?></td>
         <td><?= ($r->{'得票率'} ?? null) !== null ? htmlspecialchars($r->{'得票率'}) . '%' : '—' ?></td>
       </tr>

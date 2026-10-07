@@ -117,6 +117,27 @@ class CCAPI_Type_Councilor extends CCAPI_Type
                 'description' => '同一人跨屆連任時共用的代碼，可用來查詢某人所有屆期的記錄',
                 'type' => 'string',
             ],
+            '現況' => [
+                'es_field' => '現況',
+                'description' => '任職現況，查無異動記錄的人預設為在任（較舊的資料可能沒有這個欄位）',
+                'type' => 'string',
+                'enum' => ['在任', '已卸任', '狀態不明'],
+            ],
+            '卸任日' => [
+                'es_field' => '卸任日',
+                'description' => '卸任日期（ISO格式，查無資料時為空字串）',
+                'type' => 'string',
+            ],
+            '卸任原因' => [
+                'es_field' => '卸任原因',
+                'description' => '卸任原因（例: 轉任立法委員、當選無效、死亡；查無資料時為空字串）',
+                'type' => 'string',
+            ],
+            '繼任人姓名' => [
+                'es_field' => '繼任人姓名',
+                'description' => '遞補/補選繼任人姓名，查無資料時為空字串',
+                'type' => 'string',
+            ],
         ];
     }
 

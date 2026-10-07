@@ -20,6 +20,7 @@
           <span class="badge bg-warning text-dark"><?= htmlspecialchars($c->{'職稱'}) ?></span>
           <?php endif; ?>
           <?= info_election_status_badge($c) ?>
+          <?= info_departure_status_badge($c) ?>
         </div>
         <div class="text-body-secondary" style="font-size: 0.75rem;">
           <?= htmlspecialchars($c->{'黨籍'} ?? '—') ?><br>

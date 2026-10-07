@@ -61,6 +61,33 @@ function info_election_status_badge($record) {
     return '<span class="badge bg-info text-dark">' . htmlspecialchars($status) . '</span>';
 }
 
+// 卸任狀態提示（PLAN-20261005-reporter.md B1項目）：「現況」查無異動記錄時
+// 上游一律回傳「在任」或空字串（較舊資料沒有這個欄位），兩種都不顯示badge；
+// 「狀態不明」是CEC當選名單反查出「MOI/歷屆議員都查無此人」但還沒人工核實
+// 原因的候選名單，跟已確認的「已卸任」用不同顏色區分，避免使用者誤以為
+// 兩者信心度一樣
+function info_departure_status_badge($record) {
+    $status = $record->{'現況'} ?? '在任';
+    if ($status === '' || $status === '在任') {
+        return '';
+    }
+    $tooltip_parts = array_filter([
+        $record->{'卸任日'} ?? '',
+        $record->{'卸任原因'} ?? '',
+        ($record->{'繼任人姓名'} ?? '') !== '' ? ('繼任：' . $record->{'繼任人姓名'}) : '',
+    ]);
+    $tooltip = implode('，', $tooltip_parts);
+    // 用bg-danger(已卸任)/bg-secondary(狀態不明)，刻意跟職稱badge的bg-warning
+    // 區隔開（議長/副議長卸任時兩個badge會同時顯示，顏色相同會分不清楚）
+    $class = $status === '狀態不明' ? 'bg-secondary' : 'bg-danger';
+    $html = '<span class="badge ' . $class . '"';
+    if ($tooltip !== '') {
+        $html .= ' title="' . htmlspecialchars($tooltip) . '"';
+    }
+    $html .= '>' . htmlspecialchars($status) . '</span>';
+    return $html;
+}
+
 // 候選人學歷/經歷/政見是否為可用文字：text=公報文字層；text-garbled=文字層是
 // 亂碼、缺值=圖片或空白，這兩種不算可用，其餘一律當可用文字。「其餘」目前包含
 // cell-image-vision／manifesto-image-vision／page-image-vision 三種 AI 視覺

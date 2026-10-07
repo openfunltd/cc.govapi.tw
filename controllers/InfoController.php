@@ -970,9 +970,14 @@ class InfoController extends MiniEngine_Controller
      * 幫「同選區得票比較」表格補上性別、黨籍（來源在候選人的「其他欄位」裡，攤平成
      * 頂層屬性方便 view 直接讀）。「當選」欄位已經是 candidate 資料本身的欄位
      * （來自中選會 cand.csv 的當選註記），不需要另外查 councilor 是否有這筆
-     * 記錄來判斷——查 councilor 存不存在會被議員中途離職資料消失誤判成沒當選
-     * （實測案例：李彥秀 111 年台北市議員選舉最高票當選，但因任內離職，councilor
-     * 資料完全沒有這筆記錄，見 import-candidate.php 的說明）。
+     * 記錄來判斷，維持用candidate自己的欄位當判斷依據比較單純，不用多查一次API。
+     * （舊版這裡原本還提到一個理由：查councilor存不存在會被議員中途離職資料消失
+     * 誤判成沒當選，實測案例是李彥秀111年台北市議員選舉最高票當選、任內離職，
+     * 當時councilor資料完全沒有這筆記錄——這個根本問題已經在2026-10-07修好了
+     * （見PLAN-20261005-reporter.md B1項目：mixed-tw.gov-議會-議員資料/crawl.php
+     * 新增了反查CEC當選名單的fallback，現在查得到這筆記錄、而且現況會正確
+     * 顯示「已卸任」），但這裡還是維持原本的寫法，單純因為沒有理由為了省略
+     * 一個已經不是bug的workaround而多繞一次API）。
      */
     protected function enrichRaceCandidates($race_candidates)
     {
