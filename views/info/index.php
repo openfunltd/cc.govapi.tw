@@ -122,6 +122,7 @@ function info_departure_detail_panels($record) {
             'class' => 'alert-info',
             'title' => htmlspecialchars($election_status),
             'items' => $items,
+            'source_url' => $record->{'原任者卸任來源網址'} ?? '',
             'empty_message' => '這一屆是遞補或補選當選，但目前查無原任者的詳細資訊。',
         ];
     }
@@ -137,6 +138,7 @@ function info_departure_detail_panels($record) {
             'class' => $status === '狀態不明' ? 'alert-secondary' : 'alert-danger',
             'title' => htmlspecialchars($status),
             'items' => $items,
+            'source_url' => $record->{'卸任來源網址'} ?? '',
             'empty_message' => $status === '狀態不明'
                 ? '這一屆經比對當選名單後查無在任紀錄，研判中途卸任，但卸任原因與時間尚待人工查證。'
                 : '已確認卸任，但目前查無卸任日期/原因等詳細資訊。',
@@ -159,6 +161,9 @@ function info_departure_detail_panels($record) {
             $html .= '</ul>';
         } else {
             $html .= '<div>' . htmlspecialchars($panel['empty_message']) . '</div>';
+        }
+        if ($panel['source_url'] !== '') {
+            $html .= '<div class="mt-1"><a href="' . htmlspecialchars($panel['source_url']) . '" target="_blank" rel="noopener">查看中選會公告原文 ↗</a></div>';
         }
         $html .= '</div>';
     }

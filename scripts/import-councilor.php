@@ -75,11 +75,21 @@ $index_mapping = [
         '卸任日'     => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
         '卸任原因'   => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         '繼任人姓名' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        // 中選會罷免補選公告原文連結，個人頁/列表頁的卸任/遞補資訊區塊附上這個
+        // 連結增加公信力，不是只有信心度/查證方式這種內部文字說明
+        '卸任來源網址'   => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         // 反過來：當選狀態是遞補/補選當選時，被我取代的原任者是誰/何時卸任/
         // 為什麼卸任，給councilors列表頁的「遞補/補選當選」badge加hover提示用
         '原任者姓名'     => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         '原任者卸任日'   => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
         '原任者卸任原因' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        '原任者卸任來源網址' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        // 以下兩個欄位（補充來源/歷屆議員record才有）過去一直透過ES動態mapping
+        // 隱性生效，沒有正式宣告——第一筆record（通常來自MOI主來源）沒有這兩個
+        // 欄位，匯入腳本的「第一筆檢查未知欄位」機制因此沒抓到，見CLAUDE.md
+        // 已知的「只檢查第一筆」陷阱。這裡順手補上正式宣告，不是新增欄位
+        '來源網址' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        '來源備註' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         // 衍生欄位
         '屆次'     => ['type' => 'integer'],
     ],
