@@ -26,27 +26,46 @@ class InfoController extends MiniEngine_Controller
         }
 
         // 議員個人頁：用「人物代碼」串連同一人跨屆的所有記錄，不屬於屆次路由
-        // /info/councilor/{人物代碼}（基本資料，預設）或 /info/councilor/{人物代碼}/speeches
-        // （發言記錄）或 /info/councilor/{人物代碼}/bills（提案記錄）或
+        // /info/councilor/{人物代碼}（基本資料，預設最新一屆）或
+        // /info/councilor/{人物代碼}/{屆次}（基本資料，指定屆次，例：/14）或
+        // /info/councilor/{人物代碼}/speeches（發言記錄）或
+        // /info/councilor/{人物代碼}/bills（提案記錄）或
         // /info/councilor/{人物代碼}/elections（選舉紀錄）
         if ($term_no === 'councilor') {
             $person_code = $tab;
-            $profile_tab = in_array($sub_id, ['speeches', 'bills', 'elections'], true) ? $sub_id : 'profile';
+            // sub_id是純數字時當作「切換屆次」用，不是分頁名稱（見使用者回饋：
+            // 某屆是遞補/卸任，但那屆剛好不是這個人最新一屆，個人頁預設只顯示
+            // 最新一屆資訊，完全看不到那次遞補的詳細資訊）
+            $selected_term_no = ctype_digit((string) $sub_id) ? (int) $sub_id : null;
+            $profile_tab = ($selected_term_no === null && in_array($sub_id, ['speeches', 'bills', 'elections'], true)) ? $sub_id : 'profile';
             $this->view->is_councilor_profile = true;
             $this->view->profile_tab = $profile_tab;
 
             $records = $this->loadCouncilorProfile($person_code);
             $this->view->councilor_records = $records;
-            if ($records) {
-                $latest = $records[0];
-                $council_name = CouncilHelper::getName($latest->{'議會代碼'} ?? '') ?: ($latest->{'議會代碼'} ?? '');
-                $district = $latest->{'選區別'} ?? '';
+
+            // $records 已依選舉日期新到舊排序；URL帶屆次就找該屆，查無該屆
+            // （屆次打錯或查無資料）就退回預設的最新一屆，不是整頁噴錯
+            $selected = $records[0] ?? null;
+            if ($selected_term_no !== null) {
+                foreach ($records as $r) {
+                    if ((int) ($r->{'屆次'} ?? -1) === $selected_term_no) {
+                        $selected = $r;
+                        break;
+                    }
+                }
+            }
+            $this->view->councilor_selected = $selected;
+
+            if ($selected) {
+                $council_name = CouncilHelper::getName($selected->{'議會代碼'} ?? '') ?: ($selected->{'議會代碼'} ?? '');
+                $district = $selected->{'選區別'} ?? '';
                 if ($district === '' || $district === '區域') {
-                    $district = $latest->{'區域'} ?? '';
+                    $district = $selected->{'區域'} ?? '';
                 }
                 $this->setOg(
-                    ($latest->{'姓名'} ?? '') . ' — ' . $council_name . '第' . ($latest->{'屆次'} ?? '') . '屆議員',
-                    trim(($latest->{'黨籍'} ?? '') . '・' . $district . '，共任職 ' . count($records) . ' 屆', '・')
+                    ($selected->{'姓名'} ?? '') . ' — ' . $council_name . '第' . ($selected->{'屆次'} ?? '') . '屆議員',
+                    trim(($selected->{'黨籍'} ?? '') . '・' . $district . '，共任職 ' . count($records) . ' 屆', '・')
                 );
             }
 
