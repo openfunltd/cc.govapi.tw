@@ -18,6 +18,17 @@
 
 include(__DIR__ . '/../init.inc.php');
 
+// 跟import-candidate.php的bulletin_image_url()是同一套轉換規則（見該檔案
+// 的說明），這裡複製一份而不是抽成共用函式庫，維持跟專案現有慣例一致
+// （每支import腳本自己獨立可執行，不互相include）
+function bulletin_image_url($path)
+{
+    if (!$path) return null;
+    $path = preg_replace('#^files/#', '', $path);
+    $encoded = implode('/', array_map('rawurlencode', explode('/', $path)));
+    return 'https://lydata.ronny-s3.click/bulletin/' . $encoded;
+}
+
 $reset = in_array('--reset', $argv ?? []);
 
 $index_mapping = [
@@ -51,6 +62,11 @@ $index_mapping = [
         '選舉區號' => ['type' => 'keyword'],
         '選區別'   => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         '當選狀態' => ['type' => 'keyword'],
+        // 2026-10-08新增：「歷屆議員」補充來源/卸任fallback原本schema很精簡
+        // 查不到這個欄位，現在open-forest-scripts那邊補上候選人代碼反查CEC
+        // 選舉資料庫/選舉公報後，這幾筆record也會帶這個欄位（舊的MOI主來源
+        // record本來就沒有這欄，繼續維持沒有不影響既有資料）
+        '得票數'   => ['type' => 'integer'],
         // 卸任追蹤機制（PLAN-20261005-reporter.md B1項目）：open-forest-scripts
         // 的 mixed-tw.gov-議會-議員資料/crawl.php 反查 CEC 當選名單跟官網「歷屆
         // 議員」備註欄位得出，查無異動記錄的人這幾欄一律是空字串（因為上游
@@ -59,6 +75,11 @@ $index_mapping = [
         '卸任日'     => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
         '卸任原因'   => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         '繼任人姓名' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        // 反過來：當選狀態是遞補/補選當選時，被我取代的原任者是誰/何時卸任/
+        // 為什麼卸任，給councilors列表頁的「遞補/補選當選」badge加hover提示用
+        '原任者姓名'     => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        '原任者卸任日'   => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+        '原任者卸任原因' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         // 衍生欄位
         '屆次'     => ['type' => 'integer'],
     ],
@@ -165,6 +186,12 @@ while (($line = fgets($fh)) !== false) {
                 $doc[$key] = $val;
             }
             continue;
+        }
+        if ($key === '照片' && strpos($val, 'files/') === 0) {
+            // 來源是選舉公報的相片（block本機相對路徑，例：files/image/...），
+            // 跟MOI來源直接給完整https網址不同格式，轉成跟候選人照片同一套
+            // 公開網址（import-candidate.php的bulletin_image_url()）
+            $val = bulletin_image_url($val);
         }
         $doc[$key] = $val;
     }

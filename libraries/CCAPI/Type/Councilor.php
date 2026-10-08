@@ -138,6 +138,21 @@ class CCAPI_Type_Councilor extends CCAPI_Type
                 'description' => '遞補/補選繼任人姓名，查無資料時為空字串',
                 'type' => 'string',
             ],
+            '原任者姓名' => [
+                'es_field' => '原任者姓名',
+                'description' => '當選狀態為遞補/補選當選時，被取代的原任者姓名，查無資料時為空字串',
+                'type' => 'string',
+            ],
+            '原任者卸任日' => [
+                'es_field' => '原任者卸任日',
+                'description' => '原任者卸任日期（ISO格式，查無資料時為空字串）',
+                'type' => 'string',
+            ],
+            '原任者卸任原因' => [
+                'es_field' => '原任者卸任原因',
+                'description' => '原任者卸任原因，查無資料時為空字串',
+                'type' => 'string',
+            ],
         ];
     }
 

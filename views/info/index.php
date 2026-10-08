@@ -52,13 +52,27 @@ function info_district_label($record) {
     return $district;
 }
 
-// 非直接當選（遞補、補選當選）時顯示提示 badge，一般當選或資料缺漏（較舊資料）不顯示
+// 非直接當選（遞補、補選當選）時顯示提示 badge，一般當選或資料缺漏（較舊資料）不顯示；
+// 「原任者姓名」等3個欄位查得到時（見mixed-tw.gov-議會-議員資料/crawl.php的
+// apply_succession_info()）加上hover提示告訴使用者「取代了誰/何時/為什麼」，
+// 查不到（通常是較舊、議員異動還沒人工核實到的紀錄）就只顯示badge文字不加提示
 function info_election_status_badge($record) {
     $status = $record->{'當選狀態'} ?? '';
     if ($status === '' || $status === '當選') {
         return '';
     }
-    return '<span class="badge bg-info text-dark">' . htmlspecialchars($status) . '</span>';
+    $tooltip_parts = array_filter([
+        $record->{'原任者卸任日'} ?? '',
+        ($record->{'原任者姓名'} ?? '') !== '' ? ('原任者：' . $record->{'原任者姓名'}) : '',
+        $record->{'原任者卸任原因'} ?? '',
+    ]);
+    $tooltip = implode('，', $tooltip_parts);
+    $html = '<span class="badge bg-info text-dark"';
+    if ($tooltip !== '') {
+        $html .= ' title="' . htmlspecialchars($tooltip) . '"';
+    }
+    $html .= '>' . htmlspecialchars($status) . '</span>';
+    return $html;
 }
 
 // 卸任狀態提示（PLAN-20261005-reporter.md B1項目）：「現況」查無異動記錄時
