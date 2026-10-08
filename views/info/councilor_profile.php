@@ -30,6 +30,8 @@ $latest = $records[0];
     </p>
     <p class="small text-body-secondary mb-3">共任職 <?= count($records) ?> 屆</p>
 
+    <?= info_departure_detail_panels($latest) ?>
+
     <?php if ($latest->{'簡歷'} ?? null): ?>
     <h2 class="h6 fw-semibold">簡歷</h2>
     <p class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($latest->{'簡歷'}) ?></p>

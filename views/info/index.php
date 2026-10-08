@@ -102,6 +102,69 @@ function info_departure_status_badge($record) {
     return $html;
 }
 
+// 遞補/補選當選、已卸任/狀態不明的詳細資訊區塊（PLAN-20261005-reporter.md
+// B1項目）：上面兩個badge的詳細資訊原本只能靠mouse hover title屬性看到，
+// 使用者回饋這樣太不明顯，要求在個人頁簡歷上方直接條列顯示，不需要hover
+// 才看得到——這個function回傳的區塊就是給councilor_profile.php放在簡歷
+// 之前用的，跟上面兩個badge函式顯示同一份資料，只是呈現方式不同（badge
+// 給歷屆紀錄表格裡一行放不下完整文字的地方用，這個區塊給單一議員頁用）
+function info_departure_detail_panels($record) {
+    $panels = [];
+
+    $election_status = $record->{'當選狀態'} ?? '';
+    if (in_array($election_status, ['遞補', '補選當選'], true)) {
+        $items = array_filter([
+            '原任者' => $record->{'原任者姓名'} ?? '',
+            '原任者卸任日期' => $record->{'原任者卸任日'} ?? '',
+            '原任者卸任原因' => $record->{'原任者卸任原因'} ?? '',
+        ], fn($v) => $v !== '');
+        $panels[] = [
+            'class' => 'alert-info',
+            'title' => htmlspecialchars($election_status),
+            'items' => $items,
+            'empty_message' => '這一屆是遞補或補選當選，但目前查無原任者的詳細資訊。',
+        ];
+    }
+
+    $status = $record->{'現況'} ?? '在任';
+    if (in_array($status, ['已卸任', '狀態不明'], true)) {
+        $items = array_filter([
+            '卸任日期' => $record->{'卸任日'} ?? '',
+            '卸任原因' => $record->{'卸任原因'} ?? '',
+            '繼任人' => $record->{'繼任人姓名'} ?? '',
+        ], fn($v) => $v !== '');
+        $panels[] = [
+            'class' => $status === '狀態不明' ? 'alert-secondary' : 'alert-danger',
+            'title' => htmlspecialchars($status),
+            'items' => $items,
+            'empty_message' => $status === '狀態不明'
+                ? '這一屆經比對當選名單後查無在任紀錄，研判中途卸任，但卸任原因與時間尚待人工查證。'
+                : '已確認卸任，但目前查無卸任日期/原因等詳細資訊。',
+        ];
+    }
+
+    if (!$panels) {
+        return '';
+    }
+
+    $html = '';
+    foreach ($panels as $panel) {
+        $html .= '<div class="alert ' . $panel['class'] . ' small mb-3">';
+        $html .= '<div class="fw-semibold mb-1">' . $panel['title'] . '</div>';
+        if ($panel['items']) {
+            $html .= '<ul class="mb-0 ps-3">';
+            foreach ($panel['items'] as $label => $value) {
+                $html .= '<li>' . htmlspecialchars($label) . '：' . htmlspecialchars($value) . '</li>';
+            }
+            $html .= '</ul>';
+        } else {
+            $html .= '<div>' . htmlspecialchars($panel['empty_message']) . '</div>';
+        }
+        $html .= '</div>';
+    }
+    return $html;
+}
+
 // 候選人學歷/經歷/政見是否為可用文字：text=公報文字層；text-garbled=文字層是
 // 亂碼、缺值=圖片或空白，這兩種不算可用，其餘一律當可用文字。「其餘」目前包含
 // cell-image-vision／manifesto-image-vision／page-image-vision 三種 AI 視覺
