@@ -27,6 +27,12 @@
           <?= htmlspecialchars(info_district_label($c) ?: '—') ?>
           <?php if ($c->{'得票率'} ?? null): ?>
           <br><span class="text-primary">得票：<?= htmlspecialchars($c->{'得票率'}) ?>%</span>
+          <?php elseif ($c->{'得票數'} ?? null): ?>
+          <!-- 得票率需要同選區候選人完整得票數才能算出百分比，目前只有111年這次
+               選舉有這份資料（見InfoController::attachVoteShare()的說明），較舊
+               屆次沒有百分比可算，退而求其次顯示議員record自己帶的得票數（來源
+               回溯年份廣得多），總比完全不顯示任何得票資訊好 -->
+          <br><span class="text-primary">得票：<?= number_format($c->{'得票數'}) ?> 票</span>
           <?php endif; ?>
         </div>
       </div>

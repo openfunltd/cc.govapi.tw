@@ -261,9 +261,21 @@ class InfoController extends MiniEngine_Controller
         foreach ($councilors as $c) {
             $cand = $by_code[$c->{'參選代碼'} ?? ''] ?? null;
             if ($cand) {
-                $c->{'得票數'} = $cand->{'得票數'} ?? null;
-                $c->{'得票率'} = $cand->{'得票率'} ?? null;
-                $c->{'得票排名'} = $cand->{'得票排名'} ?? null;
+                // candidate的得票數/得票率/得票排名只在111年這次選舉才有資料（來源
+                // 得票數.jsonl目前只回溯到111年，見PLAN.md這次調查記錄），較舊屆次
+                // 這三個欄位在candidate record上會是null——這裡不能無條件覆蓋，
+                // 否則議員record自己原本就有的得票數（來自vote.csv，回溯年份廣得多，
+                // 見mixed-tw.gov-議會-議員資料/crawl.php的enrich_councilor_from_cec()）
+                // 會被這個null蓋掉，列表頁反而從「有筆數、沒有率」退化成「完全沒有」
+                if (isset($cand->{'得票數'})) {
+                    $c->{'得票數'} = $cand->{'得票數'};
+                }
+                if (isset($cand->{'得票率'})) {
+                    $c->{'得票率'} = $cand->{'得票率'};
+                }
+                if (isset($cand->{'得票排名'})) {
+                    $c->{'得票排名'} = $cand->{'得票排名'};
+                }
             }
         }
     }
