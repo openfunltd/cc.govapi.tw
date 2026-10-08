@@ -779,6 +779,8 @@ class InfoController extends MiniEngine_Controller
         $this->view->speech_term = null;
         $this->view->speech_total = 0;
         $this->view->speech_groups = [];
+        $this->view->speech_no_coverage = false;
+        $this->view->speech_no_coverage_note = null;
 
         if (!$records) {
             return;
@@ -842,6 +844,31 @@ class InfoController extends MiniEngine_Controller
         }
 
         $this->view->speech_groups = array_values($groups);
+
+        // 查無發言記錄時，要分清楚「這個議會的逐字稿整個都還沒收錄」（PM回饋案例：
+        // 基隆/宜蘭/苗栗/彰化/嘉義縣/嘉義市/澎湖目前完全沒有逐字稿block，使用者
+        // 看到「這屆沒有找到發言記錄」會誤以為是這位議員真的四年都沒發言）跟
+        // 「這個議會有收錄逐字稿、但剛好這位議員/這屆查無資料」兩種情況，用
+        // /completeness/{議會代碼} 的 transcript.status 判斷，只在查無記錄時才
+        // 多查一次，不影響有資料的正常情況
+        if (empty($groups)) {
+            $council_code = $record->{'議會代碼'} ?? '';
+            if ($council_code !== '') {
+                try {
+                    $comp = CCAPI::apiQuery(
+                        '/completeness/' . rawurlencode($council_code),
+                        '議會逐字稿收錄狀態（判斷查無發言記錄的真正原因）'
+                    );
+                    $transcript = $comp->data->types->transcript ?? null;
+                    if ($transcript && ($transcript->total ?? 0) === 0) {
+                        $this->view->speech_no_coverage = true;
+                        $this->view->speech_no_coverage_note = $transcript->upstream_note ?? null;
+                    }
+                } catch (Exception $e) {
+                    // 查完整度失敗不影響主要功能，維持原本「查無發言記錄」的訊息即可
+                }
+            }
+        }
     }
 
     /**

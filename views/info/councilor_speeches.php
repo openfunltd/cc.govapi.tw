@@ -39,7 +39,16 @@ $groups = $this->speech_groups ?? [];
 </p>
 
 <?php if (empty($groups)): ?>
+<?php if ($this->speech_no_coverage ?? false): ?>
+<div class="alert alert-warning border">
+  本議會的逐字稿尚未收錄，不代表議員沒有發言。
+  <?php if ($this->speech_no_coverage_note ?? null): ?>
+  <div class="small mt-1"><?= htmlspecialchars($this->speech_no_coverage_note) ?></div>
+  <?php endif; ?>
+</div>
+<?php else: ?>
 <div class="alert alert-light border">這屆沒有找到發言記錄</div>
+<?php endif; ?>
 <?php else: ?>
 <?php foreach ($groups as $group): ?>
 <div class="card shadow-sm mb-3">
