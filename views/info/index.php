@@ -163,7 +163,7 @@ function info_departure_detail_panels($record) {
             $html .= '<div>' . htmlspecialchars($panel['empty_message']) . '</div>';
         }
         if ($panel['source_url'] !== '') {
-            $html .= '<div class="mt-1"><a href="' . htmlspecialchars($panel['source_url']) . '" target="_blank" rel="noopener">查看中選會公告原文 ↗</a></div>';
+            $html .= '<div class="mt-1"><a href="' . htmlspecialchars($panel['source_url']) . '" target="_blank" rel="noopener">查看原始來源 ↗</a></div>';
         }
         $html .= '</div>';
     }
