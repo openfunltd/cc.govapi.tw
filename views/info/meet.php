@@ -19,7 +19,13 @@ function meet_speech_speaker_html($s) {
         if ($person_code) {
             return '<a href="/info/councilor/' . urlencode($person_code) . '">' . $name . '</a>' . $title;
         }
+    } elseif ($name !== '' && ($s->{'對應單位全名'} ?? null)) {
+        // 原始標記本來就有姓氏（如「劉教育局長答」），不能只顯示機關全名
+        // 把姓氏整個丟掉——姓氏+職稱當主要顯示，機關全名當補充資訊
+        return $name . $title . '・' . htmlspecialchars($s->{'對應單位全名'});
     } elseif ($s->{'對應單位全名'} ?? null) {
+        // 少數情形解析不出姓氏（$name為空，見transcript_name_looks_
+        // garbled()判定），退回原本只顯示機關全名的做法
         return htmlspecialchars($s->{'對應單位全名'}) . $title;
     }
     return $name . $title;
