@@ -187,11 +187,15 @@ function meet_speech_avatar_html($s) {
         // 「來源頁碼」可能是「1112-1113」這種範圍格式，#page= 只能吃單一整數，取第一個
         // 數字；「印刷頁碼」是印在頁面上、人看的頁碼，顯示時優先用印刷頁碼，比照
         // agenda.php 的做法
+        // 同一場meet常常是好幾份實體檔案接起來（臺北市），每則發言的「來源頁碼」
+        // 是各自檔案內部重新起算的頁碼——優先用這則發言自己的來源網址，沒有值
+        // （絕大多數縣市一個meet只有一份檔案）才退回meet層級的共用網址
         $source_link = '';
-        if (($meet->{'來源網址'} ?? null) && ($s->{'來源頁碼'} ?? null)) {
+        $speech_source_url = ($s->{'來源網址'} ?? null) ?: ($meet->{'來源網址'} ?? null);
+        if ($speech_source_url && ($s->{'來源頁碼'} ?? null)) {
             $nav_page = preg_replace('/[^0-9].*$/', '', (string)$s->{'來源頁碼'});
             $display_page = $s->{'印刷頁碼'} ?? $s->{'來源頁碼'};
-            $source_link = ' <a class="small" href="' . htmlspecialchars($meet->{'來源網址'} . '#page=' . urlencode($nav_page)) . '" target="_blank" rel="noopener">（第' . htmlspecialchars($display_page) . '頁）</a>';
+            $source_link = ' <a class="small" href="' . htmlspecialchars($speech_source_url . '#page=' . urlencode($nav_page)) . '" target="_blank" rel="noopener">（第' . htmlspecialchars($display_page) . '頁）</a>';
         }
         // 「代碼」是這則發言在 meet_transcript index 的 doc id（來源已保證唯一），
         // 拿來當本頁錨點，方便分享時直接連到 ?page=N#speech-{代碼} 跳到這一句
