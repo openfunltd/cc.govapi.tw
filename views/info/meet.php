@@ -60,9 +60,18 @@ function meet_speech_avatar_html($s) {
 </p>
 <?php endif; ?>
 <?php if ($meet->{'來源網址'} ?? null): ?>
+<?php
+  // 有些縣市（如臺北市）同一場會議的速記錄會拆成好幾個實體檔案，
+  // 「來源檔案」欄位因此是用分號接起來的多個檔名；但「來源網址」
+  // 只會連到第一個檔案，兩者不一致的話，連結文字只顯示第一個檔名，
+  // 另外註記總共幾份，不要把全部檔名原封不動接在同一個連結上
+  $source_files = array_filter(array_map('trim', explode(';', $meet->{'來源檔案'} ?? '')));
+  $source_file_label = $source_files[0] ?? ($meet->{'來源檔案'} ?? '原始檔案');
+  $source_file_count = count($source_files);
+?>
 <p class="text-body-secondary small mb-3">
   原始檔案：
-  <a href="<?= htmlspecialchars($meet->{'來源網址'}) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($meet->{'來源檔案'} ?? '原始檔案') ?> →</a>
+  <a href="<?= htmlspecialchars($meet->{'來源網址'}) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($source_file_label) ?> →</a><?= $source_file_count > 1 ? '（共' . $source_file_count . '份檔案）' : '' ?>
 </p>
 <?php endif; ?>
 
