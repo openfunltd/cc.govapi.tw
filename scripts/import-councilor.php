@@ -72,7 +72,9 @@ $index_mapping = [
         // 議員」備註欄位得出，查無異動記錄的人這幾欄一律是空字串（因為上游
         // 用空字串/預設「在任」表示沒有已知卸任記錄，不是故意不給值）
         '現況'       => ['type' => 'keyword'],
-        '卸任日'     => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+        // 格式同時允許只到月份（如林朝寶案例：只查到二審改判日是2012年3月，
+        // 確切日期無法查證，寧可標月份也不要亂猜一個不確定的日）
+        '卸任日'     => ['type' => 'date', 'format' => 'yyyy-MM-dd||yyyy-MM'],
         '卸任原因'   => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         '繼任人姓名' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         // 中選會罷免補選公告原文連結，個人頁/列表頁的卸任/遞補資訊區塊附上這個
@@ -81,7 +83,7 @@ $index_mapping = [
         // 反過來：當選狀態是遞補/補選當選時，被我取代的原任者是誰/何時卸任/
         // 為什麼卸任，給councilors列表頁的「遞補/補選當選」badge加hover提示用
         '原任者姓名'     => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
-        '原任者卸任日'   => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+        '原任者卸任日'   => ['type' => 'date', 'format' => 'yyyy-MM-dd||yyyy-MM'],
         '原任者卸任原因' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         '原任者卸任來源網址' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
         // 以下兩個欄位（補充來源/歷屆議員record才有）過去一直透過ES動態mapping
