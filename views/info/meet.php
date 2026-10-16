@@ -76,8 +76,14 @@ function meet_speech_avatar_html($s) {
   $source_file_count = count($source_files);
 ?>
 <p class="text-body-secondary small mb-3">
+  <?php if ($source_file_count): ?>
   原始檔案：
   <a href="<?= htmlspecialchars($meet->{'來源網址'}) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($source_file_label) ?> →</a><?= $source_file_count > 1 ? '（共' . $source_file_count . '份檔案）' : '' ?>
+  <?php else: ?>
+  <?php // 沒有檔名的來源（例：立法院議事暨公報資訊網的會議頁）顯示網站網域 ?>
+  資料來源：
+  <a href="<?= htmlspecialchars($meet->{'來源網址'}) ?>" target="_blank" rel="noopener"><?= htmlspecialchars(parse_url($meet->{'來源網址'}, PHP_URL_HOST) ?: '連結') ?> →</a>
+  <?php endif; ?>
 </p>
 <?php endif; ?>
 
@@ -135,6 +141,46 @@ function meet_speech_avatar_html($s) {
         <?php endif; ?>
       </tbody>
     </table>
+    <?php $siblings = $this->meet_siblings ?? []; ?>
+    <?php if (count($siblings) > 1): ?>
+    <p class="small mb-3">
+      <span class="text-body-secondary">這次會議共 <?= count($siblings) ?> 天：</span>
+      <?php foreach ($siblings as $i => $sib): ?><?= $i ? '、' : '' ?><?php if (($sib->{'代碼'} ?? '') === ($meet->{'代碼'} ?? '')): ?><strong><?= htmlspecialchars($sib->{'日期'} ?? '') ?></strong><?php else: ?><a href="/info/<?= $this->term_no ?>/meet/<?= urlencode($sib->{'代碼'} ?? '') ?>"><?= htmlspecialchars($sib->{'日期'} ?? '') ?></a><?php endif; ?><?php endforeach; ?>
+    </p>
+    <?php endif; ?>
+    <?php if ($meet->{'會議內容'} ?? null): ?>
+    <h2 class="h6 fw-semibold">會議內容</h2>
+    <p class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($meet->{'會議內容'}) ?></p>
+    <?php endif; ?>
+    <?php if ($agenda = ($meet->{'公報議程'} ?? [])): ?>
+    <h2 class="h6 fw-semibold">公報議程與發言者</h2>
+    <div class="table-responsive mb-3">
+      <table class="table table-sm small">
+        <thead class="table-light"><tr><th>議程</th><th>發言者</th><th class="text-nowrap">公報</th></tr></thead>
+        <tbody>
+          <?php foreach ($agenda as $a): ?>
+          <tr>
+            <td style="white-space: pre-wrap;"><?= htmlspecialchars($a->{'議程'} ?? '') ?></td>
+            <td><?= htmlspecialchars(implode('、', (array) ($a->{'發言者'} ?? []))) ?></td>
+            <td class="text-nowrap">
+              <?php if ($a->{'公報網址'} ?? null): ?>
+              <a href="<?= htmlspecialchars($a->{'公報網址'}) ?>" target="_blank" rel="noopener">p.<?= htmlspecialchars($a->{'公報頁碼'} ?? '') ?> →</a>
+              <?php else: ?>
+              <?= ($a->{'公報頁碼'} ?? null) ? 'p.' . htmlspecialchars($a->{'公報頁碼'}) : '' ?>
+              <?php endif; ?>
+            </td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+    <?php endif; ?>
+    <?php if ($attend = ($meet->{'出席委員'} ?? [])): ?>
+    <details class="mb-3">
+      <summary class="h6 fw-semibold d-inline">出席<?= htmlspecialchars(CouncilHelper::t('議員')) ?>（<?= count($attend) ?> 人）</summary>
+      <p class="small mt-2"><?= htmlspecialchars(implode('、', (array) $attend)) ?></p>
+    </details>
+    <?php endif; ?>
     <?php if (!$has_notes && !$has_transcript): ?>
     <div class="alert alert-light border">本場會議尚無速記或逐字稿資料</div>
     <?php endif; ?>

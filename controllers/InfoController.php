@@ -157,6 +157,7 @@ class InfoController extends MiniEngine_Controller
                 break;
             case 'committees':
                 $this->view->committee_groups = $this->loadCommittees($cc_code);
+                $this->loadCommitteeMembers($term_no);
                 break;
             case 'bill':
                 $bill = $this->loadBillDetail($sub_id);
@@ -468,6 +469,35 @@ class InfoController extends MiniEngine_Controller
      * 委員會不綁屆，是議會層級的常設編制，這裡回傳依「類別」（常設／特種）分組的
      * 委員會清單。目前資料沒有「委員會成員」，所以只列出委員會本身，不列出議員。
      */
+    /**
+     * 委員會成員：立法委員資料逐會期記錄所屬委員會（「委員會」欄位，格式
+     * 「第11屆第1會期：內政委員會」），取本屆最近一個有資料的會期，依委員會名稱
+     * 分組。地方議會沒有這個欄位，結果是空的，畫面照舊只列委員會清單。
+     */
+    protected function loadCommitteeMembers($term_no)
+    {
+        $this->view->committee_members = [];
+        $this->view->committee_members_period = null;
+        $r = CCAPI::apiQuery(
+            '/councilors?limit=300&' . urlencode('屆次') . '=' . $term_no,
+            '本屆委員會成員'
+        );
+        $by_period = [];
+        foreach (($r->councilors ?? []) as $c) {
+            foreach ((array) ($c->{'委員會'} ?? []) as $entry) {
+                if (preg_match('/^第(\d+)屆第(\d+)會期：(.+)$/u', $entry, $m) && (int) $m[1] === (int) $term_no) {
+                    $by_period[(int) $m[2]][$m[3]][] = $c;
+                }
+            }
+        }
+        if (!$by_period) {
+            return;
+        }
+        $period = max(array_keys($by_period));
+        $this->view->committee_members_period = $period;
+        $this->view->committee_members = $by_period[$period];
+    }
+
     protected function loadCommittees($cc_code)
     {
         $r = CCAPI::apiQuery(
@@ -549,7 +579,7 @@ class InfoController extends MiniEngine_Controller
         return [$latest, $ongoing ? 'ongoing' : 'ended', $sittings];
     }
 
-    protected function loadSittingsForSession($session_code, $size = 200)
+    protected function loadSittingsForSession($session_code, $size = 500)
     {
         $r = CCAPI::apiQuery(
             '/sittings?limit=' . (int)$size . '&' . urlencode('會期代碼') . '=' . urlencode($session_code) . '&sort=' . urlencode('日期<'),
@@ -586,7 +616,7 @@ class InfoController extends MiniEngine_Controller
     protected function loadMeetsForSession($session_code)
     {
         $r = CCAPI::apiQuery(
-            '/meets?limit=500&' . urlencode('會期代碼') . '=' . urlencode($session_code),
+            '/meets?limit=1000&' . urlencode('會期代碼') . '=' . urlencode($session_code),
             '本會期所有會議（含分組審查等平行會議）'
         );
         $by_sitting = [];
@@ -651,6 +681,16 @@ class InfoController extends MiniEngine_Controller
 
         $meet = CCAPI::apiQuery('/meet/' . rawurlencode($meet_code), '會議資料');
         $this->view->meet_meta = ($meet->error ?? true) ? null : $meet->data;
+
+        // 同一場次的其他 meet（立法院一次會議跨好幾天，每天一筆）
+        $this->view->meet_siblings = [];
+        if ($sitting_code = $this->view->meet_meta->{'場次代碼'} ?? null) {
+            $siblings = CCAPI::apiQuery(
+                '/meets?limit=20&' . urlencode('場次代碼') . '=' . urlencode($sitting_code) . '&sort=' . urlencode('日期<'),
+                '同一場次的其他會議'
+            );
+            $this->view->meet_siblings = $siblings->meets ?? [];
+        }
 
         $notes = CCAPI::apiQuery(
             '/meet_notes?limit=20&' . urlencode('會議代碼') . '=' . urlencode($meet_code),

@@ -61,9 +61,16 @@ $meets_by_sitting = $this->meets_by_sitting ?? [];
               $content = ($meet->{'委員會或主旨'} ?? null) ?: ($s->{'委員會名稱'} ?? $s->{'議程說明'} ?? '');
               $meet_url = $meet ? ('/info/' . $this->term_no . '/meet/' . urlencode($meet->{'代碼'})) : null;
             ?>
+            <?php
+              // 立法院的場次是「一次會議」可以跨好幾天，每天一筆 meet，日期以 meet 為準
+              $row_date = ($meet->{'日期'} ?? null) ?: ($s->{'日期'} ?? '');
+              $row_weekday = ($meet && $row_date !== ($s->{'日期'} ?? '') && strtotime($row_date))
+                  ? ['日', '一', '二', '三', '四', '五', '六'][date('w', strtotime($row_date))]
+                  : ($s->{'星期'} ?? '');
+            ?>
             <tr>
-              <td class="text-nowrap"><?= htmlspecialchars($s->{'日期'} ?? '') ?></td>
-              <td><?= htmlspecialchars($s->{'星期'} ?? '') ?></td>
+              <td class="text-nowrap"><?= htmlspecialchars($row_date) ?></td>
+              <td><?= htmlspecialchars($row_weekday) ?></td>
               <td>
                 <?= htmlspecialchars($s->{'時段'} ?? '全天') ?>
                 <?php if ($meet && (($meet->{'開始時間'} ?? null) || ($meet->{'結束時間'} ?? null))): ?>
@@ -71,7 +78,7 @@ $meets_by_sitting = $this->meets_by_sitting ?? [];
                 <?php endif; ?>
               </td>
               <td><?= htmlspecialchars($s->{'場次類別'} ?? '') ?></td>
-              <td class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($content) ?></td>
+              <td class="small" style="white-space: pre-wrap;"><?php if ($meet_url): ?><a href="<?= htmlspecialchars($meet_url) ?>" class="text-reset"><?= htmlspecialchars($content) ?></a><?php else: ?><?= htmlspecialchars($content) ?><?php endif; ?></td>
               <td class="text-center">
                 <?php if ($meet && ($meet->{'有速記'} ?? false)): ?>
                 <a href="<?= htmlspecialchars($meet_url) ?>" title="有速記/摘要式紀錄">✓</a>
