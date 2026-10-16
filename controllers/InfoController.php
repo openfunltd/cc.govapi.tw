@@ -2,6 +2,8 @@
 
 class InfoController extends MiniEngine_Controller
 {
+    protected $term_data = null;
+
     protected $tabs = [
         'councilors'  => '議員名單',
         'sessions'    => '會期',
@@ -217,6 +219,7 @@ class InfoController extends MiniEngine_Controller
     protected function loadHeader($cc_code, $term_no)
     {
         $term = CCAPI::apiQuery('/term/' . rawurlencode($cc_code) . '/' . $term_no, '本屆屆期資料');
+        $this->term_data = $term->data ?? null;
         $speaker = CCAPI::apiQuery(
             '/councilors?limit=1&' . urlencode('屆次') . '=' . $term_no . '&' . urlencode('職稱') . '=' . urlencode(CouncilHelper::t('議長')),
             CouncilHelper::t('本屆議長')
@@ -353,6 +356,11 @@ class InfoController extends MiniEngine_Controller
 
         foreach ($groups as &$group) {
             usort($group['councilors'], function ($a, $b) {
+                // 沒有選舉區號的分組（立法委員依縣市分組）先依選區排，同選區再比得票率
+                if (($a->{'選舉區號'} ?? '') === '' && ($b->{'選舉區號'} ?? '') === '') {
+                    $cmp = strnatcmp($a->{'選區別'} ?? '', $b->{'選區別'} ?? '');
+                    if ($cmp !== 0) return $cmp;
+                }
                 $va = $a->{'得票率'} ?? null;
                 $vb = $b->{'得票率'} ?? null;
                 if ($va === null && $vb === null) return strnatcmp($a->{'選區別'} ?? '', $b->{'選區別'} ?? '');
@@ -360,6 +368,39 @@ class InfoController extends MiniEngine_Controller
                 if ($vb === null) return -1;
                 return $vb <=> $va;
             });
+        }
+        unset($group);
+
+        // 不分區（政黨名單）再依參選政黨分組：有政黨票的屆次依得票數多到少排、標上
+        // 得票數與得票率，沒有的（立法院第3～6屆依區域得票分配）依人數多到少排；
+        // 組內依名單排序（號次）
+        $party_votes = [];
+        foreach (($this->term_data->{'政黨票'} ?? []) as $p) {
+            $party_votes[$p->{'政黨'}] = $p;
+        }
+        foreach ($groups as &$group) {
+            if (!preg_match('/不分區|僑/u', $group['label'])) {
+                continue;
+            }
+            $by_party = [];
+            foreach ($group['councilors'] as $c) {
+                $by_party[($c->{'參選政黨'} ?? null) ?: (($c->{'黨籍'} ?? null) ?: '無黨籍')][] = $c;
+            }
+            uksort($by_party, function ($a, $b) use ($party_votes, $by_party) {
+                $va = $party_votes[$a]->{'得票數'} ?? -1;
+                $vb = $party_votes[$b]->{'得票數'} ?? -1;
+                return [$vb, count($by_party[$b])] <=> [$va, count($by_party[$a])];
+            });
+            $group['subgroups'] = [];
+            foreach ($by_party as $party => $members) {
+                usort($members, fn($a, $b) => [($a->{'號次'} ?? null) === null, $a->{'號次'} ?? 0] <=> [($b->{'號次'} ?? null) === null, $b->{'號次'} ?? 0]);
+                $pv = $party_votes[$party] ?? null;
+                $group['subgroups'][] = [
+                    'label'      => $party,
+                    'note'       => $pv ? ('得票 ' . number_format($pv->{'得票數'}) . ' 票（' . $pv->{'得票率'} . '%）') : null,
+                    'councilors' => $members,
+                ];
+            }
         }
         unset($group);
 
@@ -715,6 +756,26 @@ class InfoController extends MiniEngine_Controller
         );
         $this->view->councilor_has_candidate = ($cand_r->total ?? 0) > 0;
 
+        // 同一個人物代碼（中選會依姓名＋生日串連，議員、立委共用同一套）在其他議會的
+        // 記錄：用 all 查，all 本身就排除隱藏議會，所以地方議會頁面不會連到隱藏議會
+        $other_council_records = [];
+        $cc_code = $_SERVER['CCAPI_COUNCIL_CODE'] ?? 'all';
+        if (!CCAPI_Council::isAll($cc_code)) {
+            $other_r = CCAPI::apiQuery(
+                '/councilors?limit=50&' . urlencode('人物代碼') . '=' . urlencode($person_code) . '&sort=' . urlencode('屆次>'),
+                '同一人在其他議會的記錄',
+                'all'
+            );
+            foreach (($other_r->councilors ?? []) as $o) {
+                $o_cc = $o->{'議會代碼'} ?? '';
+                if ($o_cc !== '' && $o_cc !== $cc_code) {
+                    $other_council_records[$o_cc][] = (int) ($o->{'屆次'} ?? 0);
+                }
+            }
+        }
+        // view 是 magic property，不能直接對它的陣列元素賦值，組好再整個指定
+        $this->view->other_council_records = $other_council_records;
+
         return $records;
     }
 
@@ -991,6 +1052,10 @@ class InfoController extends MiniEngine_Controller
                     '同選區候選人得票比較'
                 );
                 $race_candidates = $race_r->candidates ?? [];
+                // 沒有個人得票的（立法委員不分區政黨名單）改依號次（名單排序）排
+                if ($race_candidates && !array_filter($race_candidates, fn($rc) => isset($rc->{'得票排名'}))) {
+                    usort($race_candidates, fn($a, $b) => intval($a->{'號次'} ?? 0) <=> intval($b->{'號次'} ?? 0));
+                }
                 $this->enrichRaceCandidates($race_candidates);
             }
 
@@ -1040,6 +1105,10 @@ class InfoController extends MiniEngine_Controller
                     '同選區候選人得票比較'
                 );
                 $race_candidates = $race_r->candidates ?? [];
+                // 沒有個人得票的（立法委員不分區政黨名單）改依號次（名單排序）排
+                if ($race_candidates && !array_filter($race_candidates, fn($rc) => isset($rc->{'得票排名'}))) {
+                    usort($race_candidates, fn($a, $b) => intval($a->{'號次'} ?? 0) <=> intval($b->{'號次'} ?? 0));
+                }
                 $this->enrichRaceCandidates($race_candidates);
             }
             $groups[] = (object)[

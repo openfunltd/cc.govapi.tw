@@ -8,8 +8,13 @@ $groups = $this->election_groups ?? [];
 ?>
 
 <div class="alert alert-light border small">
+  <?php if (CCAPI_Council::getKind($records[0]->{'議會代碼'} ?? '') === '立法院'): ?>
+  立法委員選舉資料來自中選會選舉資料庫，從第3屆（民國84年）開始，第7屆起才有不分區政黨名單；
+  第3～6屆不分區、僑選委員沒有個別候選人資料。目前只有候選人名冊與得票數，沒有選舉公報的學經歷／政見。
+  <?php else: ?>
   選舉公報資料只回溯到民國98年（2009年），較舊的屆次可能查不到公報內容；
   政見如果來源是圖片或文字層是亂碼，會直接顯示原始圖片。
+  <?php endif; ?>
 </div>
 
 <?php if (!$groups): ?>
@@ -61,7 +66,7 @@ $groups = $this->election_groups ?? [];
     </div>
 
     <?php if (!empty($group->{'race'})): ?>
-    <h3 class="h6 fw-semibold mb-2">同選區得票比較</h3>
+    <h3 class="h6 fw-semibold mb-2"><?= ($c->{'選區別'} ?? '') === '全國不分區' ? '同政黨不分區名單' : '同選區得票比較' ?></h3>
     <div class="table-responsive">
       <table class="table table-sm">
         <thead class="table-light">

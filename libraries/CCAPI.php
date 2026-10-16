@@ -14,9 +14,11 @@ class CCAPI
         return self::$log;
     }
 
-    public static function apiQuery($url, $reason)
+    public static function apiQuery($url, $reason, $cc_code = null)
     {
-        $host = getenv('CCAPI_HOST') ?: ($_SERVER['CCAPI_COUNCIL_CODE'] ?? 'all') . (getenv('CCAPI_DOMAIN_POSTFIX') ?: '.cc.govapi.tw');
+        // $cc_code 指定要查哪個議會子網域（例：個人頁用 all 查同一人在其他議會的記錄），
+        // 不指定就是目前頁面所在的議會
+        $host = getenv('CCAPI_HOST') ?: ($cc_code ?? ($_SERVER['CCAPI_COUNCIL_CODE'] ?? 'all')) . (getenv('CCAPI_DOMAIN_POSTFIX') ?: '.cc.govapi.tw');
         // 純資料 API 一律掛在 /api/ 前綴下（見 index.php 路由說明），$url 只帶
         // 型別路徑本身（例：/councilors?...），這裡統一補上前綴
         $full_url = 'https://' . $host . '/api' . $url;

@@ -3,8 +3,17 @@
 <?php else: ?>
 <?php foreach ($this->councilors as $group): ?>
 <h2 class="h6 fw-semibold text-body-secondary mb-2"><?= htmlspecialchars($group['label']) ?></h2>
-<div class="row g-3 mb-4">
-  <?php foreach ($group['councilors'] as $c): ?>
+<?php // 不分區依政黨再分一層（見 InfoController::groupCouncilorsByDistrict()），其他分組只有一層 ?>
+<?php foreach ($group['subgroups'] ?? [['label' => null, 'note' => null, 'councilors' => $group['councilors']]] as $sub): ?>
+<?php $is_party_list = $sub['label'] !== null; ?>
+<?php if ($is_party_list): ?>
+<h3 class="small fw-semibold mb-2 ms-2">
+  <?= htmlspecialchars($sub['label']) ?>
+  <?php if ($sub['note']): ?><span class="fw-normal text-body-secondary ms-1"><?= htmlspecialchars($sub['note']) ?></span><?php endif; ?>
+</h3>
+<?php endif; ?>
+<div class="row g-3 mb-4<?= $is_party_list ? ' ms-1' : '' ?>">
+  <?php foreach ($sub['councilors'] as $c): ?>
   <div class="col-6 col-md-3 col-lg-2">
     <a href="/info/councilor/<?= urlencode($c->{'人物代碼'} ?? '') ?>" class="text-decoration-none text-reset">
     <div class="card councilor-card h-100 shadow-sm">
@@ -24,7 +33,11 @@
         </div>
         <div class="text-body-secondary" style="font-size: 0.75rem;">
           <?= htmlspecialchars($c->{'黨籍'} ?? '—') ?><br>
+          <?php if ($is_party_list && ($c->{'號次'} ?? null)): ?>
+          名單第 <?= (int)$c->{'號次'} ?> 名
+          <?php else: ?>
           <?= htmlspecialchars(info_district_label($c) ?: '—') ?>
+          <?php endif; ?>
           <?php if ($c->{'得票率'} ?? null): ?>
           <br><span class="text-primary">得票：<?= htmlspecialchars($c->{'得票率'}) ?>%</span>
           <?php elseif ($c->{'得票數'} ?? null): ?>
@@ -41,5 +54,6 @@
   </div>
   <?php endforeach; ?>
 </div>
+<?php endforeach; ?>
 <?php endforeach; ?>
 <?php endif; ?>

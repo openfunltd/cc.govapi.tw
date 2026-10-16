@@ -15,6 +15,16 @@ $person_code = $records[0]->{'人物代碼'} ?? '';
 $spans_multiple_councils = count(array_unique(array_map(fn($r) => $r->{'議會代碼'} ?? '', $records))) > 1;
 ?>
 
+<?php if ($this->other_council_records ?? []): ?>
+<div class="alert alert-light border small mb-3">
+  也曾任：
+  <?php $postfix = getenv('CCAPI_DOMAIN_POSTFIX') ?: '.cc.govapi.tw'; $i = 0; ?>
+  <?php foreach ($this->other_council_records as $o_cc => $o_terms): ?>
+  <?= $i++ ? '、' : '' ?><a href="<?= htmlspecialchars('https://' . $o_cc . $postfix . '/info/councilor/' . rawurlencode($person_code)) ?>"><?= htmlspecialchars(CCAPI_Council::getName($o_cc) ?? $o_cc) ?>第 <?= htmlspecialchars(implode('、', array_unique($o_terms))) ?> 屆<?= htmlspecialchars(CCAPI_Council::localize('議員', $o_cc)) ?></a>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
+
 <?php if (count($records) > 1): ?>
 <div class="mb-3">
   <span class="text-body-secondary small me-2">查看屆期：</span>
