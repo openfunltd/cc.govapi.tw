@@ -245,7 +245,55 @@ class InfoController extends MiniEngine_Controller
         $r = CCAPI::apiQuery('/councilors?limit=300&' . urlencode('屆次') . '=' . $term_no, CouncilHelper::t('本屆議員名單'));
         $councilors = $r->councilors ?? [];
         $this->attachVoteShare($councilors);
-        return $this->groupCouncilorsByDistrict($councilors);
+        $groups = $this->groupCouncilorsByDistrict($councilors);
+        $this->attachPartyListWaiting($groups, $councilors);
+        return $groups;
+    }
+
+    /**
+     * 現任屆次的不分區各政黨分組附上「待遞補」名單：同一份政黨名單裡還沒就任過的
+     * 候選人（依名單排序），放在該政黨分組的 waiting。只有現任屆次才有意義，歷屆不附。
+     */
+    protected function attachPartyListWaiting(&$groups, $councilors)
+    {
+        if (!($this->term_data->{'現任'} ?? false)) {
+            return;
+        }
+        $election_code = null;
+        $served = [];
+        foreach ($councilors as $c) {
+            $code = $c->{'參選代碼'} ?? '';
+            if (strpos($code, ':party-') !== false) {
+                $served[$code] = true;
+                $election_code = $election_code ?: ($c->{'選舉代碼'} ?? null);
+            }
+        }
+        if (!$election_code) {
+            return;
+        }
+        $r = CCAPI::apiQuery(
+            '/candidates?limit=500&' . urlencode('選舉代碼') . '=' . urlencode($election_code)
+                . '&' . urlencode('選區別') . '=' . urlencode('全國不分區'),
+            '不分區政黨名單（待遞補）'
+        );
+        $waiting_by_party = [];
+        foreach (($r->candidates ?? []) as $cand) {
+            if (!isset($served[$cand->{'候選人代碼'} ?? ''])) {
+                $waiting_by_party[$cand->{'其他欄位'}->{'推薦之政黨'} ?? ''][] = $cand;
+            }
+        }
+        foreach ($groups as &$group) {
+            if (empty($group['subgroups'])) {
+                continue;
+            }
+            foreach ($group['subgroups'] as &$sub) {
+                $list = $waiting_by_party[$sub['label']] ?? [];
+                usort($list, fn($a, $b) => intval($a->{'號次'} ?? 0) <=> intval($b->{'號次'} ?? 0));
+                $sub['waiting'] = $list;
+            }
+            unset($sub);
+        }
+        unset($group);
     }
 
     /**

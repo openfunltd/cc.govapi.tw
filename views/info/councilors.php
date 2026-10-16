@@ -54,6 +54,17 @@
   </div>
   <?php endforeach; ?>
 </div>
+<?php if (!empty($sub['waiting'])): ?>
+<details class="mb-4 ms-3" style="margin-top:-0.75rem;">
+  <summary class="small text-body-secondary">待遞補（<?= count($sub['waiting']) ?> 人）</summary>
+  <div class="small mt-1">
+    <?php foreach ($sub['waiting'] as $i => $cand): ?>
+    <?= $i ? '、' : '' ?><?php if ($cand->{'人物代碼'} ?? null): ?><a href="/info/candidate/<?= urlencode($cand->{'人物代碼'}) ?>"><?php endif; ?><?= (int)($cand->{'號次'} ?? 0) ?>. <?= htmlspecialchars($cand->{'姓名'} ?? '') ?><?php if ($cand->{'人物代碼'} ?? null): ?></a><?php endif; ?><?php if ($g = $cand->{'其他欄位'}->{'性別'} ?? null): ?><span class="text-body-secondary">（<?= htmlspecialchars($g) ?>）</span><?php endif; ?>
+    <?php endforeach; ?>
+  </div>
+  <div class="small text-body-secondary mt-1">依名單排序；遞補須維持女性不少於半數，女性委員出缺時通常由名單上下一位女性遞補，不一定照順序。</div>
+</details>
+<?php endif; ?>
 <?php endforeach; ?>
 <?php endforeach; ?>
 <?php endif; ?>
