@@ -6,6 +6,7 @@ class InfoController extends MiniEngine_Controller
 
     protected $tabs = [
         'councilors'  => '議員名單',
+        'agencies'    => '行政體系',
         'sessions'    => '會期',
         'timeline'    => '時間軸',
         'committees'  => '委員會',
@@ -154,6 +155,9 @@ class InfoController extends MiniEngine_Controller
                 break;
             case 'timeline':
                 $this->view->timeline_sessions = $this->loadTermSessions($cc_code, $term_no);
+                break;
+            case 'agencies':
+                $this->view->agency_tree = $this->loadAgencyTree($cc_code, $term_no);
                 break;
             case 'committees':
                 $this->view->committee_groups = $this->loadCommittees($cc_code);
@@ -497,6 +501,69 @@ class InfoController extends MiniEngine_Controller
         $period = max(array_keys($by_period));
         $this->view->committee_members_period = $period;
         $this->view->committee_members = $by_period[$period];
+    }
+
+    /**
+     * 行政體系 tab：議會監督的行政機關（agency），依縣市政府網站上的順序分成一級內部單位／
+     * 一級外部單位（底下掛二級機關），學校、戶政所、區公所等其他單位另外分組；每個機關附上
+     * 本屆在議會答詢的官員（從會議逐字稿「對應代碼」彙整，機關的代碼去掉議會代碼前綴就是
+     * 逐字稿用的那個代碼，縣市政府的內部單位也是同一套）
+     */
+    protected function loadAgencyTree($cc_code, $term_no)
+    {
+        $r = CCAPI::apiQuery('/agencies?limit=1000&sort=' . urlencode('排序<'), '本議會監督的行政機關');
+        $agencies = $r->agencies ?? [];
+        if (!$agencies) {
+            return null;
+        }
+
+        // 每個機關取本屆最後一次答詢的首長級職稱當作（最新）首長；首長紀錄由
+        // generate-agency-heads.php 從會議逐字稿彙整
+        $head_pattern = '/^(代理)?(局長|處長|主任委員|主委|執行秘書|總經理|董事長|館長|院長|所長|主任|大隊長|總隊長|隊長|團長|區長|校長|執行長|秘書長|總幹事|場長|廠長)$/u';
+        $children = [];
+        foreach ($agencies as $a) {
+            $a->_head = null;
+            foreach (($a->{'首長紀錄'} ?? []) as $rec) {
+                if ((int) $rec->{'屆'} === (int) $term_no && preg_match($head_pattern, $rec->{'職稱'} ?? '')
+                    && (!$a->_head || $rec->{'最後'} > $a->_head->{'最後'})) {
+                    $a->_head = $rec;
+                }
+            }
+            if ($a->{'上層代碼'} ?? null) {
+                $children[$a->{'上層代碼'}][] = $a;
+            }
+        }
+
+        $tree = ['縣市政府' => null, '一級內部單位' => [], '一級外部單位' => [], '其他單位' => []];
+        foreach ($agencies as $a) {
+            $category = $a->{'分類'} ?? '其他單位';
+            $a->_children = array_values(array_filter($children[$a->{'代碼'}] ?? [], fn($c) => ($c->{'分類'} ?? '') !== '其他單位'));
+            if ($category === '縣市政府') {
+                // 縣市長：中選會歷屆當選人，取這一屆議會選舉同年（或之前最近一次）選出的
+                $vote_date = $this->term_data->{'投票日'} ?? ($this->term_data->{'就職日'} ?? null);
+                $roc_year = $vote_date ? ((int) substr($vote_date, 0, 4) - 1911) : null;
+                $a->_mayor = null;
+                foreach (($a->{'歷任首長'} ?? []) as $m) {
+                    if ($roc_year && $m->{'年份'} <= $roc_year && (!$a->_mayor || $m->{'年份'} > $a->_mayor->{'年份'})) {
+                        $a->_mayor = $m;
+                    }
+                }
+                $tree['縣市政府'] = $a;
+            } elseif ($category === '其他單位') {
+                // 其他單位依性質分組，收合顯示
+                $name = $a->{'名稱'};
+                $kind = preg_match('/(學校|國民小學|國民中學|國民中小學|高級中學|高中|國小|國中|幼兒園|托兒所|大學)/u', $name) ? '學校'
+                    : (preg_match('/戶政/u', $name) ? '戶政事務所'
+                    : (preg_match('/地政/u', $name) ? '地政事務所'
+                    : (preg_match('/區公所/u', $name) ? '區公所'
+                    : (preg_match('/(鄉|鎮|市)公所|代表會/u', $name) ? '鄉鎮市公所／代表會'
+                    : (preg_match('/衛生所/u', $name) ? '衛生所' : '其他')))));
+                $tree['其他單位'][$kind][] = $a;
+            } elseif (!($a->{'上層代碼'} ?? null) || $category !== '二級機關') {
+                $tree[$category === '二級機關' ? '一級外部單位' : $category][] = $a;
+            }
+        }
+        return $tree;
     }
 
     protected function loadCommittees($cc_code)

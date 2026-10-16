@@ -2,7 +2,7 @@
 /**
  * 每天排程用：自動偵測各原始資料來源（config.inc.php 設定的 IMPORT_* 路徑）有沒有
  * 更新，有更新的型別才重新匯入，全部型別跑完後如果有任何型別更新過，才重跑
- * generate-completeness.php／generate-council-overview.php 這兩個下游快取。
+ * generate-completeness.php／generate-council-overview.php／generate-agency-heads.php 這幾個下游快取。
  *
  * 用法：
  *   php scripts/auto-refresh.php              # 一般執行（建議排程每天跑一次）
@@ -156,6 +156,14 @@ $jobs = [
         'prepare' => ["{$php_bin} {$dir}/prepare-candidate-lookups.php"],
         'import'  => ["{$php_bin} {$dir}/import-candidate.php"],
     ],
+    'agency' => [
+        'watch'  => [
+            getenv('IMPORT_AGENCY_ORG_DIR'),
+            getenv('IMPORT_AGENCY_UNITS_JSONL'),
+            getenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV'),
+        ],
+        'import' => ["{$php_bin} {$dir}/import-agency.php"],
+    ],
     // 立法院：必須排在上面地方議會型別之後（見檔案開頭說明）。ly_candidate 會更新 term
     // 的「政黨票」，要排在 ly_term_session 之後
     'ly_term_session' => [
@@ -251,6 +259,7 @@ if ($any_ran) {
     echo "=== 有型別更新，重建下游快取 ===\n";
     run_cmd("{$php_bin} {$dir}/generate-completeness.php");
     run_cmd("{$php_bin} {$dir}/generate-council-overview.php");
+    run_cmd("{$php_bin} {$dir}/generate-agency-heads.php");
 } else {
     echo "沒有任何型別的來源資料有變化，不需要重建下游快取\n";
 }

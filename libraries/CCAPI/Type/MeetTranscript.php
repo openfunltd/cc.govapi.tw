@@ -62,6 +62,16 @@ class CCAPI_Type_MeetTranscript extends CCAPI_Type
                 'description' => '「對應代碼」的類型（例: 議員、機關）',
                 'type' => 'string',
             ],
+            '姓名' => [
+                'es_field' => '姓名.keyword',
+                'description' => '發言者姓名（例: 湯志民）',
+                'type' => 'string',
+            ],
+            '職稱' => [
+                'es_field' => '職稱',
+                'description' => '發言者職稱（例: 局長）',
+                'type' => 'string',
+            ],
             '身分類別' => [
                 'es_field' => '身分類別',
                 'description' => '發言者身分（例: 主席、議員、政府機關首長）',

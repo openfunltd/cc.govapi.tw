@@ -23,6 +23,9 @@ class CCAPI_Helper
         if (file_exists(__DIR__ . "/Type/{$type_pascal_direct}.php")) {
             // 直接匹配，不需要去掉結尾的 s（例：completeness、status 等）
             $type_underscore_singular = $type_underscore;
+        } elseif (substr($type_underscore, -3) == 'ies' && file_exists(__DIR__ . '/Type/' . self::ucfirst(substr($type_underscore, 0, -3) . 'y') . '.php')) {
+            // agencies → agency
+            $type_underscore_singular = substr($type_underscore, 0, -3) . 'y';
         } elseif (substr($type_underscore, -2) == 'es') {
             $singular_es = substr($type_underscore, 0, -2);
             $type_pascal_es = self::ucfirst($singular_es);

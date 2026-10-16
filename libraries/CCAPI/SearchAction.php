@@ -237,18 +237,21 @@ class CCAPI_SearchAction
                     } else {
                         $es_field = $filter_fields[$agg_field];
                     }
+                    // 最外層的 bucket 數可以用 agg_size 調大（上限 1000，例：一個議會監督的機關
+                    // 超過 100 個），內層維持 100
+                    $size = count($agg_fields) ? 100 : min(1000, max(1, intval(self::getParam('agg_size', 100))));
                     if (is_null($agg_term)) {
                         $agg_term = (object)[
                             'terms' => (object)[
                                 'field' => $es_field,
-                                'size' => 100,
+                                'size' => $size,
                             ],
                         ];
                     } else {
                         $agg_term = (object)[
                             'terms' => (object)[
                                 'field' => $es_field,
-                                'size' => 100,
+                                'size' => $size,
                             ],
                             'aggs' => (object)[
                                 $agg_field => $agg_term,
@@ -297,7 +300,8 @@ class CCAPI_SearchAction
                     usort($records->aggs[$sub_agg_name]->buckets, function($a, $b) {
                         return $b->count - $a->count;
                     });
-                    $records->aggs[$sub_agg_name]->buckets = array_slice($records->aggs[$sub_agg_name]->buckets, 0, 100);
+                    $records->aggs[$sub_agg_name]->buckets = array_slice($records->aggs[$sub_agg_name]->buckets, 0,
+                        min(1000, max(100, intval(self::getParam('agg_size', 100)))));
                 }
             }
             $records->aggs = array_values($records->aggs);
