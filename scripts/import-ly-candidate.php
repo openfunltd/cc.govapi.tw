@@ -14,6 +14,10 @@
  *   IMPORT_CANDIDATE_PERSON_SOURCE_JSONL 人物代碼對照 person.jsonl（候選人代碼→人物代碼）
  *   IMPORT_LY_CANDIDATE_VOTE_CSV         候選人得票數 vote.csv（選舉代碼, 選區代碼, 候選人代碼, 票數）
  *   IMPORT_LY_PARTY_VOTES_CSV            不分區政黨得票數（選舉代碼, 政黨, 得票數）
+ *   IMPORT_CANDIDATE_JSONL               選舉公報萃取結果 bulletin.jsonl（跟議員共用同一份，
+ *                                        這裡只取「選舉類型＝立法委員」且對到候選人代碼的）
+ *   IMPORT_LY_PARTY_MANIFESTO_JSONL      不分區公報的政黨政見（一行一個政黨：選舉代碼, 政黨,
+ *                                        政黨號次, 政見, 政見來源, 政見圖路徑, 來源PDF, 來源頁碼）
  *
  * candidate 欄位對照（沒有選舉公報的學經歷/政見，只有名冊資料）：
  *   選區別      名冊的選區別；空白時（原住民、單一選區縣市）用得票資料的選區代碼或縣市；
@@ -23,7 +27,14 @@
  *   得票率／得票排名  同一場選舉同一選區裡計算；不分區候選人沒有個人得票
  *   其他欄位    性別、推薦之政黨（跟選舉公報的欄位名稱一致，同選區比較表直接沿用）
  *
- * term 新增「政黨票」：[{政黨, 得票數, 得票率}]，依得票數多到少，得票率是佔全部政黨票的比例
+ * 選舉公報：依候選人代碼併入學歷（取代名冊只有學歷等級的那欄）、經歷、政見、相片、公報
+ * 來源頁碼等欄位，欄位名稱與格式跟 import-candidate.php 匯入的議員候選人一致（圖片路徑
+ * 同樣轉成公開網址）。同一個代碼有多筆時（原住民候選人會重複刊在各縣市的公報裡），
+ * 優先取有政見文字的那筆。不分區候選人個人沒有政見（公報上的政見是政黨層級的）
+ *
+ * term 新增「政黨票」：[{政黨, 得票數, 得票率, 號次, 政見, 政見來源, 政見圖路徑, 來源PDF, 來源頁碼}]，
+ * 依得票數多到少，得票率是佔全部政黨票的比例；政見等欄位來自不分區公報（政黨層級的政見，
+ * 不屬於任何一位候選人）
  */
 
 include(__DIR__ . '/../init.inc.php');
@@ -41,6 +52,13 @@ $open_csv = function ($env) {
     $headers[0] = ltrim($headers[0], "\xEF\xBB\xBF");
     return [$fh, $headers];
 };
+// 跟 import-candidate.php 的 bulletin_image_url() 同一套轉換規則，各 import 腳本
+// 獨立可執行、不互相 include，所以這裡複製一份
+$bulletin_image_url = function ($path) {
+    if (!$path) return null;
+    $path = preg_replace('#^files/#', '', $path);
+    return 'https://lydata.ronny-s3.click/bulletin/' . implode('/', array_map('rawurlencode', explode('/', $path)));
+};
 $term_of = function ($election_code) {
     return preg_match('/^(?:ELC|BEL)-L0-(\d+)/', $election_code, $m) ? intval($m[1]) : null;
 };
@@ -48,9 +66,15 @@ $term_of = function ($election_code) {
 $prefix = getenv('ELASTIC_PREFIX');
 Elastic::dbQuery("/{$prefix}term/_mapping", 'PUT', json_encode(['properties' => [
     '政黨票' => ['properties' => [
-        '政黨'   => ['type' => 'keyword'],
-        '得票數' => ['type' => 'integer'],
-        '得票率' => ['type' => 'float'],
+        '政黨'       => ['type' => 'keyword'],
+        '得票數'     => ['type' => 'integer'],
+        '得票率'     => ['type' => 'float'],
+        '號次'       => ['type' => 'integer'],
+        '政見'       => ['type' => 'text'],
+        '政見來源'   => ['type' => 'keyword'],
+        '政見圖路徑' => ['type' => 'keyword', 'index' => false],
+        '來源PDF'    => ['type' => 'keyword', 'index' => false],
+        '來源頁碼'   => ['type' => 'integer'],
     ]],
 ]]));
 
@@ -139,6 +163,49 @@ while (($row = fgetcsv($fh)) !== false) {
 }
 fclose($fh);
 
+// 選舉公報
+$bulletin_path = getenv('IMPORT_CANDIDATE_JSONL');
+$fh = ($bulletin_path && file_exists($bulletin_path)) ? fopen($bulletin_path, 'r') : null;
+if (!$fh) {
+    error_log("ERROR: 找不到來源檔案（IMPORT_CANDIDATE_JSONL）：{$bulletin_path}");
+    exit(1);
+}
+$has_manifesto = fn($r) => in_array($r['政見來源'] ?? '', ['text', 'manifesto-image-vision', 'cell-image-vision', 'page-image-vision'], true);
+$bulletins = [];
+while (($line = fgets($fh)) !== false) {
+    if (strpos($line, '立法委員') === false) {
+        continue;
+    }
+    $r = json_decode($line, true);
+    $code = $r['候選人代碼'] ?? '';
+    if (($r['選舉類型'] ?? '') !== '立法委員' || !isset($candidates[$code])) {
+        continue;
+    }
+    if (!isset($bulletins[$code]) || (!$has_manifesto($bulletins[$code]) && $has_manifesto($r))) {
+        $bulletins[$code] = $r;
+    }
+}
+fclose($fh);
+// 名冊已經有、或是由這支腳本自己決定的欄位不從公報覆蓋
+$skip_keys = ['代碼', '候選人代碼', '選舉代碼', '選舉名稱', '選舉類型', '縣市', '行政區代碼', '選區別', '姓名', '號次'];
+foreach ($bulletins as $code => $r) {
+    foreach ($r as $key => $val) {
+        if (in_array($key, $skip_keys, true) || $val === '' || $val === null || $val === []) {
+            continue;
+        }
+        if ($key === '相片路徑' || $key === '政見圖路徑') {
+            $val = $bulletin_image_url($val);
+        } elseif ($key === '欄位圖片' && is_array($val)) {
+            $val = array_map($bulletin_image_url, $val);
+        } elseif ($key === '其他欄位' && is_array($val)) {
+            $val = array_merge($val, $candidates[$code]['其他欄位']);
+        }
+        $candidates[$code][$key] = $val;
+    }
+}
+error_log('Merged bulletin data for ' . count($bulletins) . ' candidates ('
+    . count(array_filter($bulletins, $has_manifesto)) . ' with manifesto).');
+
 // 同一場選舉同一選區（候選人代碼去掉最後的號次）內計算得票率、排名
 $races = [];
 foreach ($candidates as $code => $c) {
@@ -172,11 +239,36 @@ while (($row = fgetcsv($fh)) !== false) {
     $party_votes[$term][] = ['政黨' => $row[1], '得票數' => intval($row[2])];
 }
 fclose($fh);
+
+// 政黨政見（不分區公報）：屆 → 政黨 → 政見資料
+$party_manifestos = [];
+$manifesto_path = getenv('IMPORT_LY_PARTY_MANIFESTO_JSONL');
+if ($manifesto_path && file_exists($manifesto_path)) {
+    foreach (file($manifesto_path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        $m = json_decode($line, true);
+        $term = $term_of($m['選舉代碼'] ?? '');
+        if (!$term || !($m['政黨'] ?? null)) {
+            continue;
+        }
+        $party_manifestos[$term][$m['政黨']] = array_filter([
+            '號次'       => $m['政黨號次'] ?? null,
+            '政見'       => $m['政見'] ?? null,
+            '政見來源'   => $m['政見來源'] ?? null,
+            '政見圖路徑' => $bulletin_image_url($m['政見圖路徑'] ?? null),
+            '來源PDF'    => $m['來源PDF'] ?? null,
+            '來源頁碼'   => $m['來源頁碼'] ?? null,
+        ], fn($v) => $v !== null && $v !== '');
+    }
+} else {
+    error_log("找不到 IMPORT_LY_PARTY_MANIFESTO_JSONL（{$manifesto_path}），政黨票不附政見");
+}
+
 foreach ($party_votes as $term => $list) {
     $total = array_sum(array_column($list, '得票數'));
     usort($list, fn($a, $b) => $b['得票數'] <=> $a['得票數']);
     foreach ($list as &$p) {
         $p['得票率'] = round($p['得票數'] / $total * 100, 2);
+        $p += $party_manifestos[$term][$p['政黨']] ?? [];
     }
     unset($p);
     Elastic::dbQuery(

@@ -447,6 +447,7 @@ class InfoController extends MiniEngine_Controller
                 $group['subgroups'][] = [
                     'label'      => $party,
                     'note'       => $pv ? ('得票 ' . number_format($pv->{'得票數'}) . ' 票（' . $pv->{'得票率'} . '%）') : null,
+                    'party'      => $pv,   // 政黨票資料，含公報上的政黨政見（政見／政見來源／政見圖路徑）
                     'councilors' => $members,
                 ];
             }
@@ -1147,7 +1148,20 @@ class InfoController extends MiniEngine_Controller
                 $this->enrichRaceCandidates($race_candidates);
             }
 
+            // 不分區候選人個人沒有政見，政見是政黨層級的，從該屆 term 的政黨票取
+            $party_info = null;
+            if ($candidate && ($candidate->{'選區別'} ?? '') === '全國不分區') {
+                $term_doc = CCAPI::apiQuery('/term/' . rawurlencode($term_record->{'議會代碼'} ?? '') . '/' . (int) $term_record->{'屆次'}, '該屆政黨票與政黨政見');
+                $party_name = $candidate->{'其他欄位'}->{'推薦之政黨'} ?? null;
+                foreach (($term_doc->data->{'政黨票'} ?? []) as $pv) {
+                    if (($pv->{'政黨'} ?? null) === $party_name) {
+                        $party_info = $pv;
+                    }
+                }
+            }
+
             $groups[] = (object)[
+                'party'     => $party_info,
                 '屆次'      => $term_record->{'屆次'},
                 '議員頭銜'  => $term_record->{'_議員頭銜'} ?? null,
                 '任期年份'  => $term_record->{'_任期年份'} ?? null,

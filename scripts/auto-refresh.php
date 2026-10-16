@@ -10,10 +10,17 @@
  *   php scripts/auto-refresh.php --reset-all  # 全部型別都加 --reset（先砍 index 再重建），
  *                                              # 用於來源資料有刪除/更正、需要清掉舊資料時；
  *                                              # 平常自動排程不需要，一般 upsert 就夠了
+ *   php scripts/auto-refresh.php --dry-run    # 只列出哪些型別偵測到變化，不實際匯入
+ *   php scripts/auto-refresh.php --only=ly_   # 只處理名稱以 ly_ 開頭的型別（逗號分隔多個前綴）
  *
  * 偵測方式：每個型別的來源檔案（可能不只一個）記錄 mtime+size 組成的簽章，存在
  * .auto-refresh-state.json（gitignored），跟上次記錄的值比對，不同就代表來源有變化。
  * 只讀檔案屬性、不讀內容——候選人得票數原始來源有 1.7GB，不能每天整份重讀比對內容。
+ * 來源是目錄時（立法院會議資料，每場一個 JSON），簽章是目錄底下所有檔案的數量、最新
+ * mtime、總大小（檔案原地覆寫不會改變目錄本身的 mtime，不能只看目錄）。
+ *
+ * 立法院（ly_*）的幾個型別放在最後：它們寫進的是跟地方議會共用的 index，--reset-all
+ * 時前面的地方議會型別會先把 index 砍掉重建，ly_* 再把立法院資料補回去。
  *
  * candidate 型別比較特殊：除了 bulletin.jsonl，還要多看 person.jsonl／cand.csv／
  * 候選人得票數這三個上游原始來源，任一個有變化都要先重跑 prepare-candidate-lookups.php
@@ -33,6 +40,13 @@
 include(__DIR__ . '/../init.inc.php');
 
 $force = in_array('--force', $argv ?? []);
+$dry_run = in_array('--dry-run', $argv ?? []);
+$only = [];
+foreach ($argv ?? [] as $arg) {
+    if (strpos($arg, '--only=') === 0) {
+        $only = array_filter(explode(',', substr($arg, 7)), 'strlen');
+    }
+}
 $reset_all = in_array('--reset-all', $argv ?? []);
 
 $state_path = __DIR__ . '/../.auto-refresh-state.json';
@@ -45,7 +59,19 @@ function watched_signature($paths)
 {
     $parts = [];
     foreach ($paths as $p) {
-        if ($p && file_exists($p)) {
+        if ($p && is_dir($p)) {
+            $count = 0;
+            $max_mtime = 0;
+            $total_size = 0;
+            foreach (new DirectoryIterator($p) as $f) {
+                if ($f->isFile()) {
+                    $count++;
+                    $max_mtime = max($max_mtime, $f->getMTime());
+                    $total_size += $f->getSize();
+                }
+            }
+            $parts[] = "{$p}:dir:{$count}:{$max_mtime}:{$total_size}";
+        } elseif ($p && file_exists($p)) {
             $stat = stat($p);
             $parts[] = "{$p}:{$stat['mtime']}:{$stat['size']}";
         } else {
@@ -130,6 +156,40 @@ $jobs = [
         'prepare' => ["{$php_bin} {$dir}/prepare-candidate-lookups.php"],
         'import'  => ["{$php_bin} {$dir}/import-candidate.php"],
     ],
+    // 立法院：必須排在上面地方議會型別之後（見檔案開頭說明）。ly_candidate 會更新 term
+    // 的「政黨票」，要排在 ly_term_session 之後
+    'ly_term_session' => [
+        'watch'  => [getenv('IMPORT_LY_TERM_CSV'), getenv('IMPORT_LY_SESSION_CSV')],
+        'import' => ["{$php_bin} {$dir}/import-ly-term-session.php"],
+    ],
+    'ly_committee' => [
+        'watch'  => [getenv('IMPORT_LY_COMMITTEE_CSV')],
+        'import' => ["{$php_bin} {$dir}/import-ly-committee.php"],
+    ],
+    'ly_councilor' => [
+        'watch'  => [
+            getenv('IMPORT_LY_COUNCILOR_JSONL'),
+            getenv('IMPORT_LY_TERM_CSV'),
+            getenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV'),
+            getenv('IMPORT_CANDIDATE_PERSON_SOURCE_JSONL'),
+        ],
+        'import' => ["{$php_bin} {$dir}/import-ly-councilor.php"],
+    ],
+    'ly_candidate' => [
+        'watch'  => [
+            getenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV'),
+            getenv('IMPORT_CANDIDATE_PERSON_SOURCE_JSONL'),
+            getenv('IMPORT_LY_CANDIDATE_VOTE_CSV'),
+            getenv('IMPORT_LY_PARTY_VOTES_CSV'),
+            getenv('IMPORT_CANDIDATE_JSONL'),
+            getenv('IMPORT_LY_PARTY_MANIFESTO_JSONL'),
+        ],
+        'import' => ["{$php_bin} {$dir}/import-ly-candidate.php"],
+    ],
+    'ly_meet' => [
+        'watch'  => [getenv('IMPORT_LY_MEET_DIR'), getenv('IMPORT_LY_COMMITTEE_CSV')],
+        'import' => ["{$php_bin} {$dir}/import-ly-meet.php"],
+    ],
 ];
 
 echo '=== auto-refresh ' . date('Y-m-d H:i:s') . " ===\n";
@@ -138,6 +198,9 @@ $any_ran = false;
 $any_failed = false;
 
 foreach ($jobs as $name => $job) {
+    if ($only && !array_filter($only, fn($prefix) => strpos($name, $prefix) === 0)) {
+        continue;
+    }
     $watch = array_values(array_filter($job['watch']));
     if (!$watch) {
         echo "[{$name}] 沒有設定任何來源路徑，略過\n";
@@ -151,6 +214,10 @@ foreach ($jobs as $name => $job) {
         continue;
     }
 
+    if ($dry_run) {
+        echo "[{$name}] 偵測到來源變化（--dry-run，不匯入）\n";
+        continue;
+    }
     echo "[{$name}] 偵測到來源變化，重新匯入...\n";
     $ok = true;
     foreach (($job['prepare'] ?? []) as $cmd) {
@@ -176,6 +243,10 @@ foreach ($jobs as $name => $job) {
     }
 }
 
+if ($dry_run) {
+    echo "=== --dry-run 結束 ===\n";
+    exit(0);
+}
 if ($any_ran) {
     echo "=== 有型別更新，重建下游快取 ===\n";
     run_cmd("{$php_bin} {$dir}/generate-completeness.php");

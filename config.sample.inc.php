@@ -25,6 +25,7 @@ putenv('IMPORT_LY_SESSION_CSV=');     // 立法院 會期.csv 路徑（import-ly
 putenv('IMPORT_LY_COUNCILOR_JSONL='); // 立法院歷屆委員 JSONL 路徑（import-ly-councilor.php）
 putenv('IMPORT_LY_CANDIDATE_VOTE_CSV=');  // 中選會候選人得票數 vote.csv 路徑（import-ly-candidate.php）
 putenv('IMPORT_LY_PARTY_VOTES_CSV=');     // 中選會不分區政黨得票數 CSV 路徑（import-ly-candidate.php）
+putenv('IMPORT_LY_PARTY_MANIFESTO_JSONL='); // 不分區公報政黨政見 JSONL 路徑（import-ly-candidate.php）
 putenv('IMPORT_LY_COMMITTEE_CSV=');      // 立法院開放資料委員會 CSV 路徑（import-ly-committee.php）
 putenv('IMPORT_LY_MEET_DIR=');           // 立法院會議資料目錄，每場一個 JSON（import-ly-meet.php）
 putenv('IMPORT_COMMITTEE_CSV=');      // 委員會 data.csv 路徑，預設 {project}/data.csv

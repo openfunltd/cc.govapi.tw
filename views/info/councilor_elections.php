@@ -10,7 +10,8 @@ $groups = $this->election_groups ?? [];
 <div class="alert alert-light border small">
   <?php if (CCAPI_Council::getKind($records[0]->{'議會代碼'} ?? '') === '立法院'): ?>
   立法委員選舉資料來自中選會選舉資料庫，從第3屆（民國84年）開始，第7屆起才有不分區政黨名單；
-  第3～6屆不分區、僑選委員沒有個別候選人資料。目前只有候選人名冊與得票數，沒有選舉公報的學經歷／政見。
+  第3～6屆不分區、僑選委員沒有個別候選人資料。選舉公報的學經歷／政見目前只有第8屆（民國101年）起
+  的區域與原住民立委，更早的公報是掃描檔還沒辨識；不分區的政見是政黨層級的，不在個人資料裡。
   <?php else: ?>
   選舉公報資料只回溯到民國98年（2009年），較舊的屆次可能查不到公報內容；
   政見如果來源是圖片或文字層是亂碼，會直接顯示原始圖片。
@@ -61,7 +62,17 @@ $groups = $this->election_groups ?? [];
 
         <?= info_candidate_field_html('h3', '學歷', $c, '學歷') ?>
         <?= info_candidate_field_html('h3', '經歷', $c, '經歷') ?>
+        <?php $party = $group->{'party'} ?? null; ?>
+        <?php if (!$party || ($c->{'政見'} ?? null)): // 不分區候選人個人沒有政見，只顯示下面的政黨政見 ?>
         <?= info_candidate_field_html('h3', '政見', $c, '政見', '政見圖路徑') ?>
+        <?php endif; ?>
+        <?php if ($party): ?>
+        <?php if ($party->{'政見'} ?? null): ?>
+        <h3 class="h6 fw-semibold mt-3"><?= htmlspecialchars($party->{'政黨'} ?? '') ?> 政黨政見<span class="small fw-normal text-body-secondary ms-1">（不分區名單共用）</span></h3>
+        <div class="small" style="white-space: pre-wrap;"><?= htmlspecialchars($party->{'政見'}) ?></div>
+        <?php if ($party->{'政見圖路徑'} ?? null): ?><a class="small" href="<?= htmlspecialchars($party->{'政見圖路徑'}) ?>" target="_blank" rel="noopener">查看公報原圖 →</a><?php endif; ?>
+        <?php endif; ?>
+        <?php endif; ?>
       </div>
     </div>
 

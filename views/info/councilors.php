@@ -11,6 +11,13 @@
   <?= htmlspecialchars($sub['label']) ?>
   <?php if ($sub['note']): ?><span class="fw-normal text-body-secondary ms-1"><?= htmlspecialchars($sub['note']) ?></span><?php endif; ?>
 </h3>
+<?php if ($manifesto = ($sub['party']->{'政見'} ?? null)): ?>
+<details class="small mb-2 ms-3">
+  <summary class="text-body-secondary">政黨政見<?= ($sub['party']->{'政見來源'} ?? '') === 'manifesto-image-vision' ? '（公報為圖片，文字由辨識取得）' : '' ?></summary>
+  <div class="mt-1" style="white-space: pre-wrap;"><?= htmlspecialchars($manifesto) ?></div>
+  <?php if ($sub['party']->{'政見圖路徑'} ?? null): ?><a href="<?= htmlspecialchars($sub['party']->{'政見圖路徑'}) ?>" target="_blank" rel="noopener">查看公報原圖 →</a><?php endif; ?>
+</details>
+<?php endif; ?>
 <?php endif; ?>
 <div class="row g-3 mb-4<?= $is_party_list ? ' ms-1' : '' ?>">
   <?php foreach ($sub['councilors'] as $c): ?>
