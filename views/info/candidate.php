@@ -39,6 +39,9 @@ foreach ($groups as $g) {
         <?php if (($c->{'議會代碼'} ?? null) && !($c->{'參選職位'} ?? null)): // 縣市長選舉前面的縣市名就夠了，不標議會 ?>
         （<?= htmlspecialchars(CCAPI_Council::getName($c->{'議會代碼'}) ?? $c->{'議會代碼'}) ?>）
         <?php endif; ?>
+        <?php if ($c->{'選舉名稱'} ?? null): // 同一年可能有正式選舉與補選，標出完整選舉名稱才分得出來 ?>
+        <span class="fw-normal text-body-secondary">・<?= htmlspecialchars($c->{'選舉名稱'}) ?></span>
+        <?php endif; ?>
       </strong>
       <?php if ($c->{'當選'} ?? false): ?>
       <span class="badge bg-success">當選</span>

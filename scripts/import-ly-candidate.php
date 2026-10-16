@@ -130,6 +130,11 @@ while (($row = fgetcsv($fh)) !== false) {
         $district = $r['選區別'] ?: (($rc !== '' && !preg_match('/^\d/', $rc)) ? $rc : $r['縣市']);
         $area_code = $r['行政區代碼'];
     }
+    // 第9、10屆補選在名冊裡的選舉名稱是行政區代碼（「63000」），組一個看得懂的名稱
+    if (!preg_match('/(\d+年|補選)/u', $r['選舉名稱']) && preg_match('/^BEL-L0-(\d+):/', $r['選舉代碼'], $bm)) {
+        $r['選舉名稱'] = sprintf('第%d屆立法委員%s%s補選', $bm[1], $r['縣市'], $r['選區別']);
+        $candidates_name_fixed = ($candidates_name_fixed ?? 0) + 1;
+    }
     if (preg_match('/^(\d+)年/u', $r['選舉名稱'], $m)) {
         $year = intval($m[1]);
     } else {

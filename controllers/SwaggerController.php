@@ -33,7 +33,16 @@ class SwaggerController extends MiniEngine_Controller
 
     protected function getEndPointPath(string $entity, string $class_name, string $endpoint_type, ?string $relation_name = null): string
     {
-        $resource = $this->pascal2Underscore($entity) . 's';
+        // 複數：子音+y → ies（agency → agencies）、s/x 結尾 → es（completeness → completenesses），
+        // 跟 CCAPI_Helper::getApiType() 認得的寫法一致
+        $singular = $this->pascal2Underscore($entity);
+        if (preg_match('/[^aeiou]y$/', $singular)) {
+            $resource = substr($singular, 0, -1) . 'ies';
+        } elseif (preg_match('/(s|x)$/', $singular)) {
+            $resource = $singular . 'es';
+        } else {
+            $resource = $singular . 's';
+        }
         $id_fields = array_column($class_name::getIdFieldsInfo(), 'path_name');
         $id_fields_string = implode('/', array_map(fn($field) => '{' . $field . '}', $id_fields));
         switch ($endpoint_type) {
@@ -350,7 +359,8 @@ class SwaggerController extends MiniEngine_Controller
 
         $md .= "## ⚠️ 不是立法院（國會）\n\n";
         $md .= "這是台灣「地方制度法」規範的地方議會（直轄市議會、縣（市）議會）開放資料，**不是立法院**。"
-             . "立法委員、國會的資料在另一個姊妹服務 `ly.govapi.tw`，資料完全不重疊、也不能互相查詢。"
+             . "立法委員、國會的資料在另一個姊妹服務 `ly.govapi.tw`。"
+             . "唯一的例外是候選人（`candidate`）：為了串起同一人跨選舉的參選紀錄，也收錄了縣市長／直轄市長與立法委員選舉的候選人。"
              . "看到「議員」不要當成「立法委員」，看到「議會」不要當成「國會」「Parliament」。"
              . "完整背景知識（含「議會」定義範圍、跟鄉鎮市民代表會的差異等）見 `{$scheme}://{$host}/knowledge.md`。\n\n";
 
@@ -381,7 +391,8 @@ class SwaggerController extends MiniEngine_Controller
              . "冒號跟逗號要不要 percent-encode 都可以（`:` 也可以寫成 `%3A`、`,` 也可以寫成 `%2C`），"
              . "伺服器端會先解碼整個參數再判斷語法\n";
         $md .= "- `agg={filter欄位}`：依欄位分群統計筆數；可重複帶多個 `agg=`；同一個 `agg=` 裡用逗號可做多層分群"
-             . "（例：`agg=議會代碼,黨籍`）。回傳結果在 `aggs` 陣列裡，每個 bucket 有該欄位值與 `count`。\n";
+             . "（例：`agg=議會代碼,黨籍`）。回傳結果在 `aggs` 陣列裡，每個 bucket 有該欄位值與 `count`。"
+             . "最外層預設最多 100 個 bucket，可用 `agg_size=`（上限 1000）調大，例如一個議會監督的機關超過 100 個時\n";
         $md .= "- `sort={filter欄位}<` 或 `>`：排序，`<` 升冪、`>` 降冪，可重複帶多個欄位\n";
         $md .= "- `output_fields={欄位}`：限制回傳欄位，可重複帶；不帶則回傳全部欄位\n";
         $md .= "- `page=`、`limit=`：分頁（`limit=0` 只回傳統計/aggs，不回傳實際資料列，適合只要 `agg=` 結果時用）\n\n";
@@ -406,6 +417,10 @@ class SwaggerController extends MiniEngine_Controller
              . "  \"https://all{$postfix}/api/councilors?黨籍=民主進步黨&agg=議會代碼\"\n```\n\n";
         $md .= "```bash\n# 全文搜尋議案案由，依類別分群統計\ncurl -H \"Authorization: Bearer YOUR_TOKEN\" \\\n"
              . "  \"https://all{$postfix}/api/bills?q=公共托育&agg=類別\"\n```\n\n";
+        $md .= "```bash\n# 台北市議會監督的行政機關，依縣市政府網站上的順序\ncurl -H \"Authorization: Bearer YOUR_TOKEN\" \\\n"
+             . "  \"https://tpe{$postfix}/api/agencies?limit=200&sort=排序<\"\n```\n\n";
+        $md .= "```bash\n# 台北市議會第14屆，各機關官員在議會答詢的次數（逐字稿依對應代碼、姓名、職稱分群）\ncurl -H \"Authorization: Bearer YOUR_TOKEN\" \\\n"
+             . "  \"https://tpe{$postfix}/api/meet_transcripts?limit=0&屆=14&對應代碼類型=機關&agg=對應代碼,姓名,職稱&agg_size=500\"\n```\n\n";
 
         $md .= "## 型別一覽\n\n";
 

@@ -213,6 +213,35 @@ class TypeHelper
                     'data' => '議案內容',
                 ],
             ],
+            'agency' => [
+                'name' => '行政機關',
+                'icon' => 'fas fa-fw fa-building',
+                'cols' => [
+                    'all' => [
+                        '議會代碼',
+                        '名稱',
+                        '分類',
+                        '機關代碼',
+                    ],
+                    'single' => [
+                        '名稱',
+                        '分類',
+                        '機關代碼',
+                    ],
+                ],
+                'default_aggs' => [
+                    'all' => [
+                        '議會代碼',
+                        '分類',
+                    ],
+                    'single' => [
+                        '分類',
+                    ],
+                ],
+                'item_features' => [
+                    'data' => '行政機關資料',
+                ],
+            ],
             'candidate' => [
                 'name' => '候選人',
                 'icon' => 'fas fa-fw fa-id-card',
@@ -223,21 +252,25 @@ class TypeHelper
                         '縣市',
                         '姓名',
                         '號次',
+                        '參選職位',
                     ],
                     'single' => [
                         '年份',
                         '縣市',
                         '姓名',
                         '號次',
+                        '參選職位',
                     ],
                 ],
                 'default_aggs' => [
                     'all' => [
                         '議會代碼',
                         '年份',
+                        '參選職位',
                     ],
                     'single' => [
                         '年份',
+                        '參選職位',
                     ],
                 ],
                 'item_features' => [
