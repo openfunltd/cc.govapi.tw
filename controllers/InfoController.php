@@ -1270,6 +1270,22 @@ class InfoController extends MiniEngine_Controller
             '該候選人歷年參選紀錄'
         );
 
+        // 單一議會的頁面只列本議會範圍的參選紀錄；同一人在其他縣市或其他層級（立委等）
+        // 也有參選的話，提示並連到 all 的完整頁面
+        $this->view->candidate_all_url = null;
+        $cc_code = $_SERVER['CCAPI_COUNCIL_CODE'] ?? 'all';
+        if (!CCAPI_Council::isAll($cc_code)) {
+            $all_r = CCAPI::apiQuery(
+                '/candidates?limit=0&' . urlencode('人物代碼') . '=' . urlencode($person_code),
+                '該候選人在所有議會的參選紀錄數',
+                'all'
+            );
+            if (($all_r->total ?? 0) > ($r->total ?? 0)) {
+                $this->view->candidate_all_url = 'https://all' . (getenv('CCAPI_DOMAIN_POSTFIX') ?: '.cc.govapi.tw')
+                    . '/info/candidate/' . rawurlencode($person_code);
+            }
+        }
+
         $groups = [];
         foreach (($r->candidates ?? []) as $cand) {
             $race_candidates = [];

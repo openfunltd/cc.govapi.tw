@@ -25,6 +25,9 @@ foreach ($groups as $g) {
     這裡收錄的是本議會範圍內「縣市議員／直轄市議員」與「縣市長／直轄市長」選舉的參選紀錄，
     包含落選的次數；選舉公報（學經歷、政見）只回溯到民國98年（2009年），更早期的參選紀錄只有
     得票資料。政見如果來源是圖片或文字層是亂碼，會直接顯示原始圖片。
+    <?php if ($this->candidate_all_url ?? null): ?>
+    本參選人有在其他縣市或層級有參選記錄，可以點選<a href="<?= htmlspecialchars($this->candidate_all_url) ?>">這邊</a>看完整記錄。
+    <?php endif; ?>
   </div>
 
   <?php foreach ($groups as $group): ?>
@@ -33,8 +36,8 @@ foreach ($groups as $g) {
     <div class="card-header py-2 d-flex align-items-center justify-content-between">
       <strong class="small">
         <?= htmlspecialchars($c->{'年份'} ?? '') ?> 年・<?= htmlspecialchars($c->{'縣市'} ?? '') ?>
-        <?php if ($c->{'議會代碼'} ?? null): ?>
-        （<?= htmlspecialchars($c->{'議會代碼'}) ?>）
+        <?php if (($c->{'議會代碼'} ?? null) && !($c->{'參選職位'} ?? null)): // 縣市長選舉前面的縣市名就夠了，不標議會 ?>
+        （<?= htmlspecialchars(CCAPI_Council::getName($c->{'議會代碼'}) ?? $c->{'議會代碼'}) ?>）
         <?php endif; ?>
       </strong>
       <?php if ($c->{'當選'} ?? false): ?>

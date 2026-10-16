@@ -1,7 +1,8 @@
 <?php
 $is_all = ($this->cc_code === 'all');
 $postfix = getenv('CCAPI_DOMAIN_POSTFIX') ?: '.cc.govapi.tw';
-$council_names = CouncilHelper::getAll();
+// 政見（候選人）不受隱藏議會限制，標籤也要認得隱藏議會的名稱（例：ly → 立法院）
+$council_names = CouncilHelper::getAll() + array_combine(CCAPI_Council::getHiddenCodes(), array_map([CCAPI_Council::class, 'getName'], CCAPI_Council::getHiddenCodes()));
 $initial_q = $_GET['q'] ?? '';
 
 // 四個獨立搜尋分頁的設定：key 同時是 DOM id 前綴跟 JS 端 renderer 的對照 key。

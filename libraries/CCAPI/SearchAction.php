@@ -90,10 +90,10 @@ class CCAPI_SearchAction
             $cmd->query->bool->must[] = (object)[
                 'term' => (object)[$cc_field => $cc_code],
             ];
-        } elseif ($cc_code && CCAPI_Council::getHiddenCodes()) {
+        } elseif ($cc_code && CCAPI_Council::getHiddenCodesForType($type)) {
             $cc_field = CCAPI_Type::run($type, 'getCCCodeField');
             $cmd->query->bool->must_not = [(object)[
-                'terms' => (object)[$cc_field => CCAPI_Council::getHiddenCodes()],
+                'terms' => (object)[$cc_field => CCAPI_Council::getHiddenCodesForType($type)],
             ]];
         }
 
@@ -326,7 +326,7 @@ class CCAPI_SearchAction
         if ($cc_code) {
             $cc_field = CCAPI_Type::run($type, 'getCCCodeField');
             $doc_cc = $obj->_source->{$cc_field} ?? null;
-            if (CCAPI_Council::isAll($cc_code) ? CCAPI_Council::isHidden($doc_cc) : $doc_cc !== $cc_code) {
+            if (CCAPI_Council::isAll($cc_code) ? in_array($doc_cc, CCAPI_Council::getHiddenCodesForType($type), true) : $doc_cc !== $cc_code) {
                 $records = new StdClass;
                 $records->error = true;
                 $records->message = '找不到資料';
