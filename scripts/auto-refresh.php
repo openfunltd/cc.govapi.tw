@@ -169,12 +169,12 @@ $jobs = [
     ],
     // 村里長候選人同樣寫進 candidate index，排在 candidate 之後
     'village_candidate' => [
-        'watch'  => [
+        // IMPORT_CANDIDATE_VILLAGE_JSONL 可以用逗號列多個檔案，每個都要監看
+        'watch'  => array_merge([
             getenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV'),
             getenv('IMPORT_CANDIDATE_PERSON_SOURCE_JSONL'),
             getenv('IMPORT_LY_CANDIDATE_VOTE_CSV'),
-            getenv('IMPORT_CANDIDATE_VILLAGE_JSONL'),
-        ],
+        ], array_map('trim', explode(',', (string) getenv('IMPORT_CANDIDATE_VILLAGE_JSONL')))),
         'import' => ["{$php_bin} {$dir}/import-village-candidate.php"],
     ],
     'agency' => [

@@ -14,7 +14,8 @@
  *   IMPORT_CANDIDATE_PERSON_SOURCE_JSONL 人物代碼對照 person.jsonl
  *   IMPORT_LY_CANDIDATE_VOTE_CSV         候選人得票數 vote.csv（跟立委、縣市長共用同一份）
  *   IMPORT_CANDIDATE_VILLAGE_JSONL       村里長選舉公報萃取結果（依候選人代碼併入學經歷、政見、相片；
- *                                        選填，沒有的話只匯入名冊）
+ *                                        選填，沒有的話只匯入名冊）。可以用逗號列多個檔案（例：各年份的
+ *                                        文字層解析結果、掃描公報的辨識結果），同一位候選人以有政見的那筆為準
  *
  * 名單以中選會名冊為準，沒有公報（或公報還沒解析）的村里長一樣會列出來，只是沒有政見。
  * 參選職位：村里長
@@ -173,8 +174,11 @@ foreach ($rows as $r) {
 // 選舉公報（依候選人代碼併入；同代碼多筆時優先取有政見文字的）
 $has_manifesto = fn($r) => in_array($r['政見來源'] ?? '', ['text', 'manifesto-image-vision', 'cell-image-vision', 'page-image-vision'], true);
 $bulletins = [];
-$bulletin_path = getenv('IMPORT_CANDIDATE_VILLAGE_JSONL');
-if ($bulletin_path && file_exists($bulletin_path)) {
+foreach (array_filter(array_map('trim', explode(',', (string) getenv('IMPORT_CANDIDATE_VILLAGE_JSONL')))) as $bulletin_path) {
+    if (!file_exists($bulletin_path)) {
+        error_log("WARNING: 找不到村里長選舉公報（IMPORT_CANDIDATE_VILLAGE_JSONL）：{$bulletin_path}");
+        continue;
+    }
     $fh = fopen($bulletin_path, 'r');
     while (($line = fgets($fh)) !== false) {
         $r = json_decode($line, true);
@@ -187,8 +191,9 @@ if ($bulletin_path && file_exists($bulletin_path)) {
         }
     }
     fclose($fh);
-} else {
-    error_log("WARNING: 沒有村里長選舉公報（IMPORT_CANDIDATE_VILLAGE_JSONL）：{$bulletin_path}，只匯入名冊");
+}
+if (!$bulletins) {
+    error_log('WARNING: 沒有讀到村里長選舉公報（IMPORT_CANDIDATE_VILLAGE_JSONL），只匯入名冊');
 }
 $skip_keys = ['代碼', '候選人代碼', '選舉代碼', '選舉名稱', '選舉類型', '縣市', '行政區代碼', '選區別', '姓名', '號次'];
 foreach ($bulletins as $code => $r) {
