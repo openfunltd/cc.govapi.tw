@@ -1,5 +1,5 @@
 <?php if (empty($this->councilors)): ?>
-<div class="alert alert-light border mb-4">目前尚無本屆議員資料</div>
+<div class="alert alert-light border mb-4"><?= htmlspecialchars(CouncilHelper::t('目前尚無本屆議員資料')) ?></div>
 <?php else: ?>
 <?php foreach ($this->councilors as $group): ?>
 <h2 class="h6 fw-semibold text-body-secondary mb-2"><?= htmlspecialchars($group['label']) ?></h2>
@@ -16,7 +16,7 @@
       <div class="card-body p-2">
         <div class="fw-semibold small">
           <?= htmlspecialchars($c->{'姓名'} ?? '') ?>
-          <?php if (($c->{'職稱'} ?? '議員') !== '議員'): ?>
+          <?php if (!in_array($c->{'職稱'} ?? '議員', ['議員', CouncilHelper::t('議員')], true)): ?>
           <span class="badge bg-warning text-dark"><?= htmlspecialchars($c->{'職稱'}) ?></span>
           <?php endif; ?>
           <?= info_election_status_badge($c) ?>

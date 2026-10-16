@@ -1,7 +1,7 @@
 <?php
 $records = $this->councilor_records ?? [];
 if (!$records): ?>
-<div class="alert alert-warning mt-4">找不到議員資料</div>
+<div class="alert alert-warning mt-4"><?= htmlspecialchars(CouncilHelper::t('找不到議員資料')) ?></div>
 <?php return; endif;
 
 $total = $this->bill_total ?? 0;
@@ -14,7 +14,7 @@ $groups = $this->bill_groups ?? [];
 </div>
 
 <?php if (!$total): ?>
-<div class="alert alert-light border">找不到這位議員的提案記錄（目前議案資料只涵蓋少數議會）</div>
+<div class="alert alert-light border"><?= htmlspecialchars(CouncilHelper::t('找不到這位議員的提案記錄（目前議案資料只涵蓋少數議會）')) ?></div>
 <?php else: ?>
 
 <p class="small text-body-secondary">共找到 <?= $total ?> 筆議案，來自 <?= count($groups) ?> 個屆次（依屆次新到舊排列）</p>

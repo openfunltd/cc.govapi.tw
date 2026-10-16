@@ -32,15 +32,15 @@
         <div class="fs-5 fw-semibold">第 <?= (int)$h->{'屆次'} ?> 屆</div>
       </div>
       <div class="col-6 col-md-3">
-        <div class="text-body-secondary small">議長</div>
+        <div class="text-body-secondary small"><?= htmlspecialchars(CouncilHelper::t('議長')) ?></div>
         <div class="fs-5 fw-semibold"><?= htmlspecialchars($h->{'議長姓名'} ?? '—') ?></div>
       </div>
       <div class="col-6 col-md-3">
-        <div class="text-body-secondary small">副議長</div>
+        <div class="text-body-secondary small"><?= htmlspecialchars(CouncilHelper::t('副議長')) ?></div>
         <div class="fs-5 fw-semibold"><?= htmlspecialchars($h->{'副議長姓名'} ?? '—') ?></div>
       </div>
       <div class="col-6 col-md-3">
-        <div class="text-body-secondary small">議員人數</div>
+        <div class="text-body-secondary small"><?= htmlspecialchars(CouncilHelper::t('議員人數')) ?></div>
         <div class="fs-5 fw-semibold"><?= is_null($h->{'議員人數'} ?? null) ? '—' : (int)$h->{'議員人數'} . ' 位' ?></div>
       </div>
     </div>

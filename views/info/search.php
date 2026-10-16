@@ -57,6 +57,16 @@ $search_tabs = [
 // 分享網址時要能還原搜尋狀態：從網址的 tab/q 決定預設開哪個分頁、分頁裡預先帶入
 // 什麼關鍵字。沒有 tab 參數但有 q 時，沿用舊網址的假設（以前只有逐字稿能被分享）
 // 落在「逐字稿」分頁，維持舊分享連結（例如 /info/search?q=xxx）行為不變。
+if (!$is_all) {
+    foreach ($search_tabs as &$_t) {
+        foreach (['label', 'placeholder', 'note', 'summary_unit', 'no_results'] as $_k) {
+            if (isset($_t[$_k])) {
+                $_t[$_k] = CouncilHelper::t($_t[$_k]);
+            }
+        }
+    }
+    unset($_t);
+}
 $valid_tab_keys = array_column($search_tabs, 'key');
 $initial_tab = $_GET['tab'] ?? '';
 if (!in_array($initial_tab, $valid_tab_keys, true)) {
@@ -69,7 +79,7 @@ if (!in_array($initial_tab, $valid_tab_keys, true)) {
     🔍 搜尋<?= $is_all ? '' : '（' . htmlspecialchars($this->council_name) . '）' ?>
   </h1>
   <p class="text-body-secondary mb-3">
-    議員姓名、逐字稿、政見、議案是四種不同性質的資料，分開搜尋、分開篩選。
+    <?= htmlspecialchars(CouncilHelper::t('議員姓名')) ?>、逐字稿、政見、議案是四種不同性質的資料，分開搜尋、分開篩選。
   </p>
 
   <ul class="nav nav-tabs mb-3" role="tablist">
@@ -337,7 +347,7 @@ if (!in_array($initial_tab, $valid_tab_keys, true)) {
     }
     html += '<div class="small text-body-secondary">' + councilName + ' ・ 第' + c['屆次'] + '屆' + (c['黨籍'] ? ' ・ ' + escapeHtml(c['黨籍']) : '') + '</div>';
     html += '</div>';
-    if (c['職稱'] && c['職稱'] !== '議員') {
+    if (c['職稱'] && c['職稱'] !== '議員' && c['職稱'] !== '立法委員') {
       html += '<span class="badge bg-info text-dark align-self-start">' + escapeHtml(c['職稱']) + '</span>';
     }
     html += '</div>';

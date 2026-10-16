@@ -78,9 +78,16 @@ class CCAPI_Type_Session extends CCAPI_Type
      * 這是彙整腳本統一產生的命名規則（已核對全部 21 個有會期資料的議會、1965 筆代碼皆符合，
      * r=定期會、e=臨時會、i=成立大會 對應完全一致，非各縣市各自的格式，可放心解析）。
      * 用來在會期紀錄還沒建檔、但場次已公告時，組出跟正式「會期名稱」同樣格式的友善名稱。
+     *
+     * 立法院（ly）的臨時會掛在會期底下，代碼是 ly-{屆}-r{會期}e{次}；定期會則依立法院
+     * 官方用語稱「第N屆第M會期」（見 scripts/import-ly-term-session.php）。
      */
     public static function getFriendlyName($session_code)
     {
+        if (preg_match('/^ly-(\d+)-(?:r(\d+))?(?:e(\d+))?$/', $session_code, $m) && (($m[2] ?? '') !== '' || ($m[3] ?? '') !== '')) {
+            $name = "第{$m[1]}屆" . (($m[2] ?? '') !== '' ? "第{$m[2]}會期" : '');
+            return ($m[3] ?? '') !== '' ? "{$name}第{$m[3]}次臨時會" : $name;
+        }
         if (!preg_match('/^[a-z]+-(\d+)-([a-z]+)(\d*)$/', $session_code, $m)) {
             return '本次會期';
         }

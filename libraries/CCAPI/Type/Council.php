@@ -39,6 +39,12 @@ class CCAPI_Type_Council extends CCAPI_Type
                 'description' => '議會代碼（例: tpe）',
                 'type' => 'string',
             ],
+            '議會種類' => [
+                'es_field' => '議會種類',
+                'description' => '議會種類（比議會類別粗一層的分類）',
+                'type' => 'string',
+                'enum' => ['國民大會', '立法院', '縣市議會', '鄉鎮市區代表會', '省議會'],
+            ],
             '議會類別' => [
                 'es_field' => '議會類別',
                 'description' => '議會類別',

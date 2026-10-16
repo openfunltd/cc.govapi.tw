@@ -64,7 +64,7 @@ class InfoController extends MiniEngine_Controller
                     $district = $selected->{'區域'} ?? '';
                 }
                 $this->setOg(
-                    ($selected->{'姓名'} ?? '') . ' — ' . $council_name . '第' . ($selected->{'屆次'} ?? '') . '屆議員',
+                    ($selected->{'姓名'} ?? '') . ' — ' . $council_name . '第' . ($selected->{'屆次'} ?? '') . '屆' . CCAPI_Council::localize('議員', $selected->{'議會代碼'} ?? ''),
                     trim(($selected->{'黨籍'} ?? '') . '・' . $district . '，共任職 ' . count($records) . ' 屆', '・')
                 );
             }
@@ -135,12 +135,12 @@ class InfoController extends MiniEngine_Controller
 
         $this->view->term_no = $term_no;
         $this->view->tab = $tab;
-        $this->view->tabs = $this->tabs;
+        $this->view->tabs = $this->tabs = array_map([CouncilHelper::class, 't'], $this->tabs);
         $this->view->all_terms = $this->loadAllTerms($cc_code);
         $this->view->header = $this->loadHeader($cc_code, $term_no);
         $this->setOg(
             $this->view->council_name . '第' . $term_no . '屆・' . ($this->tabs[$tab] ?? $tab),
-            $this->view->council_name . '第' . $term_no . '屆的議員、會期、議案等開放資料。'
+            $this->view->council_name . '第' . $term_no . '屆的' . CouncilHelper::t('議員') . '、會期、議案等開放資料。'
         );
 
         switch ($tab) {
@@ -218,14 +218,14 @@ class InfoController extends MiniEngine_Controller
     {
         $term = CCAPI::apiQuery('/term/' . rawurlencode($cc_code) . '/' . $term_no, '本屆屆期資料');
         $speaker = CCAPI::apiQuery(
-            '/councilors?limit=1&' . urlencode('屆次') . '=' . $term_no . '&' . urlencode('職稱') . '=' . urlencode('議長'),
-            '本屆議長'
+            '/councilors?limit=1&' . urlencode('屆次') . '=' . $term_no . '&' . urlencode('職稱') . '=' . urlencode(CouncilHelper::t('議長')),
+            CouncilHelper::t('本屆議長')
         );
         $deputy = CCAPI::apiQuery(
-            '/councilors?limit=1&' . urlencode('屆次') . '=' . $term_no . '&' . urlencode('職稱') . '=' . urlencode('副議長'),
-            '本屆副議長'
+            '/councilors?limit=1&' . urlencode('屆次') . '=' . $term_no . '&' . urlencode('職稱') . '=' . urlencode(CouncilHelper::t('副議長')),
+            CouncilHelper::t('本屆副議長')
         );
-        $count = CCAPI::apiQuery('/councilors?limit=0&' . urlencode('屆次') . '=' . $term_no, '本屆議員人數');
+        $count = CCAPI::apiQuery('/councilors?limit=0&' . urlencode('屆次') . '=' . $term_no, CouncilHelper::t('本屆議員人數'));
 
         return (object)[
             '屆次'       => $term_no,
@@ -239,7 +239,7 @@ class InfoController extends MiniEngine_Controller
 
     protected function loadCouncilors($cc_code, $term_no)
     {
-        $r = CCAPI::apiQuery('/councilors?limit=100&' . urlencode('屆次') . '=' . $term_no, '本屆議員名單');
+        $r = CCAPI::apiQuery('/councilors?limit=300&' . urlencode('屆次') . '=' . $term_no, CouncilHelper::t('本屆議員名單'));
         $councilors = $r->councilors ?? [];
         $this->attachVoteShare($councilors);
         return $this->groupCouncilorsByDistrict($councilors);
@@ -314,22 +314,48 @@ class InfoController extends MiniEngine_Controller
         foreach ($councilors as $c) {
             $district_no = $c->{'選舉區號'} ?? null;
             $district_name = $c->{'選區別'} ?? '';
-            if ($district_name === '' || $district_name === '區域') {
-                $district_name = $district_no !== null && $district_no !== '' ? "第{$district_no}選舉區" : '選區不詳';
+            if ($district_no !== null && $district_no !== '') {
+                if ($district_name === '' || $district_name === '區域') {
+                    $district_name = "第{$district_no}選舉區";
+                }
+                $key = (int)$district_no;
+            } else {
+                // 沒有選舉區號（例：立法委員的選區跨縣市，不是單一議會內的編號）→
+                // 區域選出的依縣市分組，原住民／不分區依選區名稱分組
+                $district_name = ($c->{'區域'} ?? '') ?: (($district_name !== '' && $district_name !== '區域') ? $district_name : '選區不詳');
+                $key = 'name:' . $district_name;
             }
-            $key = ($district_no !== null && $district_no !== '') ? (int)$district_no : PHP_INT_MAX;
             if (!isset($groups[$key])) {
                 $groups[$key] = ['label' => $district_name, 'councilors' => []];
             }
             $groups[$key]['councilors'][] = $c;
         }
-        ksort($groups, SORT_NUMERIC);
+        // 有編號的選區依編號排；沒編號的依縣市（議會清單順序）、原住民、不分區排
+        $county_order = array_flip(array_map(
+            fn($n) => preg_replace('/議會$/u', '', $n),
+            array_values(CouncilHelper::getAll())
+        ));
+        // 已改制的縣排在改制後的直轄市後面（立法委員早期屆次的選區）
+        $merged_into = ['臺北縣' => '新北市', '桃園縣' => '桃園市', '臺中縣' => '臺中市', '臺南縣' => '臺南市', '高雄縣' => '高雄市'];
+        $name_rank = function ($label) use ($county_order, $merged_into) {
+            $label = str_replace('台', '臺', $label);
+            if (preg_match('/不分區|僑/u', $label)) return [3, 0];
+            if (preg_match('/原住民|山胞/u', $label)) return [2, 0];
+            if (isset($merged_into[$label])) return [1, ($county_order[$merged_into[$label]] ?? PHP_INT_MAX) + 0.5];
+            return [1, $county_order[$label] ?? PHP_INT_MAX];
+        };
+        uksort($groups, function ($a, $b) use ($groups, $name_rank) {
+            if (is_int($a) && is_int($b)) return $a <=> $b;
+            if (is_int($a)) return -1;
+            if (is_int($b)) return 1;
+            return [$name_rank($groups[$a]['label']), $a] <=> [$name_rank($groups[$b]['label']), $b];
+        });
 
         foreach ($groups as &$group) {
             usort($group['councilors'], function ($a, $b) {
                 $va = $a->{'得票率'} ?? null;
                 $vb = $b->{'得票率'} ?? null;
-                if ($va === null && $vb === null) return 0;
+                if ($va === null && $vb === null) return strnatcmp($a->{'選區別'} ?? '', $b->{'選區別'} ?? '');
                 if ($va === null) return 1;
                 if ($vb === null) return -1;
                 return $vb <=> $va;
@@ -428,7 +454,10 @@ class InfoController extends MiniEngine_Controller
             return [null, 'none', []];
         }
         $sittings = $this->loadSittingsForSession($latest->{'代碼'});
-        return [$latest, 'ended', $sittings];
+        // 沒有場次資料可判斷時，改看會期自己的起訖日（還沒有結束日期＝還在進行中）
+        $latest_end = $latest->{'結束日期'} ?? null;
+        $ongoing = ($latest->{'開始日期'} ?? '9999') <= $today_str && (!$latest_end || $latest_end >= $today_str);
+        return [$latest, $ongoing ? 'ongoing' : 'ended', $sittings];
     }
 
     protected function loadSittingsForSession($session_code, $size = 200)
@@ -751,7 +780,11 @@ class InfoController extends MiniEngine_Controller
             $r->{'_任期年份'} = $start_year !== '' ? ($start_year . '-' . ($end_year ?: '至今')) : null;
 
             $council_name = $council_name_by_code[$r->{'議會代碼'} ?? ''] ?? null;
-            $r->{'_議員頭銜'} = $council_name ? preg_replace('/議會$/u', '議員', $council_name) : null;
+            if (CCAPI_Council::getKind($r->{'議會代碼'} ?? '') !== '縣市議會') {
+                $r->{'_議員頭銜'} = CCAPI_Council::localize('議員', $r->{'議會代碼'});
+            } else {
+                $r->{'_議員頭銜'} = $council_name ? preg_replace('/議會$/u', '議員', $council_name) : null;
+            }
         }
 
         usort($records, function ($a, $b) {

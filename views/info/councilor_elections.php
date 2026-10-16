@@ -1,7 +1,7 @@
 <?php
 $records = $this->councilor_records ?? [];
 if (!$records): ?>
-<div class="alert alert-warning mt-4">找不到議員資料</div>
+<div class="alert alert-warning mt-4"><?= htmlspecialchars(CouncilHelper::t('找不到議員資料')) ?></div>
 <?php return; endif;
 
 $groups = $this->election_groups ?? [];
@@ -13,7 +13,7 @@ $groups = $this->election_groups ?? [];
 </div>
 
 <?php if (!$groups): ?>
-<div class="alert alert-light border">找不到這位議員的選舉紀錄</div>
+<div class="alert alert-light border"><?= htmlspecialchars(CouncilHelper::t('找不到這位議員的選舉紀錄')) ?></div>
 <?php else: ?>
 
 <?php foreach ($groups as $group): ?>

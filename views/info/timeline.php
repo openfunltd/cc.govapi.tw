@@ -44,7 +44,8 @@ $type_color = ['定期會' => '#0d6efd', '臨時會' => '#fd7e14', '成立大會
       <?php endforeach; ?>
     </div>
     <div class="small text-body-secondary mb-3 d-flex flex-wrap gap-3">
-      <?php foreach ($type_color as $type => $color): ?>
+      <?php $present_types = array_flip(array_map(fn($s) => $s->{'會期類別'} ?? '', $sessions)); ?>
+      <?php foreach (array_intersect_key($type_color, $present_types) as $type => $color): ?>
       <span><span class="d-inline-block" style="width:10px;height:10px;background:<?= $color ?>;border-radius:2px;"></span> <?= $type ?></span>
       <?php endforeach; ?>
     </div>

@@ -1,7 +1,7 @@
 <?php
 $records = $this->councilor_records ?? [];
 if (!$records): ?>
-<div class="alert alert-warning mt-4">找不到議員資料</div>
+<div class="alert alert-warning mt-4"><?= htmlspecialchars(CouncilHelper::t('找不到議員資料')) ?></div>
 <?php return; endif;
 
 $latest = $records[0];

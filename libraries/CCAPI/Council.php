@@ -6,6 +6,8 @@ class CCAPI_Council
      * 所有議會代碼（含已廢止），key 為代碼，value 為議會名稱
      */
     protected static $councils = [
+        // 國會
+        'ly' => '立法院',
         // 現行議會
         'tpe' => '臺北市議會',
         'nwt' => '新北市議會',
@@ -47,6 +49,33 @@ class CCAPI_Council
     ];
 
     /**
+     * 隱藏議會：子網域可以正常使用（只有知道網址的人看得到），但不出現在任何
+     * 議會清單，all 跨議會查詢也會排除它的資料。用於新資料來源正式公開前的測試。
+     */
+    protected static $hidden_councils = ['ly'];
+
+    /**
+     * 議會種類（國民大會／立法院／縣市議會／鄉鎮市區代表會／省議會），沒列出的一律是
+     * 縣市議會。跟 council index 的「議會種類」欄位一致（見 scripts/import-council.php）
+     */
+    protected static $council_kinds = [
+        'ly' => '立法院',
+    ];
+
+    /**
+     * 各議會種類跟縣市議會不同的用詞，key 是縣市議會的用詞。同時用在畫面文字跟
+     * councilor「職稱」欄位的查詢值（立法院的職稱資料是 立法委員／院長／副院長）
+     */
+    protected static $kind_terms = [
+        '立法院' => [
+            '副議長' => '副院長',
+            '議長' => '院長',
+            '議員' => '立法委員',
+            '議會官網公告頁' => '資料來源',
+        ],
+    ];
+
+    /**
      * 從 HTTP_HOST 解析出議會代碼。
      *
      * 以 CCAPI_DOMAIN_POSTFIX 環境變數為後綴，去除後取得代碼。
@@ -74,6 +103,33 @@ class CCAPI_Council
     public static function isAll($cc_code)
     {
         return $cc_code === 'all';
+    }
+
+    /**
+     * 取得隱藏議會代碼清單
+     */
+    public static function getHiddenCodes()
+    {
+        return self::$hidden_councils;
+    }
+
+    public static function isHidden($cc_code)
+    {
+        return in_array($cc_code, self::$hidden_councils, true);
+    }
+
+    public static function getKind($cc_code)
+    {
+        return self::$council_kinds[$cc_code] ?? '縣市議會';
+    }
+
+    /**
+     * 把縣市議會用詞（議長、議員…）換成該議會種類的用詞，例：立法院「議員名單」→「立法委員名單」
+     */
+    public static function localize($text, $cc_code)
+    {
+        $map = self::$kind_terms[self::getKind($cc_code)] ?? [];
+        return $map ? strtr($text, $map) : $text;
     }
 
     /**

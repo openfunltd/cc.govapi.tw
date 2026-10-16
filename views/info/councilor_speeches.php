@@ -9,7 +9,7 @@ function safe_highlight($raw) {
 
 $records = $this->councilor_records ?? [];
 if (!$records): ?>
-<div class="alert alert-warning mt-4">找不到議員資料</div>
+<div class="alert alert-warning mt-4"><?= htmlspecialchars(CouncilHelper::t('找不到議員資料')) ?></div>
 <?php return; endif;
 
 $person_code = $records[0]->{'人物代碼'} ?? '';
@@ -41,7 +41,7 @@ $groups = $this->speech_groups ?? [];
 <?php if (empty($groups)): ?>
 <?php if ($this->speech_no_coverage ?? false): ?>
 <div class="alert alert-warning border">
-  本議會的逐字稿尚未收錄，不代表議員沒有發言。
+  本議會的逐字稿尚未收錄，不代表<?= htmlspecialchars(CouncilHelper::t('議員')) ?>沒有發言。
   <?php if ($this->speech_no_coverage_note ?? null): ?>
   <div class="small mt-1"><?= htmlspecialchars($this->speech_no_coverage_note) ?></div>
   <?php endif; ?>

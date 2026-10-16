@@ -26,7 +26,7 @@ $session_code = $transcript->{'會期代碼'} ?? $sitting->{'會期代碼'} ?? n
 <?php if ($sitting->{'來源網址'} ?? null): ?>
 <p class="text-body-secondary small">
   原始會議紀錄：
-  <a href="<?= htmlspecialchars($sitting->{'來源網址'}) ?>" target="_blank" rel="noopener">議會官網公告頁 →</a>
+  <a href="<?= htmlspecialchars($sitting->{'來源網址'}) ?>" target="_blank" rel="noopener"><?= htmlspecialchars(CouncilHelper::t('議會官網公告頁')) ?> →</a>
 </p>
 <?php endif; ?>
 

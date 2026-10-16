@@ -215,8 +215,9 @@ foreach ($councils as $cc => $council) {
     $councilor_count = null;
 
     if ($term_no) {
-        $speaker = find_councilor_name($cc, $term_no, '議長');
-        $deputy_speaker = find_councilor_name($cc, $term_no, '副議長');
+        // 職稱用詞依議會種類而定（立法院是院長／副院長），見 CCAPI_Council::localize()
+        $speaker = find_councilor_name($cc, $term_no, CCAPI_Council::localize('議長', $cc));
+        $deputy_speaker = find_councilor_name($cc, $term_no, CCAPI_Council::localize('副議長', $cc));
         $councilor_count = count_councilors($cc, $term_no);
     }
 

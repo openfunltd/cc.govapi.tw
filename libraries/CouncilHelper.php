@@ -70,8 +70,18 @@ class CouncilHelper
         return 'https://' . $code . $postfix . $path;
     }
 
+    /**
+     * 把畫面文字裡的縣市議會用詞換成目前議會種類的用詞（見 CCAPI_Council::localize()）
+     */
+    public static function t($text)
+    {
+        return CCAPI_Council::localize($text, self::getCurrentCode());
+    }
+
     public static function getName($code)
     {
-        return self::$councils[$code] ?? $code;
+        // 隱藏議會（見 CCAPI_Council::$hidden_councils）刻意不列在本類別的清單裡，
+        // 避免出現在議會切換選單/Swagger，名稱改從 CCAPI_Council 取
+        return self::$councils[$code] ?? CCAPI_Council::getName($code) ?? $code;
     }
 }

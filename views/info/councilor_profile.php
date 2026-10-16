@@ -1,7 +1,7 @@
 <?php
 $records = $this->councilor_records ?? [];
 if (!$records): ?>
-<div class="alert alert-warning mt-4">找不到議員資料</div>
+<div class="alert alert-warning mt-4"><?= htmlspecialchars(CouncilHelper::t('找不到議員資料')) ?></div>
 <?php return; endif;
 
 // 記錄已依選舉日期由新到舊排序；$selected是controller依URL路徑最後一段
@@ -40,7 +40,7 @@ $spans_multiple_councils = count(array_unique(array_map(fn($r) => $r->{'議會�
     <p class="text-body-secondary mb-2">
       <?= htmlspecialchars($selected->{'議會代碼'} ?? '') ?>
       第 <?= htmlspecialchars($selected->{'屆次'} ?? '') ?> 屆
-      <?php if (($selected->{'職稱'} ?? '議員') !== '議員'): ?>
+      <?php if (!in_array($selected->{'職稱'} ?? '議員', ['議員', CCAPI_Council::localize('議員', $selected->{'議會代碼'} ?? '')], true)): ?>
       <span class="badge bg-warning text-dark"><?= htmlspecialchars($selected->{'職稱'}) ?></span>
       <?php endif; ?>
       <?= info_election_status_badge($selected) ?>
@@ -102,7 +102,7 @@ $spans_multiple_councils = count(array_unique(array_map(fn($r) => $r->{'議會�
       <tr<?= $r === $selected ? ' class="table-active"' : '' ?>>
         <td>
           <a href="/info/councilor/<?= urlencode($person_code) ?>/<?= (int) ($r->{'屆次'} ?? 0) ?>">第 <?= htmlspecialchars($r->{'屆次'} ?? '') ?> 屆</a>
-          <a href="/info/<?= (int) ($r->{'屆次'} ?? 0) ?>/councilors" class="text-body-secondary small ms-1" title="查看該屆議員名單">（名單）</a>
+          <a href="/info/<?= (int) ($r->{'屆次'} ?? 0) ?>/councilors" class="text-body-secondary small ms-1" title="<?= htmlspecialchars(CCAPI_Council::localize('查看該屆議員名單', $r->{'議會代碼'} ?? '')) ?>">（名單）</a>
         </td>
         <td><?= htmlspecialchars($r->{'議會代碼'} ?? '') ?></td>
         <td><?= htmlspecialchars($r->{'_任期年份'} ?? '—') ?></td>

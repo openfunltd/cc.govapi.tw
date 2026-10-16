@@ -84,12 +84,17 @@ class CCAPI_SearchAction
         $cmd->query->bool = new StdClass;
         $cmd->query->bool->must = [];
 
-        // 注入議會代碼 filter（'all' 不加 filter）
+        // 注入議會代碼 filter（'all' 不加 filter，但排除隱藏議會）
         if ($cc_code && !CCAPI_Council::isAll($cc_code)) {
             $cc_field = CCAPI_Type::run($type, 'getCCCodeField');
             $cmd->query->bool->must[] = (object)[
                 'term' => (object)[$cc_field => $cc_code],
             ];
+        } elseif ($cc_code && CCAPI_Council::getHiddenCodes()) {
+            $cc_field = CCAPI_Type::run($type, 'getCCCodeField');
+            $cmd->query->bool->must_not = [(object)[
+                'terms' => (object)[$cc_field => CCAPI_Council::getHiddenCodes()],
+            ]];
         }
 
         $records = new StdClass;
@@ -313,10 +318,11 @@ class CCAPI_SearchAction
             $records->message = '找不到資料';
             return $records;
         }
-        // 驗證 cc_code 避免跨議會資料洩漏
-        if ($cc_code && !CCAPI_Council::isAll($cc_code)) {
+        // 驗證 cc_code 避免跨議會資料洩漏（all 也不回傳隱藏議會的資料）
+        if ($cc_code) {
             $cc_field = CCAPI_Type::run($type, 'getCCCodeField');
-            if (($obj->_source->{$cc_field} ?? null) !== $cc_code) {
+            $doc_cc = $obj->_source->{$cc_field} ?? null;
+            if (CCAPI_Council::isAll($cc_code) ? CCAPI_Council::isHidden($doc_cc) : $doc_cc !== $cc_code) {
                 $records = new StdClass;
                 $records->error = true;
                 $records->message = '找不到資料';

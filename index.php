@@ -14,7 +14,7 @@ if ($_host === $_bare_domain) {
 MiniEngine::dispatch(function($uri) {
     $cc_code = CCAPI_Council::getCouncilCode($_SERVER['HTTP_HOST'] ?? '');
     if (is_null($cc_code)) {
-        return ['index', 'unknown_council'];
+        return ['index', 'unknownCouncil'];
     }
     $_SERVER['CCAPI_COUNCIL_CODE'] = $cc_code;
 

@@ -5,7 +5,7 @@
 <?php else: ?>
 <div class="alert alert-light border small mb-4">
   委員會不綁屆，是議會層級的常設編制，不會每屆重新產生。目前資料只有委員會本身的清單，
-  還沒有「哪位議員屬於哪個委員會」的成員資料。
+  還沒有「哪位<?= htmlspecialchars(CouncilHelper::t('議員')) ?>屬於哪個委員會」的成員資料。
 </div>
 <?php foreach ($groups as $type => $committees): ?>
 <h2 class="h6 fw-semibold text-body-secondary mb-2"><?= htmlspecialchars($type) ?></h2>

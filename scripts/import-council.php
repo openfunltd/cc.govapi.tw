@@ -6,9 +6,12 @@
  *   php scripts/import-council.php            # 匯入資料（upsert）
  *   php scripts/import-council.php --reset    # 先刪除 index 再重建並匯入
  *
- * 來源欄位：代碼, 議會名稱, 議會類別, 內政部行政區代碼, ISO碼, 生效日期, 廢止日期, 維基條目, wikidata-id
+ * 來源欄位：代碼, 議會名稱, 議會種類（選填）, 議會類別, 內政部行政區代碼, ISO碼, 生效日期, 廢止日期, 維基條目, wikidata-id
  * ES 欄位名稱與來源一致（wikidata-id 轉為 wikidata_id）
  * 衍生欄位：現存（由廢止日期推算）、最新屆期代碼（由 import-term 寫入）
+ *
+ * 議會種類是比議會類別粗一層的分類（國民大會／立法院／縣市議會／鄉鎮市區代表會／
+ * 省議會），來源沒有這個欄位時由議會類別推算（直轄市議會、縣（市）議會 → 縣市議會）
  */
 
 include(__DIR__ . '/../init.inc.php');
@@ -20,6 +23,7 @@ $index_mapping = [
     'properties' => [
         '代碼'              => ['type' => 'keyword'],
         '議會名稱'          => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        '議會種類'          => ['type' => 'keyword'],
         '議會類別'          => ['type' => 'keyword'],
         '內政部行政區代碼'  => ['type' => 'keyword'],
         'ISO碼'             => ['type' => 'keyword'],
@@ -33,7 +37,7 @@ $index_mapping = [
 ];
 
 // 來源欄位（含 wikidata-id 連字符原名）
-$known_source_columns = ['代碼', '議會名稱', '議會類別', '內政部行政區代碼', 'ISO碼', '生效日期', '廢止日期', '維基條目', 'wikidata-id'];
+$known_source_columns = ['代碼', '議會名稱', '議會種類', '議會類別', '內政部行政區代碼', 'ISO碼', '生效日期', '廢止日期', '維基條目', 'wikidata-id'];
 
 if ($reset) {
     try {
@@ -92,6 +96,10 @@ while (($row = fgetcsv($fh)) !== false) {
         } else {
             $doc[$col] = $val;
         }
+    }
+
+    if (!isset($doc['議會種類']) && in_array($doc['議會類別'] ?? '', ['直轄市議會', '縣（市）議會'], true)) {
+        $doc['議會種類'] = '縣市議會';
     }
 
     $doc['現存'] = ($record['廢止日期'] === '');
