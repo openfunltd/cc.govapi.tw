@@ -1,3 +1,12 @@
+<?php if ($this->has_villages ?? false): ?>
+<ul class="nav nav-pills mb-3">
+  <li class="nav-item"><a class="nav-link py-1<?= $this->agency_section === 'agencies' ? ' active' : '' ?>" href="/info/<?= (int) $this->term_no ?>/agencies">縣市政府機關</a></li>
+  <li class="nav-item"><a class="nav-link py-1<?= $this->agency_section === 'villages' ? ' active' : '' ?>" href="/info/<?= (int) $this->term_no ?>/agencies/villages">村里長</a></li>
+</ul>
+<?php endif; ?>
+<?php if (($this->agency_section ?? '') === 'villages'): ?>
+<?= $this->partial('info/villages', $this) ?>
+<?php return; endif; ?>
 <?php
 $tree = $this->agency_tree ?? null;
 

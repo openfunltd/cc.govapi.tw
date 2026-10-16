@@ -167,6 +167,16 @@ $jobs = [
         ],
         'import' => ["{$php_bin} {$dir}/import-mayor-candidate.php"],
     ],
+    // 村里長候選人同樣寫進 candidate index，排在 candidate 之後
+    'village_candidate' => [
+        'watch'  => [
+            getenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV'),
+            getenv('IMPORT_CANDIDATE_PERSON_SOURCE_JSONL'),
+            getenv('IMPORT_LY_CANDIDATE_VOTE_CSV'),
+            getenv('IMPORT_CANDIDATE_VILLAGE_JSONL'),
+        ],
+        'import' => ["{$php_bin} {$dir}/import-village-candidate.php"],
+    ],
     'agency' => [
         'watch'  => [
             getenv('IMPORT_AGENCY_ORG_DIR'),

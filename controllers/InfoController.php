@@ -13,7 +13,7 @@ class InfoController extends MiniEngine_Controller
         'bills'       => '議案',
     ];
 
-    public function indexAction($term_no = null, $tab = null, $sub_id = null)
+    public function indexAction($term_no = null, $tab = null, $sub_id = null, $sub_id2 = null)
     {
         $cc_code = $_SERVER['CCAPI_COUNCIL_CODE'] ?? 'all';
         $this->view->cc_code = $cc_code;
@@ -157,7 +157,15 @@ class InfoController extends MiniEngine_Controller
                 $this->view->timeline_sessions = $this->loadTermSessions($cc_code, $term_no);
                 break;
             case 'agencies':
-                $this->view->agency_tree = $this->loadAgencyTree($cc_code, $term_no);
+                // 行政體系底下分「縣市政府機關」與「村里長」（/info/{屆}/agencies/villages[/{鄉鎮市區}]），
+                // 村里長只有縣市議會才有（立法院等其他議會種類沒有對應的村里）
+                $this->view->has_villages = CCAPI_Council::getKind($cc_code) === '縣市議會';
+                $this->view->agency_section = ($sub_id === 'villages' && $this->view->has_villages) ? 'villages' : 'agencies';
+                if ($this->view->agency_section === 'villages') {
+                    $this->loadVillagesTab($cc_code, $term_no, $sub_id2);
+                } else {
+                    $this->view->agency_tree = $this->loadAgencyTree($cc_code, $term_no);
+                }
                 break;
             case 'committees':
                 $this->view->committee_groups = $this->loadCommittees($cc_code);
@@ -572,6 +580,91 @@ class InfoController extends MiniEngine_Controller
             }
         }
         return $tree;
+    }
+
+    /**
+     * 行政體系 → 村里長：/info/{屆}/agencies/villages 列出鄉鎮市區（附地圖），
+     * /info/{屆}/agencies/villages/{鄉鎮市區} 列出該區每個村里的村里長（中選會名冊的當選人，
+     * 姓名連到候選人頁看得票、政見）。村里長跟縣市議員同一年選出
+     * （民國99年那次縣市議員是98年底選、村里長99年選），取跟本屆投票日同年或隔年的那次
+     * 村里長選舉；同一任期內的重行選舉（年份相同）一起列在該村里底下
+     */
+    protected function loadVillagesTab($cc_code, $term_no, $town)
+    {
+        $this->view->village_year = null;
+        $this->view->village_geo = null;  // 地圖用的邊界檔（scripts/export-geo.php 匯出，沒有就不顯示地圖）
+        $this->view->village_town = $town = ($town !== null && $town !== '') ? urldecode($town) : null;
+        $vote_date = $this->term_data->{'投票日'} ?? ($this->term_data->{'就職日'} ?? null);
+        $years_r = CCAPI::apiQuery(
+            '/candidates?limit=0&' . urlencode('參選職位') . '=' . urlencode('村里長') . '&agg=' . urlencode('年份'),
+            '本議會有收錄的村里長選舉年份'
+        );
+        $years = array_map(fn($b) => (int) $b->{'年份'}, $years_r->aggs[0]->buckets ?? []);
+        sort($years);
+        $this->view->village_years = $years;
+        if (!$vote_date) {
+            return;
+        }
+        $roc_year = (int) substr($vote_date, 0, 4) - 1911;
+        foreach ([$roc_year, $roc_year + 1] as $y) {
+            if (in_array($y, $years, true)) {
+                $this->view->village_year = $year = $y;
+                break;
+            }
+        }
+        if (!$this->view->village_year) {
+            return;
+        }
+        $base_qs = urlencode('參選職位') . '=' . urlencode('村里長') . '&' . urlencode('年份') . '=' . $year;
+
+        if ($town === null) {
+            // 每個鄉鎮市區的村里數：依候選人的行政區代碼（村里層級）去重複計算
+            $r = CCAPI::apiQuery(
+                '/candidates?limit=10000&' . $base_qs
+                    . '&output_fields=' . urlencode('鄉鎮市區代碼') . '&output_fields=' . urlencode('鄉鎮市區')
+                    . '&output_fields=' . urlencode('行政區代碼'),
+                '本屆村里長候選人的鄉鎮市區與村里'
+            );
+            $towns = [];
+            foreach (($r->candidates ?? []) as $c) {
+                $code = $c->{'鄉鎮市區代碼'} ?? '';
+                $towns[$code] ??= ['代碼' => $code, '名稱' => $c->{'鄉鎮市區'} ?? '', '村里' => []];
+                $towns[$code]['村里'][$c->{'行政區代碼'} ?? ''] = true;
+            }
+            ksort($towns);
+            $county_code = substr((string) array_key_first($towns), 0, 5);
+            if ($county_code && file_exists(__DIR__ . "/../static/geo/town/{$county_code}.json")) {
+                $this->view->village_geo = "/static/geo/town/{$county_code}.json";
+            }
+            $this->view->village_towns = array_values(array_map(fn($t) => [
+                '代碼' => $t['代碼'], '名稱' => $t['名稱'], '村里數' => count($t['村里']),
+            ], $towns));
+            return;
+        }
+
+        $fields = ['姓名', '人物代碼', '鄉鎮市區代碼', '行政區代碼', '村里', '當選', '選舉代碼'];
+        $r = CCAPI::apiQuery(
+            '/candidates?limit=3000&' . $base_qs . '&' . urlencode('鄉鎮市區') . '=' . urlencode($town)
+                . '&sort=' . urlencode('行政區代碼<') . '&sort=' . urlencode('選舉代碼<')
+                . implode('', array_map(fn($f) => '&output_fields=' . urlencode($f), $fields)),
+            '該鄉鎮市區的村里長候選人'
+        );
+        // 依村里分組，只留當選人（同一任期的重行選舉當選人也算）
+        $villages = [];
+        foreach (($r->candidates ?? []) as $c) {
+            $area = $c->{'行政區代碼'} ?? '';
+            $villages[$area] ??= ['村里' => $c->{'村里'} ?? '', '行政區代碼' => $area, '村里長' => []];
+            if ($c->{'當選'} ?? false) {
+                $villages[$area]['村里長'][] = $c;
+            }
+            $this->view->village_town_code = $c->{'鄉鎮市區代碼'} ?? null;
+        }
+        ksort($villages);
+        $town_code = $this->view->village_town_code ?? null;
+        if ($town_code && file_exists(__DIR__ . "/../static/geo/village/{$town_code}.json")) {
+            $this->view->village_geo = "/static/geo/village/{$town_code}.json";
+        }
+        $this->view->village_list = array_values($villages);
     }
 
     protected function loadCommittees($cc_code)
