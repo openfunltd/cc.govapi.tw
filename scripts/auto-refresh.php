@@ -156,6 +156,17 @@ $jobs = [
         'prepare' => ["{$php_bin} {$dir}/prepare-candidate-lookups.php"],
         'import'  => ["{$php_bin} {$dir}/import-candidate.php"],
     ],
+    // 縣市長候選人寫進跟議員共用的 candidate index，要排在 candidate 之後（--reset-all 時
+    // candidate 會先把 index 砍掉重建）
+    'mayor_candidate' => [
+        'watch'  => [
+            getenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV'),
+            getenv('IMPORT_CANDIDATE_PERSON_SOURCE_JSONL'),
+            getenv('IMPORT_LY_CANDIDATE_VOTE_CSV'),
+            getenv('IMPORT_CANDIDATE_JSONL'),
+        ],
+        'import' => ["{$php_bin} {$dir}/import-mayor-candidate.php"],
+    ],
     'agency' => [
         'watch'  => [
             getenv('IMPORT_AGENCY_ORG_DIR'),
