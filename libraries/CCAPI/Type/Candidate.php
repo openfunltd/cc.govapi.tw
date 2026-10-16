@@ -104,6 +104,12 @@ class CCAPI_Type_Candidate extends CCAPI_Type
                 'description' => '候選人在自己選區的得票排名（1 為最高票）；只有縣市議員/直轄市議員的得票資料涵蓋這個欄位，其餘沒有這個欄位',
                 'type' => 'integer',
             ],
+            '參選職位' => [
+                'es_field' => '參選職位',
+                'description' => '縣市首長選舉的參選職位（直轄市長／縣市長）；議員、立委候選人沒有這個欄位',
+                'type' => 'string',
+                'enum' => ['直轄市長', '縣市長'],
+            ],
             '當選' => [
                 'es_field' => '當選',
                 'description' => '是否當選（來自中選會 cand.csv 的當選註記，選舉當下的正式結果，不受議員後續離職/辭職影響——這比「查得到 councilor 記錄」更可靠，因為 councilor 資料若議員中途離職會直接消失整筆記錄）',

@@ -35,7 +35,12 @@ $agency_card_html = function ($a) use ($head_text) {
   <div class="card-body py-2">
     <div class="fw-semibold fs-5"><?= htmlspecialchars($gov->{'名稱'}) ?></div>
     <?php if ($gov->_mayor): ?>
-    <div><?= htmlspecialchars($gov->_mayor->{'職稱'} . ' ' . $gov->_mayor->{'姓名'}) ?>
+    <div><?= htmlspecialchars($gov->_mayor->{'職稱'}) ?>
+      <?php if ($gov->_mayor->_person_code ?? null): ?>
+      <a href="/info/candidate/<?= urlencode($gov->_mayor->_person_code) ?>"><?= htmlspecialchars($gov->_mayor->{'姓名'}) ?></a>
+      <?php else: ?>
+      <?= htmlspecialchars($gov->_mayor->{'姓名'}) ?>
+      <?php endif; ?>
       <span class="small text-body-secondary">（<?= (int) $gov->_mayor->{'年份'} ?>年當選<?= ($gov->_mayor->{'政黨'} ?? null) ? '・' . htmlspecialchars($gov->_mayor->{'政黨'}) : '' ?>）</span>
     </div>
     <?php endif; ?>

@@ -548,6 +548,14 @@ class InfoController extends MiniEngine_Controller
                         $a->_mayor = $m;
                     }
                 }
+                // 縣市長姓名連到候選人歷年參選頁（學經歷、政見），用當選人的候選人代碼查人物代碼
+                if ($a->_mayor && ($a->_mayor->{'候選人代碼'} ?? null)) {
+                    $r = CCAPI::apiQuery(
+                        '/candidates?limit=1&' . urlencode('候選人代碼') . '=' . urlencode($a->_mayor->{'候選人代碼'}),
+                        '縣市長的候選人資料'
+                    );
+                    $a->_mayor->_person_code = $r->candidates[0]->{'人物代碼'} ?? null;
+                }
                 $tree['縣市政府'] = $a;
             } elseif ($category === '其他單位') {
                 // 其他單位依性質分組，收合顯示
