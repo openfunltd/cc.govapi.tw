@@ -180,3 +180,22 @@ if ($town === null) {
 </div>
 <?php endif; ?>
 <?php endif; ?>
+
+<?php if ($town !== null && ($this->upcoming_candidates ?? [])): ?>
+<h6 class="mt-4 mb-2">🗳 <?= (int) $this->upcoming_year ?> 年選舉登記參選人<span class="small text-body-secondary fw-normal ms-2">登記階段名單，還沒有號次與政見</span></h6>
+<?php foreach (['鄉鎮市長', '山地原住民區長', '鄉鎮市民代表', '山地原住民區民代表', '村里長'] as $position): ?>
+<?php if ($groups = $this->upcoming_candidates[$position] ?? []): ?>
+<div class="small fw-semibold mt-2"><?= htmlspecialchars($position) ?></div>
+<div class="row g-1 mb-2 small">
+  <?php foreach ($groups as $district => $list): ?>
+  <div class="col-12 col-md-6 col-lg-4">
+    <div class="border rounded px-2 py-1 h-100">
+      <span class="text-body-secondary"><?= htmlspecialchars($district) ?></span>
+      <?= implode('、', array_map(fn($c) => $person_link($c) . ((($c->{'其他欄位'}->{'推薦之政黨'} ?? '無') !== '無') ? '<span class="text-body-secondary">（' . htmlspecialchars($c->{'其他欄位'}->{'推薦之政黨'}) . '）</span>' : ''), $list)) ?>
+    </div>
+  </div>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
+<?php endforeach; ?>
+<?php endif; ?>

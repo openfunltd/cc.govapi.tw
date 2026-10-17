@@ -125,6 +125,11 @@ class CCAPI_Type_Candidate extends CCAPI_Type
                 'description' => '村里長候選人參選的村里（例: 下埤里）；其他選舉沒有這個欄位',
                 'type' => 'string',
             ],
+            '登記階段' => [
+                'es_field' => '登記階段',
+                'description' => '是否為選前「候選人登記名冊」階段的資料（true＝中選會公告的登記名單，還沒有候選人代碼、號次、政見，代碼以 REG- 開頭；正式候選人名冊公布後換成正式資料）',
+                'type' => 'boolean',
+            ],
             '當選' => [
                 'es_field' => '當選',
                 'description' => '是否當選（來自中選會 cand.csv 的當選註記，選舉當下的正式結果，不受議員後續離職/辭職影響——這比「查得到 councilor 記錄」更可靠，因為 councilor 資料若議員中途離職會直接消失整筆記錄）',

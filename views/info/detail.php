@@ -12,6 +12,11 @@
     </a>
   </li>
   <?php endforeach; ?>
+  <?php if (CCAPI_Council::getKind($this->cc_code ?? '') === '縣市議會'): ?>
+  <li class="nav-item ms-auto">
+    <a class="nav-link text-danger" href="/info/election/<?= InfoController::NEXT_ELECTION_YEAR ?>">🗳 <?= InfoController::NEXT_ELECTION_YEAR ?> 年選舉</a>
+  </li>
+  <?php endif; ?>
 </ul>
 
 <?= $this->partial('info/' . $this->tab, $this) ?>

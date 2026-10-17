@@ -270,6 +270,8 @@ document.addEventListener('click', function (e) {
     <?= $this->partial('info/councilor', $this) ?>
     <?php elseif (!empty($this->is_candidate_profile)): ?>
     <?= $this->partial('info/candidate', $this) ?>
+    <?php elseif (!empty($this->is_election_guide)): ?>
+    <?= $this->partial('info/election', $this) ?>
     <?php else: ?>
 
     <form action="/info/search" method="get" class="pt-3 pb-1">

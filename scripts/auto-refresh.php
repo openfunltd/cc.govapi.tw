@@ -213,6 +213,15 @@ $jobs = [
         ],
         'import' => ["{$php_bin} {$dir}/import-na-tpg.php"],
     ],
+    'registration_candidate' => [
+        // 即將舉行選舉的登記參選人名冊（選舉指南 /info/election/{年}）
+        'watch'  => [
+            getenv('IMPORT_REGISTRATION_CANDIDATE_JSONL'),
+            getenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV'),
+            getenv('IMPORT_CANDIDATE_PERSON_SOURCE_JSONL'),
+        ],
+        'import' => ["{$php_bin} {$dir}/import-registration-candidate.php"],
+    ],
     'agency' => [
         'watch'  => [
             getenv('IMPORT_AGENCY_ORG_DIR'),
