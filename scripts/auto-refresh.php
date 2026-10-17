@@ -186,6 +186,24 @@ $jobs = [
         ], array_filter(array_map('trim', explode(',', (string) getenv('IMPORT_CANDIDATE_TOWNSHIP_JSONL'))))),
         'import' => ["{$php_bin} {$dir}/import-township-candidate.php"],
     ],
+    'president_candidate' => [
+        'watch'  => [
+            getenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV'),
+            getenv('IMPORT_CANDIDATE_PERSON_SOURCE_JSONL'),
+            getenv('IMPORT_LY_CANDIDATE_VOTE_CSV'),
+            getenv('IMPORT_CANDIDATE_JSONL'),
+        ],
+        'import' => ["{$php_bin} {$dir}/import-president-candidate.php"],
+    ],
+    'roster_councilor_candidate' => [
+        // 名冊有、公報沒有的議員候選人（早期選舉、補選）；已經從公報匯入的不動，所以排在 candidate 之後
+        'watch'  => [
+            getenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV'),
+            getenv('IMPORT_CANDIDATE_PERSON_SOURCE_JSONL'),
+            getenv('IMPORT_LY_CANDIDATE_VOTE_CSV'),
+        ],
+        'import' => ["{$php_bin} {$dir}/import-roster-councilor-candidate.php"],
+    ],
     'agency' => [
         'watch'  => [
             getenv('IMPORT_AGENCY_ORG_DIR'),

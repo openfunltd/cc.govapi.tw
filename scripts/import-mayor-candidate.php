@@ -36,6 +36,24 @@ $open_csv = function ($env) {
     return [$fh, $headers];
 };
 $mayor_election = fn($name) => preg_match('/^(\d+)年(直轄市市長|直轄市長|縣\(市\)長)選舉/u', $name, $m) ? [(int) $m[1], $m[2]] : null;
+// 縣市長補選：選舉代碼 BEL-{類別}-{任期年}:{投票日}:{縣市代碼 5 碼}，名冊的「選舉名稱」「行政區代碼」兩欄對調
+//（實測 109 年高雄市長補選代碼是 BEL-D1-107:20200815:64000，類別碼誤用了原住民區長的 D1，所以只看縣市代碼與名稱）
+$mayor_by_election = function ($r) {
+    if (!preg_match('/^BEL-[A-Z0-9]+-(\d+):(\d{8}):(\d{5})$/', $r['選舉代碼'], $m)) {
+        return null;
+    }
+    $name = $r['行政區代碼'];
+    if (!preg_match('/(市長|縣長)補選/u', $name)) {
+        return null;
+    }
+    $direct = in_array($m[3], ['63000', '64000', '65000', '66000', '67000', '68000'], true);
+    return [(int) $m[1], $direct ? '直轄市長' : '縣(市)長', $name, $m[3], preg_replace('/^(\d{4})(\d{2})(\d{2})$/', '$1-$2-$3', $m[2])];
+};
+$mayor_code = fn($code) => (bool) preg_match('/^(ELC-C[12]-|BEL-[A-Z0-9]+-\d+:\d{8}:\d{5}:)/', $code);
+// 單一縣市另外投票的那一場（實測 111 年嘉義市長因候選人過世延期，代碼 ELC-C2-111-10020），
+// 名冊格式同重行選舉：「選舉名稱」「行政區代碼」兩欄對調
+$mayor_separate = fn($r) => preg_match('/^ELC-(C[12])-(\d+)-(\d{5})$/', $r['選舉代碼'], $m)
+    ? [(int) $m[2], $m[1] === 'C1' ? '直轄市長' : '縣(市)長', $r['行政區代碼'], $m[3]] : null;
 
 // 縣市 → 議會代碼（依選舉年份處理縣市改制）
 $council_of = function ($county, $year) {
@@ -72,12 +90,12 @@ if (!$fh) {
     exit(1);
 }
 while (($line = fgets($fh)) !== false) {
-    if (strpos($line, '-C1-') === false && strpos($line, '-C2-') === false) {
+    if (strpos($line, '-C1-') === false && strpos($line, '-C2-') === false && strpos($line, '"BEL-') === false) {
         continue;
     }
     $p = json_decode($line);
     foreach ($p->records ?? [] as $rec) {
-        if (preg_match('/^ELC-C[12]-/', $rec->person_id ?? '')) {
+        if ($mayor_code($rec->person_id ?? '')) {
             $person_code[$rec->person_id] = $p->id;
         }
     }
@@ -88,7 +106,7 @@ fclose($fh);
 $votes = [];
 [$fh, $headers] = $open_csv('IMPORT_LY_CANDIDATE_VOTE_CSV');
 while (($row = fgetcsv($fh)) !== false) {
-    if (count($row) === count($headers) && preg_match('/^ELC-C[12]-/', $row[0]) && strpos($row[2], $row[0] . ':') === 0) {
+    if (count($row) === count($headers) && $mayor_code($row[2]) && strpos($row[2], $row[0] . ':') === 0) {
         $votes[$row[2]] = intval($row[3]);
     }
 }
@@ -103,10 +121,16 @@ while (($row = fgetcsv($fh)) !== false) {
         continue;
     }
     $r = array_combine($headers, $row);
-    if (!($e = $mayor_election($r['選舉名稱']))) {
+    $by_election = $mayor_by_election($r);
+    if ($by_election) {
+        [$year, $kind, $r['選舉名稱'], $r['行政區代碼']] = $by_election;
+    } elseif ($separate = $mayor_separate($r)) {
+        [$year, $kind, $r['選舉名稱'], $r['行政區代碼']] = $separate;
+    } elseif ($e = $mayor_election($r['選舉名稱'])) {
+        [$year, $kind] = $e;
+    } else {
         continue;
     }
-    [$year, $kind] = $e;
     $county = str_replace('台', '臺', $r['縣市']);
     $cc_code = $council_of($county, $year);
     if (!$cc_code) {
@@ -138,7 +162,7 @@ while (($row = fgetcsv($fh)) !== false) {
         '人物代碼'   => $person_code[$code] ?? null,
         '當選'       => in_array($r['當選註記'], ['*', '!'], true),
         '當選註記'   => $r['當選註記'] ?: null,
-    ];
+    ] + ($by_election ? ['補選' => true, '投票日' => $by_election[4]] : []);
 }
 fclose($fh);
 

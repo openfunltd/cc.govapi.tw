@@ -31,8 +31,42 @@ $agency_card_html = function ($a) use ($head_text) {
     return $html;
 };
 ?>
-<?php if (!$tree): ?>
+<?php
+// 立法院：最上面是總統、副總統（中選會選舉當選人）
+$ticket = $this->president_ticket ?? null;
+$person = function ($c) {
+    $name = htmlspecialchars($c->{'姓名'} ?? '');
+    return ($c->{'人物代碼'} ?? null) ? '<a href="/info/candidate/' . rawurlencode($c->{'人物代碼'}) . '">' . $name . '</a>' : $name;
+};
+?>
+<?php if ($ticket): ?>
+<h5 class="mb-2">總統、副總統<span class="small text-body-secondary fw-normal ms-2">民國 <?= (int) ($ticket[0]->{'年份'} ?? $ticket[1]->{'年份'} ?? 0) ?> 年選出</span></h5>
+<div class="row g-2 mb-2">
+  <?php foreach ([0 => '總統', 1 => '副總統'] as $i => $title): ?>
+  <?php if ($c = $ticket[$i] ?? null): ?>
+  <div class="col-12 col-md-6 col-lg-4">
+    <div class="card h-100 shadow-sm"><div class="card-body p-2">
+      <div class="small text-body-secondary"><?= $title ?></div>
+      <div class="fs-5 fw-semibold"><?= $person($c) ?></div>
+      <div class="small text-body-secondary"><?= htmlspecialchars($c->{'其他欄位'}->{'推薦之政黨'} ?? '') ?><?php if (isset($c->{'得票數'})): ?>・得票 <?= number_format($c->{'得票數'}) ?>（<?= htmlspecialchars($c->{'得票率'} ?? '') ?>%）<?php endif; ?></div>
+    </div></div>
+  </div>
+  <?php endif; ?>
+  <?php endforeach; ?>
+</div>
+<details class="small mb-4">
+  <summary class="text-body-secondary">歷屆總統、副總統</summary>
+  <ul class="mb-0 ps-3">
+    <?php foreach (($this->president_history ?? []) as $year => $t): ?>
+    <li>民國 <?= (int) $year ?> 年：總統 <?= isset($t[0]) ? $person($t[0]) : '—' ?>、副總統 <?= isset($t[1]) ? $person($t[1]) : '—' ?></li>
+    <?php endforeach; ?>
+  </ul>
+</details>
+<?php endif; ?>
+<?php if (!$tree && !$ticket): ?>
 <div class="alert alert-light border">目前尚無這個議會監督的行政機關資料</div>
+<?php elseif (!$tree): ?>
+<p class="small text-body-secondary">總統、副總統是中選會的選舉當選人；點選姓名查看歷次參選紀錄、得票與政見。行政院與所屬機關資料尚未收錄。</p>
 <?php else: ?>
 <div class="alert alert-light border small mb-4">
   議會監督的縣市政府機關，順序依縣市政府網站上的組織架構。縣市長是中選會的選舉當選人；各機關首長是從本屆

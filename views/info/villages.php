@@ -7,7 +7,9 @@ $section_name = ($this->has_townships ?? false) ? '鄉鎮市／村里長' : '村
 // 候選人姓名（有人物代碼就連到候選人頁）
 $person_link = function ($c) {
     $name = htmlspecialchars($c->{'姓名'} ?? '');
-    return ($c->{'人物代碼'} ?? null) ? '<a href="/info/candidate/' . rawurlencode($c->{'人物代碼'}) . '">' . $name . '</a>' : $name;
+    $html = ($c->{'人物代碼'} ?? null) ? '<a href="/info/candidate/' . rawurlencode($c->{'人物代碼'}) . '">' . $name . '</a>' : $name;
+    // 補選當選的（任期中途出缺後選出）標出來，跟原本的當選人並列
+    return $html . (($c->{'補選'} ?? false) ? '<span class="small text-body-secondary">（補選）</span>' : '');
 };
 // 首長職稱：鄉鎮的「鄉長／鎮長／市長」，山地原住民區是「區長」
 $chief_title = function ($town_name) {
@@ -25,7 +27,7 @@ if ($town === null) {
     foreach (($this->village_towns ?? []) as $t) {
         $sub = [];
         foreach ($t['首長'] ?? [] as $c) {
-            $sub[] = $chief_title($t['名稱']) . ' ' . ($c->{'姓名'} ?? '');
+            $sub[] = $chief_title($t['名稱']) . ' ' . ($c->{'姓名'} ?? '') . (($c->{'補選'} ?? false) ? '（補選）' : '');
         }
         if ($t['代表數'] ?? null) {
             $sub[] = $t['代表數'] . ' 位代表';
@@ -116,7 +118,7 @@ if ($town === null) {
       <div class="card-body p-2">
         <div class="fw-semibold"><?= htmlspecialchars($t['名稱']) ?></div>
         <?php foreach ($t['首長'] ?? [] as $c): ?>
-        <div class="small"><?= $chief_title($t['名稱']) ?> <span class="text-body"><?= htmlspecialchars($c->{'姓名'} ?? '') ?></span></div>
+        <div class="small"><?= $chief_title($t['名稱']) ?> <span class="text-body"><?= htmlspecialchars($c->{'姓名'} ?? '') ?></span><?= ($c->{'補選'} ?? false) ? '<span class="text-body-secondary">（補選）</span>' : '' ?></div>
         <?php endforeach; ?>
         <div class="small text-body-secondary"><?php if ($t['代表數'] ?? null): ?><?= (int) $t['代表數'] ?> 位代表・<?php endif; ?><?= (int) $t['村里數'] ?> 個村里</div>
       </div>
@@ -143,7 +145,7 @@ if ($town === null) {
 </div>
 <?php endif; ?>
 <?php if ($this->township_reps ?? []): ?>
-<h6 class="mt-3 mb-2"><?= $rep_title($town) ?><span class="small text-body-secondary fw-normal ms-2">民國 <?= (int) $this->township_rep_year ?> 年選出，<?= array_sum(array_map('count', $this->township_reps)) ?> 位</span></h6>
+<h6 class="mt-3 mb-2"><?= $rep_title($town) ?><span class="small text-body-secondary fw-normal ms-2">民國 <?= (int) $this->township_rep_year ?> 年選出，<?= count(array_filter(array_merge(...array_values($this->township_reps)), fn($c) => !($c->{'補選'} ?? false))) ?> 席</span></h6>
 <div class="row g-2 mb-3">
   <?php foreach ($this->township_reps as $district => $reps): ?>
   <div class="col-12 col-md-6 col-lg-4">
@@ -170,13 +172,7 @@ if ($town === null) {
         <?php if (!$v['村里長']): ?>
         <span class="small text-body-secondary">無人當選</span>
         <?php endif; ?>
-        <?php foreach ($v['村里長'] as $c): ?>
-        <?php if ($c->{'人物代碼'} ?? null): ?>
-        <a href="/info/candidate/<?= rawurlencode($c->{'人物代碼'}) ?>"><?= htmlspecialchars($c->{'姓名'} ?? '') ?></a>
-        <?php else: ?>
-        <?= htmlspecialchars($c->{'姓名'} ?? '') ?>
-        <?php endif; ?>
-        <?php endforeach; ?>
+        <?= implode('、', array_map($person_link, $v['村里長'])) ?>
       </span>
     </div>
   </div>

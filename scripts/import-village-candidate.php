@@ -10,7 +10,7 @@
  *
  * 來源：
  *   IMPORT_CANDIDATE_ELECTED_SOURCE_CSV  中選會候選人名冊 cand.csv（選舉代碼 ELC-V0-{年}，以及重行選舉
- *                                        ELC-V0-{年}-{村里行政區代碼}）
+ *                                        ELC-V0-{年}-{村里行政區代碼}、補選 BEL-V0-{年}:{投票日}:{村里代碼}）
  *   IMPORT_CANDIDATE_PERSON_SOURCE_JSONL 人物代碼對照 person.jsonl
  *   IMPORT_LY_CANDIDATE_VOTE_CSV         候選人得票數 vote.csv（跟立委、縣市長共用同一份）
  *   IMPORT_CANDIDATE_VILLAGE_JSONL       村里長選舉公報萃取結果（依候選人代碼併入學經歷、政見、相片；
@@ -21,7 +21,8 @@
  * 參選職位：村里長
  * 鄉鎮市區／鄉鎮市區代碼（行政區代碼前 8 碼）／村里：村里長名單頁依這三個欄位分組
  * 選區別：鄉鎮市區＋村里（例：中山區下埤里）；行政區代碼是村里層級，同一場選舉一個村里一個選區
- * 年份：重行選舉的年份沿用代碼裡的任期年份（例：ELC-V0-107-… 是 107 年那次選舉之後的重行選舉）
+ * 年份：重行選舉、補選的年份沿用代碼裡的任期年份（例：ELC-V0-107-… 是 107 年那次選舉之後的重行選舉，
+ * BEL-V0-111:20240817:… 是 111 年選出的那一任中途出缺、113 年 8 月 17 日的補選）；補選另有「補選」「投票日」欄位
  * 重行選舉在名冊裡「選舉名稱」跟「行政區代碼」兩欄對調（選舉名稱欄是行政區代碼，行政區代碼欄才是
  * 「臺北市第12屆大安區光武里里長重行選舉」這樣的名稱），部分還缺鄉鎮市區／村里別，用同一個行政區
  * 代碼在正式選舉裡的鄉鎮市區／村里補上
@@ -84,7 +85,7 @@ while (($line = fgets($fh)) !== false) {
     }
     $p = json_decode($line);
     foreach ($p->records ?? [] as $rec) {
-        if (strpos($rec->person_id ?? '', 'ELC-V0-') === 0) {
+        if (preg_match('/^(ELC|BEL)-V0-/', $rec->person_id ?? '')) {
             $person_code[$rec->person_id] = $p->id;
         }
     }
@@ -95,7 +96,7 @@ fclose($fh);
 $votes = [];
 [$fh, $headers] = $open_csv('IMPORT_LY_CANDIDATE_VOTE_CSV');
 while (($row = fgetcsv($fh)) !== false) {
-    if (count($row) === count($headers) && strpos($row[0], 'ELC-V0-') === 0 && strpos($row[2], $row[0] . ':') === 0) {
+    if (count($row) === count($headers) && preg_match('/^(ELC|BEL)-V0-/', $row[0]) && strpos($row[2], $row[0] . ':') === 0) {
         $votes[$row[2]] = intval($row[3]);
     }
 }
@@ -106,7 +107,7 @@ $rows = [];
 $area_names = [];  // 行政區代碼 → [鄉鎮市區, 村里]
 [$fh, $headers] = $open_csv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV');
 while (($row = fgetcsv($fh)) !== false) {
-    if (count($row) !== count($headers) || strpos($row[0], 'ELC-V0-') !== 0) {
+    if (count($row) !== count($headers) || !preg_match('/^(ELC|BEL)-V0-/', $row[0])) {
         continue;
     }
     $r = array_combine($headers, $row);
@@ -123,10 +124,11 @@ fclose($fh);
 $candidates = [];
 $skipped = 0;
 foreach ($rows as $r) {
-    if (!preg_match('/^ELC-V0-(\d+)(-\d+)?$/', $r['選舉代碼'], $m)) {
+    if (!preg_match('/^(?:ELC-V0-(\d+)(-\d+)?|BEL-V0-(\d+):(\d{8}):\d+)$/', $r['選舉代碼'], $m)) {
         continue;
     }
-    $year = (int) $m[1];
+    $by_election = ($m[3] ?? '') !== '';
+    $year = (int) ($by_election ? $m[3] : $m[1]);
     if ($r['鄉鎮市區'] === '' || $r['村里別'] === '') {
         [$r['鄉鎮市區'], $r['村里別']] = $area_names[$r['行政區代碼']] ?? ['', ''];
     }
@@ -168,7 +170,7 @@ foreach ($rows as $r) {
         '人物代碼'     => $person_code[$code] ?? null,
         '當選'         => in_array($r['當選註記'], ['*', '!'], true),
         '當選註記'     => $r['當選註記'] ?: null,
-    ];
+    ] + ($by_election ? ['補選' => true, '投票日' => preg_replace('/^(\d{4})(\d{2})(\d{2})$/', '$1-$2-$3', $m[4])] : []);
 }
 
 // 選舉公報（依候選人代碼併入；同代碼多筆時優先取有政見文字的）

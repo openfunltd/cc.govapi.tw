@@ -21,6 +21,8 @@
  *                                名冊裡也用 ELC-R2（選舉名稱是「直轄市區民代表」），歸到山地原住民區民代表
  *   ELC-D1-{年}                  直轄市山地原住民區長
  *   ELC-R1-{年}                  直轄市山地原住民區民代表（111 年起）
+ *   BEL-{D2,R2,D1,R1}-{年}:{投票日}:{行政區代碼[-選區]}  以上各種的補選（年份是任期年份），另有「補選」「投票日」欄位；
+ *                                代表補選的選區別換成同一任正式選舉的寫法（名冊裡補選只寫「第4選舉區」）
  *
  * 鄉鎮市區／鄉鎮市區代碼（行政區代碼前 8 碼）：行政體系「鄉鎮市／村里長」頁依這兩個欄位分組
  * 選區別：鄉鎮市長、區長是鄉鎮市區名稱；代表是名冊的選區名稱（例：茂林區第01選舉區）
@@ -61,8 +63,8 @@ $bulletin_image_url = function ($path) {
     $path = preg_replace('#^files/#', '', $path);
     return 'https://lydata.ronny-s3.click/bulletin/' . implode('/', array_map('rawurlencode', explode('/', $path)));
 };
-$code_re = '/^ELC-(D2|R2|D1|R1)-(\d+)(-[\d-]+)?$/';
-$is_ours = fn($code) => (bool) preg_match('/^ELC-(D2|R2|D1|R1)-/', $code);
+$code_re = '/^(?:ELC-(D2|R2|D1|R1)-(\d+)(-[\d-]+)?|BEL-(D2|R2|D1|R1)-(\d+):(\d{8}):([\d-]+))$/';
+$is_ours = fn($code) => (bool) preg_match('/^(ELC|BEL)-(D2|R2|D1|R1)-/', $code);
 
 $prefix = getenv('ELASTIC_PREFIX');
 Elastic::dbQuery("/{$prefix}candidate/_mapping", 'PUT', json_encode(['properties' => [
@@ -80,7 +82,7 @@ if (!$fh) {
     exit(1);
 }
 while (($line = fgets($fh)) !== false) {
-    if (!preg_match('/ELC-(D2|R2|D1|R1)-/', $line)) {
+    if (!preg_match('/(ELC|BEL)-(D2|R2|D1|R1)-/', $line)) {
         continue;
     }
     $p = json_decode($line);
@@ -102,25 +104,41 @@ while (($row = fgetcsv($fh)) !== false) {
 }
 fclose($fh);
 
-// 候選人
-$candidates = [];
-$skipped = 0;
+// 候選人（先讀進來：代表補選的選區別要用同一任正式選舉的寫法，得先看過正式選舉的選區）
+$rows = [];
+$district_names = [];  // [年][選區代碼（例：10008060-4）] => 正式選舉的選區別（例：名間鄉第04選區）
 [$fh, $headers] = $open_csv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV');
 while (($row = fgetcsv($fh)) !== false) {
     if (count($row) !== count($headers) || !$is_ours($row[0])) {
         continue;
     }
     $r = array_combine($headers, $row);
+    if (preg_match('/^ELC-(R1|R2)-(\d+)$/', $r['選舉代碼'], $m2) && $r['選區別'] !== '') {
+        $parts = explode(':', $r['候選人代碼']);
+        $district_names[(int) $m2[2]][$parts[count($parts) - 2]] = $r['選區別'];
+    }
+    $rows[] = $r;
+}
+fclose($fh);
+
+$candidates = [];
+$skipped = 0;
+foreach ($rows as $r) {
     if (!preg_match($code_re, $r['選舉代碼'], $m)) {
         continue;
     }
-    [, $kind, $year] = $m;
-    $year = (int) $year;
-    $rerun = ($m[3] ?? '') !== '';
-    if ($rerun) {
+    $by_election = ($m[4] ?? '') !== '';
+    $kind = $by_election ? $m[4] : $m[1];
+    $year = (int) ($by_election ? $m[5] : $m[2]);
+    $rerun = !$by_election && ($m[3] ?? '') !== '';
+    if ($rerun || $by_election) {
         [$r['選舉名稱'], $r['行政區代碼']] = [$r['行政區代碼'], $r['選舉名稱']];
     }
-    $town_code = $rerun ? substr(ltrim($m[3], '-'), 0, 8) : substr(str_replace('-', '', $r['行政區代碼']), 0, 8);
+    if ($by_election) {
+        $town_code = substr($m[7], 0, 8);
+    } else {
+        $town_code = $rerun ? substr(ltrim($m[3], '-'), 0, 8) : substr(str_replace('-', '', $r['行政區代碼']), 0, 8);
+    }
     if (!preg_match('/^\d{8}$/', $town_code)) {
         $skipped++;
         continue;
@@ -140,8 +158,13 @@ while (($row = fgetcsv($fh)) !== false) {
     $town = $r['鄉鎮市區'];
     $is_rep = in_array($kind, ['R1', 'R2'], true);
     $code = $r['候選人代碼'];
-    // 代表的選區：候選人代碼中間那段（例：64000360-1），同一場選舉同一選區比得票
-    $district_key = explode(':', $code)[1] ?? $town_code;
+    // 代表的選區：候選人代碼倒數第二段（例：64000360-1），同一場選舉同一選區比得票
+    $code_parts = explode(':', $code);
+    $district_key = $code_parts[count($code_parts) - 2] ?? $town_code;
+    $district = $r['選區別'] ?: $town;
+    if ($by_election && $is_rep) {
+        $district = $district_names[$year][$district_key] ?? ($town . $district);
+    }
     $candidates[$code] = [
         '代碼'         => $code,
         '候選人代碼'   => $code,
@@ -154,7 +177,7 @@ while (($row = fgetcsv($fh)) !== false) {
         '行政區代碼'   => $town_code,
         '鄉鎮市區'     => $town,
         '鄉鎮市區代碼' => $town_code,
-        '選區別'       => $is_rep ? ($r['選區別'] ?: $town) : $town,
+        '選區別'       => $is_rep ? $district : $town,
         '姓名'         => $r['姓名'],
         '號次'         => $r['號次'],
         '學歷'         => $r['學歷'] ?: null,
@@ -170,9 +193,8 @@ while (($row = fgetcsv($fh)) !== false) {
         '當選'         => in_array($r['當選註記'], ['*', '!'], true),
         '當選註記'     => $r['當選註記'] ?: null,
         '_race'        => $r['選舉代碼'] . '|' . $district_key,
-    ];
+    ] + ($by_election ? ['補選' => true, '投票日' => preg_replace('/^(\d{4})(\d{2})(\d{2})$/', '$1-$2-$3', $m[6])] : []);
 }
-fclose($fh);
 
 // 選舉公報（依候選人代碼併入；同代碼多筆時優先取有政見文字的）
 $has_manifesto = fn($r) => in_array($r['政見來源'] ?? '', ['text', 'manifesto-image-vision', 'cell-image-vision', 'page-image-vision', 'paddleocr'], true);
