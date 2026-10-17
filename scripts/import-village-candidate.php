@@ -172,7 +172,7 @@ foreach ($rows as $r) {
 }
 
 // 選舉公報（依候選人代碼併入；同代碼多筆時優先取有政見文字的）
-$has_manifesto = fn($r) => in_array($r['政見來源'] ?? '', ['text', 'manifesto-image-vision', 'cell-image-vision', 'page-image-vision'], true);
+$has_manifesto = fn($r) => in_array($r['政見來源'] ?? '', ['text', 'manifesto-image-vision', 'cell-image-vision', 'page-image-vision', 'paddleocr'], true);
 $bulletins = [];
 foreach (array_filter(array_map('trim', explode(',', (string) getenv('IMPORT_CANDIDATE_VILLAGE_JSONL')))) as $bulletin_path) {
     if (!file_exists($bulletin_path)) {

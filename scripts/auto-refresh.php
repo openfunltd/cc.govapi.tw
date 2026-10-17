@@ -177,6 +177,15 @@ $jobs = [
         ], array_map('trim', explode(',', (string) getenv('IMPORT_CANDIDATE_VILLAGE_JSONL')))),
         'import' => ["{$php_bin} {$dir}/import-village-candidate.php"],
     ],
+    'township_candidate' => [
+        // 鄉鎮市長、鄉鎮市民代表、山地原住民區長、區民代表（IMPORT_CANDIDATE_TOWNSHIP_JSONL 選填、可列多個）
+        'watch'  => array_merge([
+            getenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV'),
+            getenv('IMPORT_CANDIDATE_PERSON_SOURCE_JSONL'),
+            getenv('IMPORT_LY_CANDIDATE_VOTE_CSV'),
+        ], array_filter(array_map('trim', explode(',', (string) getenv('IMPORT_CANDIDATE_TOWNSHIP_JSONL'))))),
+        'import' => ["{$php_bin} {$dir}/import-township-candidate.php"],
+    ],
     'agency' => [
         'watch'  => [
             getenv('IMPORT_AGENCY_ORG_DIR'),

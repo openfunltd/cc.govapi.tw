@@ -160,6 +160,11 @@ class InfoController extends MiniEngine_Controller
                 // 行政體系底下分「縣市政府機關」與「村里長」（/info/{屆}/agencies/villages[/{鄉鎮市區}]），
                 // 村里長只有縣市議會才有（立法院等其他議會種類沒有對應的村里）
                 $this->view->has_villages = CCAPI_Council::getKind($cc_code) === '縣市議會';
+                // 縣（有鄉鎮市長選舉）的分頁叫「鄉鎮市／村里長」，直轄市、省轄市（區長官派）維持「村里長」
+                $this->view->has_townships = $this->view->has_villages && (CCAPI::apiQuery(
+                    '/candidates?limit=0&' . urlencode('參選職位') . '=' . urlencode('鄉鎮市長'),
+                    '本議會有沒有鄉鎮市長選舉資料'
+                )->total ?? 0) > 0;
                 $this->view->agency_section = ($sub_id === 'villages' && $this->view->has_villages) ? 'villages' : 'agencies';
                 if ($this->view->agency_section === 'villages') {
                     $this->loadVillagesTab($cc_code, $term_no, $sub_id2);
@@ -616,6 +621,7 @@ class InfoController extends MiniEngine_Controller
             return;
         }
         $base_qs = urlencode('參選職位') . '=' . urlencode('村里長') . '&' . urlencode('年份') . '=' . $year;
+        $this->loadTownshipOfficials($roc_year, $town);
 
         if ($town === null) {
             // 每個鄉鎮市區的村里數：依候選人的行政區代碼（村里層級）去重複計算
@@ -638,6 +644,8 @@ class InfoController extends MiniEngine_Controller
             }
             $this->view->village_towns = array_values(array_map(fn($t) => [
                 '代碼' => $t['代碼'], '名稱' => $t['名稱'], '村里數' => count($t['村里']),
+                '首長' => $this->view->township_chiefs[$t['代碼']] ?? [],
+                '代表數' => $this->view->township_rep_counts[$t['代碼']] ?? null,
             ], $towns));
             return;
         }
@@ -665,6 +673,85 @@ class InfoController extends MiniEngine_Controller
             $this->view->village_geo = "/static/geo/village/{$town_code}.json";
         }
         $this->view->village_list = array_values($villages);
+    }
+
+    /**
+     * 鄉鎮市長、鄉鎮市民代表（縣），以及直轄市山地原住民區長、區民代表（scripts/import-township-candidate.php）。
+     * 鄉鎮市長、代表通常跟縣市議員同一天選，但民國 98／99 年那次代表跟村里長一起在 99 年選，
+     * 所以首長、代表各自取跟本屆投票日同年或隔年的那次選舉。
+     *
+     * 鄉鎮市區列表：township_chiefs[鄉鎮市區代碼] = 當選首長、township_rep_counts[鄉鎮市區代碼] = 當選代表人數
+     * 單一鄉鎮市區：township_chief_race = 首長那場選舉的全部候選人（依得票排序）、
+     *               township_reps = [選區別 => 當選代表]
+     */
+    protected function loadTownshipOfficials($roc_year, $town)
+    {
+        // view 的屬性是 magic property，不能直接 $this->view->x[] = …（間接修改會靜靜失敗），先用區域變數
+        $chiefs = $rep_counts = $chief_race = $reps = [];
+        $this->view->township_chief_year = null;
+        $this->view->township_rep_year = null;
+        $positions = [
+            'chief' => ['鄉鎮市長', '山地原住民區長'],
+            'rep'   => ['鄉鎮市民代表', '山地原住民區民代表'],
+        ];
+        $pos_qs = fn($list) => implode('&', array_map(fn($p) => urlencode('參選職位') . '=' . urlencode($p), $list));
+        $year_of = [];
+        foreach ($positions as $kind => $list) {
+            $r = CCAPI::apiQuery('/candidates?limit=0&' . $pos_qs($list) . '&agg=' . urlencode('年份'), '本議會有收錄的鄉鎮市選舉年份');
+            $years = array_map(fn($b) => (int) $b->{'年份'}, $r->aggs[0]->buckets ?? []);
+            foreach ([$roc_year, $roc_year + 1] as $y) {
+                if (in_array($y, $years, true)) {
+                    $year_of[$kind] = $y;
+                    break;
+                }
+            }
+        }
+        $this->view->township_chief_year = $year_of['chief'] ?? null;
+        $this->view->township_rep_year = $year_of['rep'] ?? null;
+        $fields = ['姓名', '人物代碼', '鄉鎮市區代碼', '鄉鎮市區', '參選職位', '選區別', '當選', '得票數', '得票率', '號次', '其他欄位', '選舉代碼'];
+        $fields_qs = implode('', array_map(fn($f) => '&output_fields=' . urlencode($f), $fields));
+        $town_qs = $town !== null ? '&' . urlencode('鄉鎮市區') . '=' . urlencode($town) : '';
+
+        if (isset($year_of['chief'])) {
+            $r = CCAPI::apiQuery(
+                '/candidates?limit=3000&' . $pos_qs($positions['chief']) . '&' . urlencode('年份') . '=' . $year_of['chief']
+                    . $town_qs . '&' . urlencode('當選') . '=true' . $fields_qs,
+                $town === null ? '本屆鄉鎮市長（區長）當選人' : '該鄉鎮市區的鄉鎮市長（區長）當選人'
+            );
+            foreach (($r->candidates ?? []) as $c) {
+                if ($town === null) {
+                    if ($c->{'當選'} ?? false) {
+                        $chiefs[$c->{'鄉鎮市區代碼'} ?? ''][] = $c;
+                    }
+                } elseif ($c->{'當選'} ?? false) {
+                    $chief_race[] = $c;
+                }
+            }
+            usort($chief_race, fn($a, $b) => [$a->{'選舉代碼'} ?? '', -($a->{'得票數'} ?? 0)] <=> [$b->{'選舉代碼'} ?? '', -($b->{'得票數'} ?? 0)]);
+        }
+        if (isset($year_of['rep'])) {
+            $r = CCAPI::apiQuery(
+                '/candidates?limit=5000&' . $pos_qs($positions['rep']) . '&' . urlencode('年份') . '=' . $year_of['rep']
+                    . $town_qs . '&' . urlencode('當選') . '=true' . $fields_qs,
+                $town === null ? '本屆鄉鎮市民代表（區民代表）當選人' : '該鄉鎮市區的鄉鎮市民代表（區民代表）當選人'
+            );
+            foreach (($r->candidates ?? []) as $c) {
+                if (!($c->{'當選'} ?? false)) {
+                    continue;
+                }
+                if ($town === null) {
+                    $code = $c->{'鄉鎮市區代碼'} ?? '';
+                    $rep_counts[$code] = ($rep_counts[$code] ?? 0) + 1;
+                } else {
+                    $reps[$c->{'選區別'} ?? ''][] = $c;
+                }
+            }
+            ksort($reps);
+        }
+        $this->view->township_chiefs = $chiefs;
+        $this->view->township_rep_counts = $rep_counts;
+        $this->view->township_chief_race = $chief_race;
+        $this->view->township_reps = $reps;
     }
 
     protected function loadCommittees($cc_code)

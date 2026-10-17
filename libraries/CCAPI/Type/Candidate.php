@@ -83,21 +83,21 @@ class CCAPI_Type_Candidate extends CCAPI_Type
             ],
             '學歷來源' => [
                 'es_field' => '學歷來源',
-                'description' => '「學歷」欄位內容是否可用：text=可用；text-garbled=文字層抽出來是亂碼、不可當文字用；cell-image-vision=AI 視覺模型辨識裁切後的欄位圖片得出的文字（不是 PDF 文字層，仍可當文字用，但準確度可能略低，細節見 note）；沒有這個欄位代表學歷是圖片或空白',
+                'description' => '「學歷」欄位內容是否可用：text=可用；text-garbled=文字層抽出來是亂碼、不可當文字用；cell-image-vision=AI 視覺模型辨識裁切後的欄位圖片得出的文字（不是 PDF 文字層，仍可當文字用，但準確度可能略低，細節見 note）；paddleocr=PaddleOCR 辨識公報圖片得出的文字（村里長公報中沒有文字層的部分，準確度可能略低）；沒有這個欄位代表學歷是圖片或空白',
                 'type' => 'string',
-                'enum' => ['text', 'text-garbled', 'cell-image-vision'],
+                'enum' => ['text', 'text-garbled', 'cell-image-vision', 'paddleocr'],
             ],
             '經歷來源' => [
                 'es_field' => '經歷來源',
                 'description' => '「經歷」欄位內容是否可用，規則同「學歷來源」',
                 'type' => 'string',
-                'enum' => ['text', 'text-garbled', 'cell-image-vision'],
+                'enum' => ['text', 'text-garbled', 'cell-image-vision', 'paddleocr'],
             ],
             '政見來源' => [
                 'es_field' => '政見來源',
-                'description' => '「政見」欄位內容是否可用：text=可用；text-garbled=文字層抽出來是亂碼、不可當文字用；cell-image-vision=AI 視覺模型辨識裁切後的欄位圖片得出的文字；manifesto-image-vision=政見整欄是一張圖時，AI 視覺模型直接辨識整張圖得出的文字（政見欄最常見這種來源）；page-image-vision=整頁都是掃描圖、逐頁辨識出來的文字（以上三種辨識來源皆不是 PDF 文字層，仍可當文字用，但準確度可能略低，細節見 note）；沒有這個欄位代表政見是圖片或空白（見「政見圖路徑」）',
+                'description' => '「政見」欄位內容是否可用：text=可用；text-garbled=文字層抽出來是亂碼、不可當文字用；cell-image-vision=AI 視覺模型辨識裁切後的欄位圖片得出的文字；manifesto-image-vision=政見整欄是一張圖時，AI 視覺模型直接辨識整張圖得出的文字（政見欄最常見這種來源）；page-image-vision=整頁都是掃描圖、逐頁辨識出來的文字；paddleocr=PaddleOCR 辨識公報圖片得出的文字（村里長公報中沒有文字層的部分）（以上辨識來源皆不是 PDF 文字層，仍可當文字用，但準確度可能略低，細節見 note）；沒有這個欄位代表政見是圖片或空白（見「政見圖路徑」）',
                 'type' => 'string',
-                'enum' => ['text', 'text-garbled', 'cell-image-vision', 'manifesto-image-vision', 'page-image-vision'],
+                'enum' => ['text', 'text-garbled', 'cell-image-vision', 'manifesto-image-vision', 'page-image-vision', 'paddleocr'],
             ],
             '得票排名' => [
                 'es_field' => '得票排名',
@@ -106,18 +106,18 @@ class CCAPI_Type_Candidate extends CCAPI_Type
             ],
             '參選職位' => [
                 'es_field' => '參選職位',
-                'description' => '縣市首長、村里長選舉的參選職位（直轄市長／縣市長／村里長）；議員、立委候選人沒有這個欄位',
+                'description' => '縣市首長、鄉鎮市長、代表、村里長選舉的參選職位（直轄市長／縣市長／鄉鎮市長／鄉鎮市民代表／山地原住民區長／山地原住民區民代表／村里長）；議員、立委候選人沒有這個欄位',
                 'type' => 'string',
-                'enum' => ['直轄市長', '縣市長', '村里長'],
+                'enum' => ['直轄市長', '縣市長', '鄉鎮市長', '鄉鎮市民代表', '山地原住民區長', '山地原住民區民代表', '村里長'],
             ],
             '鄉鎮市區' => [
                 'es_field' => '鄉鎮市區',
-                'description' => '村里長候選人所屬鄉鎮市區（例: 中山區）；其他選舉沒有這個欄位',
+                'description' => '鄉鎮市長、鄉鎮市民代表、山地原住民區長、區民代表、村里長候選人所屬鄉鎮市區（例: 中山區）；其他選舉沒有這個欄位',
                 'type' => 'string',
             ],
             '鄉鎮市區代碼' => [
                 'es_field' => '鄉鎮市區代碼',
-                'description' => '村里長候選人所屬鄉鎮市區的行政區代碼（村里行政區代碼前 8 碼，例: 63000040）；其他選舉沒有這個欄位',
+                'description' => '鄉鎮市長、鄉鎮市民代表、山地原住民區長、區民代表、村里長候選人所屬鄉鎮市區的行政區代碼（8 碼，例: 63000040）；其他選舉沒有這個欄位',
                 'type' => 'string',
             ],
             '村里' => [
