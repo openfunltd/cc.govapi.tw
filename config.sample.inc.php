@@ -40,6 +40,7 @@ putenv('IMPORT_MEET_TRANSCRIPT_CSV=');// meet_transcripts.csv 路徑，預設
 putenv('IMPORT_CANDIDATE_JSONL=');    // bulletin.jsonl 路徑，預設 {project}/bulletin.jsonl
 putenv('IMPORT_CANDIDATE_VILLAGE_JSONL=');  // 村里長選舉公報萃取結果 jsonl 路徑（import-village-candidate.php，選填，可用逗號列多個）
 putenv('IMPORT_CANDIDATE_TOWNSHIP_JSONL=');  // 鄉鎮市長、代表選舉公報萃取結果 jsonl 路徑（import-township-candidate.php，選填，可用逗號列多個）
+putenv('IMPORT_CANDIDATE_MANIFESTO_SUPPLEMENT_JSONL=');  // 政見圖 OCR 補充檔 jsonl（import-candidate.php，選填；只補政見不是可用文字的候選人）
 putenv('IMPORT_CANDIDATE_VOTES_JSONL=');// 得票數.jsonl 路徑（已篩選縣市/直轄市議員、
                                        // 縣市層級得票數的子集），預設 {project}/得票數.jsonl
 putenv('IMPORT_CANDIDATE_PERSON_JSONL=');// 人物代碼.jsonl 路徑（候選人代碼→人物代碼

@@ -191,6 +191,29 @@ try {
 }
 
 $jsonl_path = getenv('IMPORT_CANDIDATE_JSONL') ?: (__DIR__ . '/../bulletin.jsonl');
+
+// 政見補充檔（選填，IMPORT_CANDIDATE_MANIFESTO_SUPPLEMENT_JSONL）：政見是圖片或文字層是亂碼的候選人，
+// 另外用 OCR 辨識政見圖的結果（每行 {候選人代碼, 政見, 政見來源}）。只在公報本身的政見不是可用
+// 文字時才用，不覆蓋可用的文字
+$manifesto_supplement = [];
+$supplement_path = getenv('IMPORT_CANDIDATE_MANIFESTO_SUPPLEMENT_JSONL');
+if ($supplement_path && file_exists($supplement_path)) {
+    foreach (file($supplement_path) as $line) {
+        $d = json_decode($line, true);
+        if (!empty($d['候選人代碼']) && trim((string) ($d['政見'] ?? '')) !== '') {
+            $manifesto_supplement[$d['候選人代碼']] = $d;
+        }
+    }
+}
+$apply_supplement = function ($doc) use ($manifesto_supplement) {
+    $usable = ['text', 'manifesto-image-vision', 'cell-image-vision', 'page-image-vision', 'paddleocr'];
+    $sup = $manifesto_supplement[$doc['候選人代碼'] ?? ''] ?? null;
+    if ($sup && (!in_array($doc['政見來源'] ?? '', $usable, true) || trim((string) ($doc['政見'] ?? '')) === '')) {
+        $doc['政見'] = $sup['政見'];
+        $doc['政見來源'] = $sup['政見來源'] ?? 'paddleocr';
+    }
+    return $doc;
+};
 if (!file_exists($jsonl_path)) {
     error_log("ERROR: 找不到 bulletin.jsonl：{$jsonl_path}");
     exit(1);
@@ -393,6 +416,16 @@ function import_candidate_doc($record, $doc_id, $county_to_cc_code, $votes_by_co
         $doc[$key] = $val;
     }
 
+    // 人工核對 PDF 修正過的紀錄（note 會寫「已核對PDF重新拆分」之類）常常只改了欄位內容、
+    // 沒補「X來源」，前端會把沒有來源的欄位當成不可用文字而不顯示（實測 50 位議員的政見
+    // 因此看不到）。有文字、沒來源、也不是政見圖的，視為文字層（text）
+    foreach (['學歷', '經歷', '政見'] as $field) {
+        if (trim((string) ($doc[$field] ?? '')) !== '' && empty($doc[$field . '來源'])
+            && !($field === '政見' && !empty($doc['政見圖路徑']))) {
+            $doc[$field . '來源'] = 'text';
+        }
+    }
+
     // 候選人代碼格式固定是 {選舉代碼}:{行政區代碼}-{選區}:{號次}（例：
     // ELC-T1-111:68000-7:1），沒比對到候選人名冊時來源不會算出選舉代碼／
     // 行政區代碼，這裡從候選人代碼反解出來，不然「同選區得票比較」查不到同一場選舉
@@ -442,7 +475,7 @@ foreach ($grouped as $code => $records) {
         $dedup_dropped += count($records) - 1;
     }
 
-    $doc = import_candidate_doc($chosen, $code, $county_to_cc_code, $votes_by_code, $votes_rank, $person_by_code, $elected_by_code);
+    $doc = $apply_supplement(import_candidate_doc($chosen, $code, $county_to_cc_code, $votes_by_code, $votes_rank, $person_by_code, $elected_by_code));
     if (!isset($doc['議會代碼'])) {
         $no_council_code_field++;
     }
