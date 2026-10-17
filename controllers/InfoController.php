@@ -170,8 +170,8 @@ class InfoController extends MiniEngine_Controller
                     $this->loadVillagesTab($cc_code, $term_no, $sub_id2);
                 } else {
                     $this->view->agency_tree = $this->loadAgencyTree($cc_code, $term_no);
-                    if ($cc_code === 'ly') {
-                        $this->loadPresidents();
+                    if (in_array($cc_code, ['ly', 'tpg'], true)) {
+                        $this->loadPresidents($cc_code);
                     }
                 }
                 break;
@@ -681,22 +681,25 @@ class InfoController extends MiniEngine_Controller
     /**
      * 立法院行政體系最上面的總統、副總統（scripts/import-president-candidate.php，議會代碼掛 ly）。
      * 取本屆立委投票日隔年以前最近的一次總統選舉（第 3 屆立委 84 年底選出，對應 85 年選出的總統；
-     * 97 年起立委、總統同年選）。president_ticket = [總統, 副總統]，president_history = 歷屆當選組
+     * 97 年起立委、總統同年選）。president_ticket = [總統, 副總統]，president_history = 歷屆當選組。
+     * 臺灣省議會（tpg）同一套顯示省長（只有 83 年一次民選）
      */
-    protected function loadPresidents()
+    protected function loadPresidents($cc_code = 'ly')
     {
         $this->view->president_ticket = null;
         $this->view->president_history = [];
+        $titles = $cc_code === 'tpg' ? ['省長'] : ['總統', '副總統'];
+        $this->view->president_titles = $titles;
         $vote_date = $this->term_data->{'投票日'} ?? ($this->term_data->{'就職日'} ?? null);
         $fields = ['姓名', '人物代碼', '參選職位', '年份', '選舉名稱', '得票數', '得票率', '其他欄位', '號次', '當選'];
         $r = CCAPI::apiQuery(
-            '/candidates?limit=100&' . urlencode('參選職位') . '=' . urlencode('總統') . '&' . urlencode('參選職位') . '=' . urlencode('副總統')
+            '/candidates?limit=100&' . implode('&', array_map(fn($t) => urlencode('參選職位') . '=' . urlencode($t), $titles))
                 . '&' . urlencode('當選') . '=true' . implode('', array_map(fn($f) => '&output_fields=' . urlencode($f), $fields)),
-            '歷屆總統、副總統當選人'
+            '歷屆' . implode('、', $titles) . '當選人'
         );
         $by_year = [];
         foreach (($r->candidates ?? []) as $c) {
-            $by_year[(int) $c->{'年份'}][$c->{'參選職位'} === '總統' ? 0 : 1] = $c;
+            $by_year[(int) $c->{'年份'}][(int) array_search($c->{'參選職位'}, $titles, true)] = $c;
         }
         krsort($by_year);
         $this->view->president_history = $by_year;
@@ -1427,7 +1430,9 @@ class InfoController extends MiniEngine_Controller
             if ($candidate && ($candidate->{'選舉代碼'} ?? null)) {
                 $race_qs = '&' . urlencode('選舉代碼') . '=' . urlencode($candidate->{'選舉代碼'})
                     . '&' . urlencode('行政區代碼') . '=' . urlencode($candidate->{'行政區代碼'} ?? '')
-                    . '&' . urlencode('選區別') . '=' . urlencode($candidate->{'選區別'} ?? '');
+                    . '&' . urlencode('選區別') . '=' . urlencode($candidate->{'選區別'} ?? '')
+                    // 總統副總統一組兩筆（正、副手得票相同），比較表一組只列總統候選人那一筆
+                    . (in_array($candidate->{'參選職位'} ?? '', ['總統', '副總統'], true) ? '&' . urlencode('參選職位') . '=' . urlencode('總統') : '');
                 $race_r = CCAPI::apiQuery(
                     '/candidates?limit=100&sort=' . urlencode('得票排名<') . $race_qs,
                     '同選區候選人得票比較'
@@ -1509,7 +1514,9 @@ class InfoController extends MiniEngine_Controller
             if ($cand->{'選舉代碼'} ?? null) {
                 $race_qs = '&' . urlencode('選舉代碼') . '=' . urlencode($cand->{'選舉代碼'})
                     . '&' . urlencode('行政區代碼') . '=' . urlencode($cand->{'行政區代碼'} ?? '')
-                    . '&' . urlencode('選區別') . '=' . urlencode($cand->{'選區別'} ?? '');
+                    . '&' . urlencode('選區別') . '=' . urlencode($cand->{'選區別'} ?? '')
+                    // 總統副總統一組兩筆（正、副手得票相同），比較表一組只列總統候選人那一筆
+                    . (in_array($cand->{'參選職位'} ?? '', ['總統', '副總統'], true) ? '&' . urlencode('參選職位') . '=' . urlencode('總統') : '');
                 $race_r = CCAPI::apiQuery(
                     '/candidates?limit=100&sort=' . urlencode('得票排名<') . $race_qs,
                     '同選區候選人得票比較'

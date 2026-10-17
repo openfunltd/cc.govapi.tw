@@ -8,6 +8,9 @@ class CCAPI_Council
     protected static $councils = [
         // 國會
         'ly' => '立法院',
+        'na' => '國民大會',
+        // 省議會
+        'tpg' => '臺灣省議會',
         // 現行議會
         'tpe' => '臺北市議會',
         'nwt' => '新北市議會',
@@ -52,7 +55,7 @@ class CCAPI_Council
      * 隱藏議會：子網域可以正常使用（只有知道網址的人看得到），但不出現在任何
      * 議會清單，all 跨議會查詢也會排除它的資料。用於新資料來源正式公開前的測試。
      */
-    protected static $hidden_councils = ['ly'];
+    protected static $hidden_councils = ['ly', 'na', 'tpg'];
 
     /**
      * 不受隱藏議會限制的型別：all 查詢照常包含隱藏議會的資料。候選人先開放，讓跨選舉的
@@ -66,6 +69,8 @@ class CCAPI_Council
      */
     protected static $council_kinds = [
         'ly' => '立法院',
+        'na' => '國民大會',
+        'tpg' => '省議會',
     ];
 
     /**
@@ -77,6 +82,14 @@ class CCAPI_Council
             '副議長' => '副院長',
             '議長' => '院長',
             '議員' => '立法委員',
+            '議會官網公告頁' => '資料來源',
+        ],
+        '國民大會' => [
+            '議員' => '國民大會代表',
+            '議會官網公告頁' => '資料來源',
+        ],
+        '省議會' => [
+            '議員' => '省議員',
             '議會官網公告頁' => '資料來源',
         ],
     ];

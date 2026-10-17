@@ -204,6 +204,15 @@ $jobs = [
         ],
         'import' => ["{$php_bin} {$dir}/import-roster-councilor-candidate.php"],
     ],
+    'na_tpg' => [
+        // 國民大會、臺灣省議會：議會、屆期是程式內的參考資料，候選人與名單來自中選會名冊
+        'watch'  => [
+            getenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV'),
+            getenv('IMPORT_CANDIDATE_PERSON_SOURCE_JSONL'),
+            getenv('IMPORT_LY_CANDIDATE_VOTE_CSV'),
+        ],
+        'import' => ["{$php_bin} {$dir}/import-na-tpg.php"],
+    ],
     'agency' => [
         'watch'  => [
             getenv('IMPORT_AGENCY_ORG_DIR'),
