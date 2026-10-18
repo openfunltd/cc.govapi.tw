@@ -351,12 +351,56 @@ document.addEventListener('click', function (e) {
     <?php if (CCAPI::hasLog()): ?>
     <div class="card shadow-sm my-4">
       <div class="card-body">
-        <h2 class="h6 fw-semibold mb-2">本頁使用 API</h2>
+        <?php
+        // 「複製給 AI 的提示詞」：把本頁用到的 API 和用途包成一段 prompt，貼給代理型 AI 接著做資料分析
+        $api_logs = CCAPI::getLogs();
+        $api_base = preg_replace('#^(https://[^/]+).*$#', '$1', $api_logs[0][0] ?? '');
+        $page_url = 'https://' . ($_SERVER['HTTP_HOST'] ?? '') . urldecode(preg_replace('/[?&]x=\d+$/', '', $_SERVER['REQUEST_URI'] ?? ''));
+        $uses_candidate = (bool) array_filter($api_logs, fn($l) => preg_match('#/api/candidates?[/?]#', $l[0]));
+        $prompt = "我正在看「" . ($og_title ?? '') . "」這個網頁：\n{$page_url}\n\n"
+            . "這頁的資料來自地方議會開放 API（CCAPI），請你直接呼叫下面這些 API 取得同樣的資料，幫我做進一步的分析。\n\n"
+            . "## 這頁用到的 API\n"
+            . implode('', array_map(fn($l) => "- {$l[1]}：" . urldecode($l[0]) . "\n", $api_logs))
+            . "\n## 使用方式\n"
+            . "- 呼叫前請先讀 {$api_base}/skill.md（API 使用說明：篩選、分頁、欄位）和 {$api_base}/knowledge.md（資料的背景知識，例如「議員」「議會」在這裡的精確意思）。欄位定義與可用的篩選條件見 {$api_base}/swagger。\n"
+            . "- 回應是 JSON，有 total、total_page、page、limit；資料多時用 page 參數分頁抓完，可以用 output_fields 只取需要的欄位，也可以改用其他篩選欄位查更多資料。\n"
+            . "- 不需要 token 也能呼叫，但匿名請求有流量限制，請控制呼叫頻率；不要抓 HTML 網頁，直接呼叫 API。\n"
+            . ($uses_candidate ? "\n## 候選人資料的限制\n"
+                . "- 選舉公報（學歷、經歷、政見、相片）只回溯到民國 98 年，更早的選舉多半只有得票資料。\n"
+                . "- 「學歷來源」「經歷來源」「政見來源」是 paddleocr、cell-image-vision、manifesto-image-vision、page-image-vision 的，是從公報圖片辨識出來的文字，可能有錯字；text-garbled 是亂碼，不能當文字用；沒有來源欄位代表那一欄是圖片或空白（政見圖見「政見圖路徑」）。\n"
+                . "- 選舉代碼 ELC- 開頭是正式選舉，BEL- 開頭是補選。「登記階段」為 true 的是還在登記階段的參選人，還沒有號次、學經歷與政見。\n"
+                . "- 同一個人跨次選舉用「人物代碼」串連。\n" : '')
+            . "\n## 回答時\n"
+            . "- 結論請附上你用到的 API 網址，方便我回頭核對。\n"
+            . "- 資料不足以下結論的地方請直接說明，不要用一般知識補。\n"
+            . "\n我想分析的是：";
+        ?>
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+          <h2 class="h6 fw-semibold mb-0">本頁使用 API</h2>
+          <button type="button" class="btn btn-sm btn-outline-primary py-0" id="copy-ai-prompt">📋 複製給 AI 的提示詞</button>
+          <button type="button" class="btn btn-sm btn-link py-0" data-bs-toggle="collapse" data-bs-target="#ai-prompt-preview" aria-expanded="false">預覽</button>
+        </div>
         <ul class="small mb-0 ps-3">
-          <?php foreach (CCAPI::getLogs() as $log): ?>
+          <?php foreach ($api_logs as $log): ?>
           <li><a href="<?= htmlspecialchars($log[0]) ?>" target="_blank"><?= htmlspecialchars($log[1]) ?></a></li>
           <?php endforeach; ?>
         </ul>
+        <div class="collapse mt-2" id="ai-prompt-preview">
+          <p class="small text-body-secondary mb-1">把這段提示詞貼給 ChatGPT、Claude 等能上網呼叫 API 的 AI，在最後補上你想分析的問題。</p>
+          <pre class="small border rounded p-2 bg-body-tertiary mb-0" style="white-space: pre-wrap; max-height: 360px; overflow:auto;" id="ai-prompt-text"><?= htmlspecialchars($prompt) ?></pre>
+        </div>
+        <script>
+        document.getElementById('copy-ai-prompt').addEventListener('click', function () {
+          var btn = this, text = document.getElementById('ai-prompt-text').textContent;
+          var done = function () { btn.textContent = '✅ 已複製'; setTimeout(function () { btn.textContent = '📋 複製給 AI 的提示詞'; }, 2000); };
+          if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(done);
+          } else {
+            var ta = document.createElement('textarea');
+            ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); done();
+          }
+        });
+        </script>
       </div>
     </div>
     <?php endif; ?>
