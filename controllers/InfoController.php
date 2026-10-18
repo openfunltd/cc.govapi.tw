@@ -109,9 +109,28 @@ class InfoController extends MiniEngine_Controller
 
         // 選舉指南：/info/election/{年}，即將舉行（或剛辦完）的那次選舉的候選人。不屬於屆次路由：
         // 選前還沒有新的一屆，候選人資料（含登記階段的參選人）放在 candidate index，用年份查
+        // /info/election/{年}/town/{鄉鎮市區}：鄉鎮市長、代表、各村里的候選人
+        // /info/election/{年}/race/{類別}:{選區別}：單一選舉（例：V0:板橋區華東里）全部候選人的學經歷、政見，像選舉公報
         if ($term_no === 'election' && !CCAPI_Council::isAll($cc_code)) {
             $this->view->is_election_guide = true;
-            $this->loadElectionGuide((int) ($tab ?: self::NEXT_ELECTION_YEAR));
+            $year = (int) ($tab ?: self::NEXT_ELECTION_YEAR);
+            if ($sub_id === 'race' && $sub_id2) {
+                $this->loadElectionRace($year, $sub_id2);
+                $this->setOg(
+                    $this->view->council_name . '・' . $year . ' 年' . $this->view->race_title . '候選人',
+                    $this->view->race_title . '候選人的學歷、經歷與政見。'
+                );
+                return;
+            }
+            if ($sub_id === 'town' && $sub_id2) {
+                $this->loadElectionTown($year, $sub_id2);
+                $this->setOg(
+                    $this->view->council_name . $sub_id2 . '・' . $year . ' 年選舉候選人',
+                    $sub_id2 . ' ' . $year . ' 年鄉鎮市長、代表與村里長候選人。'
+                );
+                return;
+            }
+            $this->loadElectionGuide($year);
             $this->setOg(
                 $this->view->council_name . '・' . $this->view->election_year . ' 年選舉候選人',
                 $this->view->council_name . '轄區 ' . $this->view->election_year . ' 年地方選舉的縣市長、' . CouncilHelper::t('議員') . '候選人與歷年參選紀錄。'
@@ -711,48 +730,156 @@ class InfoController extends MiniEngine_Controller
 
     /**
      * 選舉指南：這個議會轄區內某次選舉的候選人（登記階段的參選人也算，見
-     * scripts/import-registration-candidate.php）。
+     * scripts/import-registration-candidate.php）。補選不算（選舉代碼不是 ELC- 開頭）。
      * election_mayors = 縣市長候選人；election_districts = [選區別 => 議員候選人]；
-     * election_local_counts = [參選職位 => 人數]（鄉鎮市長、代表、村里長，細節在「鄉鎮市／村里長」頁）；
-     * 上一次同類選舉當選的人標成現任（人物代碼相同）
+     * election_towns = [鄉鎮市區 => [參選職位 => 人數]]（鄉鎮市長、代表、村里長，細節在各鄉鎮市區頁）
      */
     protected function loadElectionGuide($year)
     {
         $this->view->election_year = $year;
-        $fields = ['姓名', '人物代碼', '參選職位', '選舉類型', '選區別', '號次', '其他欄位', '登記階段', '登記日期', '得票數', '得票率', '當選', '選舉代碼', '政見來源'];
+        $fields = ['姓名', '人物代碼', '參選職位', '選舉類型', '選區別', '號次', '其他欄位', '登記階段', '登記日期', '得票數', '得票率', '當選', '選舉代碼', '鄉鎮市區', '鄉鎮市區代碼'];
         $fields_qs = implode('', array_map(fn($f) => '&output_fields=' . urlencode($f), $fields));
         $r = CCAPI::apiQuery('/candidates?limit=10000&' . urlencode('年份') . '=' . $year . $fields_qs, $year . ' 年選舉的候選人');
-        $mayors = $districts = $local = [];
+        $mayors = $districts = $towns = $town_codes = [];
         foreach (($r->candidates ?? []) as $c) {
+            if (!str_starts_with($c->{'選舉代碼'} ?? '', 'ELC-')) {
+                continue;
+            }
             $position = $c->{'參選職位'} ?? null;
             if (in_array($position, ['直轄市長', '縣市長'], true)) {
                 $mayors[] = $c;
             } elseif (in_array($c->{'選舉類型'} ?? '', ['直轄市議員', '縣市議員'], true)) {
                 $districts[$c->{'選區別'} ?? ''][] = $c;
-            } elseif ($position) {
-                $local[$position] = ($local[$position] ?? 0) + 1;
+            } elseif ($position && ($c->{'鄉鎮市區'} ?? null)) {
+                $towns[$c->{'鄉鎮市區'}][$position] = ($towns[$c->{'鄉鎮市區'}][$position] ?? 0) + 1;
+                $town_codes[$c->{'鄉鎮市區'}] = $c->{'鄉鎮市區代碼'} ?? '';
             }
         }
         ksort($districts);
-        $by_number = fn($a, $b) => [(int) ($a->{'號次'} ?? 999), $a->{'登記日期'} ?? ''] <=> [(int) ($b->{'號次'} ?? 999), $b->{'登記日期'} ?? ''];
-        usort($mayors, $by_number);
+        uksort($towns, fn($a, $b) => [$town_codes[$a], $a] <=> [$town_codes[$b], $b]);
+        usort($mayors, [$this, 'compareCandidateNumber']);
         foreach ($districts as &$list) {
-            usort($list, $by_number);
+            usort($list, [$this, 'compareCandidateNumber']);
         }
         unset($list);
 
-        // 現任：上一次（4 年前）同類選舉的當選人
-        $incumbent = [];
-        $prev = CCAPI::apiQuery('/candidates?limit=5000&' . urlencode('年份') . '=' . ($year - 4) . '&' . urlencode('當選') . '=true'
-            . '&output_fields=' . urlencode('人物代碼') . '&output_fields=' . urlencode('參選職位') . '&output_fields=' . urlencode('選舉類型'),
-            '上一次選舉的當選人（標示現任）');
-        foreach (($prev->candidates ?? []) as $c) {
-            if (($c->{'人物代碼'} ?? null) && (in_array($c->{'參選職位'} ?? '', ['直轄市長', '縣市長'], true)
-                || in_array($c->{'選舉類型'} ?? '', ['直轄市議員', '縣市議員'], true))) {
-                $incumbent[$c->{'人物代碼'}] = '現任';
+        $this->view->election_mayors = $mayors;
+        $this->view->election_districts = $districts;
+        $this->view->election_towns = $towns;
+        $this->view->election_incumbent = $this->loadElectionIncumbents($year);
+        $this->view->election_registration_only = (bool) array_filter(array_merge($mayors, ...array_values($districts) ?: [[]]),
+            fn($c) => $c->{'登記階段'} ?? false);
+        $this->view->latest_term_no = CCAPI::apiQuery('/overview/' . rawurlencode($this->view->cc_code), '本議會現況資料')->data->{'屆次'} ?? null;
+    }
+
+    /**
+     * 選舉指南的鄉鎮市區頁：鄉鎮市長（原住民區長）、代表（依選區）、各村里的候選人
+     */
+    protected function loadElectionTown($year, $town)
+    {
+        $this->view->election_year = $year;
+        $this->view->election_town = $town;
+        $fields = ['姓名', '人物代碼', '參選職位', '選區別', '村里', '行政區代碼', '號次', '其他欄位', '登記階段', '得票數', '得票率', '當選', '選舉代碼'];
+        $fields_qs = implode('', array_map(fn($f) => '&output_fields=' . urlencode($f), $fields));
+        $r = CCAPI::apiQuery('/candidates?limit=5000&' . urlencode('年份') . '=' . $year . '&' . urlencode('鄉鎮市區') . '=' . urlencode($town) . $fields_qs,
+            $town . ' ' . $year . ' 年選舉的候選人');
+        $chiefs = $reps = $villages = $village_codes = [];
+        foreach (($r->candidates ?? []) as $c) {
+            if (!str_starts_with($c->{'選舉代碼'} ?? '', 'ELC-')) {
+                continue;
+            }
+            $position = $c->{'參選職位'} ?? '';
+            if (in_array($position, ['鄉鎮市長', '山地原住民區長'], true)) {
+                $chiefs[] = $c;
+            } elseif (in_array($position, ['鄉鎮市民代表', '山地原住民區民代表'], true)) {
+                $reps[$c->{'選區別'} ?? ''][] = $c;
+            } elseif ($position === '村里長') {
+                $villages[$c->{'村里'} ?? ''][] = $c;
+                $village_codes[$c->{'村里'} ?? ''] = $c->{'行政區代碼'} ?? '';
             }
         }
-        // 現任立委（最近一次立委選舉的當選人，含不分區；立法院的資料掛在 ly，要跨議會查）
+        usort($chiefs, [$this, 'compareCandidateNumber']);
+        ksort($reps, SORT_NATURAL);
+        foreach ($reps as &$list) {
+            usort($list, [$this, 'compareCandidateNumber']);
+        }
+        unset($list);
+        uksort($villages, fn($a, $b) => [$village_codes[$a], $a] <=> [$village_codes[$b], $b]);
+        foreach ($villages as &$list) {
+            usort($list, [$this, 'compareCandidateNumber']);
+        }
+        unset($list);
+        $this->view->town_chiefs = $chiefs;
+        $this->view->town_reps = $reps;
+        $this->view->town_villages = $villages;
+        $this->view->election_incumbent = $this->loadElectionIncumbents($year);
+        $this->view->election_registration_only = (bool) array_filter($r->candidates ?? [], fn($c) => $c->{'登記階段'} ?? false);
+        $this->view->latest_term_no = CCAPI::apiQuery('/overview/' . rawurlencode($this->view->cc_code), '本議會現況資料')->data->{'屆次'} ?? null;
+    }
+
+    /**
+     * 選舉指南的單一選舉頁（像選舉公報）：$key 是「{選舉代碼的類別}:{選區別}」，例：C1:新北市、T1:第01選舉區、
+     * V0:板橋區華東里、D2:竹北市、R2:竹北市第01選舉區。列出這一場全部候選人的相片、學歷、經歷、政見
+     */
+    protected function loadElectionRace($year, $key)
+    {
+        $this->view->election_year = $year;
+        [$kind, $district] = array_pad(explode(':', $key, 2), 2, '');
+        $candidates = [];
+        if (preg_match('/^[A-Z]\d$/', $kind) && $district !== '') {
+            $r = CCAPI::apiQuery('/candidates?limit=500&' . urlencode('選舉代碼') . '=' . urlencode("ELC-{$kind}-{$year}")
+                . '&' . urlencode('選區別') . '=' . urlencode($district), $district . ' ' . $year . ' 年選舉的候選人');
+            $candidates = $r->candidates ?? [];
+        }
+        usort($candidates, [$this, 'compareCandidateNumber']);
+        $first = $candidates[0] ?? null;
+        // 標題：新北市長、新北市議員 第01選舉區、竹北市長、竹北市第01選舉區 代表、板橋區華東里里長
+        $county = $first->{'縣市'} ?? '';
+        $title = match ($kind) {
+            'C1', 'C2', 'D1', 'D2' => $district . '長',
+            'T1', 'T2' => ($county ?: $this->view->council_name) . CouncilHelper::t('議員') . ' ' . $district,
+            'R1' => $district . ' 區民代表',
+            'R2' => $district . ' 代表',
+            'V0' => $district . (str_ends_with($district, '村') ? '村長' : '里長'),
+            default => $district,
+        };
+        $this->view->race_candidates = $candidates;
+        $this->view->race_district = $district;
+        $this->view->race_town = $first->{'鄉鎮市區'} ?? null;
+        $this->view->race_title = $title;
+        $this->view->election_incumbent = $this->loadElectionIncumbents($year);
+        $this->view->election_registration_only = (bool) array_filter($candidates, fn($c) => $c->{'登記階段'} ?? false);
+        $this->view->latest_term_no = CCAPI::apiQuery('/overview/' . rawurlencode($this->view->cc_code), '本議會現況資料')->data->{'屆次'} ?? null;
+    }
+
+    /**
+     * 號次排序（登記階段還沒有號次，依登記日期）
+     */
+    protected function compareCandidateNumber($a, $b)
+    {
+        return [(int) ($a->{'號次'} ?? 999), $a->{'登記日期'} ?? ''] <=> [(int) ($b->{'號次'} ?? 999), $b->{'登記日期'} ?? ''];
+    }
+
+    /**
+     * 現任：[人物代碼 => 職稱]。上一次（4 年前）地方選舉的當選人（縣市長、議員、鄉鎮市長、代表、村里長），
+     * 以及最近一次立委選舉的當選人（含不分區；立法院的資料掛在 ly，要跨議會查）
+     */
+    protected function loadElectionIncumbents($year)
+    {
+        $incumbent = [];
+        $prev = CCAPI::apiQuery('/candidates?limit=10000&' . urlencode('年份') . '=' . ($year - 4) . '&' . urlencode('當選') . '=true'
+            . '&output_fields=' . urlencode('人物代碼') . '&output_fields=' . urlencode('參選職位') . '&output_fields=' . urlencode('選舉類型')
+            . '&output_fields=' . urlencode('選舉代碼'),
+            '上一次選舉的當選人（標示現任）');
+        foreach (($prev->candidates ?? []) as $c) {
+            $title = $c->{'選舉類型'} ?? $c->{'參選職位'} ?? null;
+            if (($c->{'人物代碼'} ?? null) && $title && str_starts_with($c->{'選舉代碼'} ?? '', 'ELC-')) {
+                $incumbent[$c->{'人物代碼'}] = '現任' . ([
+                    '直轄市長' => '市長', '直轄市議員' => '議員', '縣市議員' => '議員', '鄉鎮市民代表' => '代表',
+                    '山地原住民區長' => '區長', '山地原住民區民代表' => '區民代表',
+                ][$title] ?? $title);
+            }
+        }
         $ly = CCAPI::apiQuery('/candidates?limit=500&' . urlencode('議會代碼') . '=ly&' . urlencode('當選') . '=true&sort=' . urlencode('年份>')
             . '&output_fields=' . urlencode('人物代碼') . '&output_fields=' . urlencode('年份') . '&output_fields=' . urlencode('選舉類型'),
             '最近一次立委選舉的當選人（標示現任立委）', 'all');
@@ -766,13 +893,7 @@ class InfoController extends MiniEngine_Controller
                 $incumbent[$c->{'人物代碼'}] ??= '現任立委';
             }
         }
-        $this->view->election_mayors = $mayors;
-        $this->view->election_districts = $districts;
-        $this->view->election_local_counts = $local;
-        $this->view->election_incumbent = $incumbent;
-        $this->view->election_registration_only = (bool) array_filter(array_merge($mayors, ...array_values($districts) ?: [[]]),
-            fn($c) => $c->{'登記階段'} ?? false);
-        $this->view->latest_term_no = CCAPI::apiQuery('/overview/' . rawurlencode($this->view->cc_code), '本議會現況資料')->data->{'屆次'} ?? null;
+        return $incumbent;
     }
 
     /**
