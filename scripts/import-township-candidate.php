@@ -10,6 +10,7 @@
  *
  * 來源：
  *   IMPORT_CANDIDATE_ELECTED_SOURCE_CSV  中選會候選人名冊 cand.csv
+ *   IMPORT_CANDIDATE_MANIFESTO_SUPPLEMENT_JSONL 政見圖 OCR 補充檔（選填，逗號分隔）
  *   IMPORT_CANDIDATE_PERSON_SOURCE_JSONL 人物代碼對照 person.jsonl
  *   IMPORT_LY_CANDIDATE_VOTE_CSV         候選人得票數 vote.csv（跟立委、縣市長共用同一份）
  *   IMPORT_CANDIDATE_TOWNSHIP_JSONL      選舉公報萃取結果（依候選人代碼併入學經歷、政見、相片；選填，
@@ -219,6 +220,8 @@ foreach (array_filter(array_map('trim', explode(',', (string) getenv('IMPORT_CAN
 }
 $skip_keys = ['代碼', '候選人代碼', '選舉代碼', '選舉名稱', '選舉類型', '縣市', '行政區代碼', '選區別', '姓名', '號次'];
 foreach ($bulletins as $code => $r) {
+    // 欄位錯位時學經歷、政見會裝到別的欄位的內容（政黨、出生地、公報標題），那種不採用（見 BulletinFieldHelper）
+    [$r] = BulletinFieldHelper::sanitize($r);
     foreach ($r as $key => $val) {
         if (in_array($key, $skip_keys, true) || $val === '' || $val === null || $val === []) {
             continue;
@@ -231,6 +234,23 @@ foreach ($bulletins as $code => $r) {
             $val = array_merge($val, $candidates[$code]['其他欄位']);
         }
         $candidates[$code][$key] = $val;
+    }
+}
+
+// 政見補充檔（選填，IMPORT_CANDIDATE_MANIFESTO_SUPPLEMENT_JSONL，逗號分隔）：政見是圖片的候選人另外用 OCR 辨識
+// 政見圖的結果，只在公報本身的政見不是可用文字時才用
+foreach (array_filter(array_map('trim', explode(',', (string) getenv('IMPORT_CANDIDATE_MANIFESTO_SUPPLEMENT_JSONL')))) as $path) {
+    if (!file_exists($path)) {
+        continue;
+    }
+    foreach (file($path) as $line) {
+        $d = json_decode($line, true);
+        $code = $d['候選人代碼'] ?? '';
+        if (isset($candidates[$code]) && trim((string) ($d['政見'] ?? '')) !== ''
+            && (!$has_manifesto($candidates[$code]) || trim((string) ($candidates[$code]['政見'] ?? '')) === '')) {
+            $candidates[$code]['政見'] = $d['政見'];
+            $candidates[$code]['政見來源'] = $d['政見來源'] ?? 'paddleocr';
+        }
     }
 }
 

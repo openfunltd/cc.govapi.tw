@@ -8,12 +8,15 @@
  * 議員候選人原本由 import-candidate.php 從選舉公報匯入（學經歷、政見、相片），公報只回溯到
  * 民國 98／99 年，更早的選舉（直轄市議員 83～95 年、縣市議員 87～94 年）以及議員缺額補選
  * 只有名冊與得票。這支把名冊裡、candidate index 還沒有的議員候選人補進來，讓候選人頁的歷年
- * 參選紀錄可以回溯到更早；**已經從公報匯入的候選人代碼一律不動**（不覆蓋公報的欄位）。
+ * 參選紀錄可以回溯到更早；**已經從公報匯入、有學經歷或政見的候選人代碼一律不動**（不覆蓋公報的欄位）。
+ * 早年整份掃描的公報另外用 OCR 辨識（IMPORT_CANDIDATE_EARLY_JSONL，選填，逗號分隔多個檔），依候選人代碼
+ * 併入學歷、經歷、政見與來源。
  *
  * 來源：
  *   IMPORT_CANDIDATE_ELECTED_SOURCE_CSV  中選會候選人名冊 cand.csv（ELC-T1／ELC-T2 與補選 BEL-T1／BEL-T2）
  *   IMPORT_CANDIDATE_PERSON_SOURCE_JSONL 人物代碼對照 person.jsonl
  *   IMPORT_LY_CANDIDATE_VOTE_CSV         候選人得票數 vote.csv
+ *   IMPORT_CANDIDATE_EARLY_JSONL         早年掃描公報的辨識結果（選填；格式同選舉公報萃取結果，各欄來源 paddleocr）
  *
  * 補選：選舉代碼 BEL-T{1,2}-{任期年}:{投票日}:{縣市代碼}-{選區}，「選舉名稱」「行政區代碼」兩欄對調，
  * 年份用任期年份，另有「補選」「投票日」欄位；選區別換成同一任正式選舉的寫法（名冊裡補選只寫「第7選舉區」）
@@ -53,11 +56,16 @@ $is_ours = fn($code) => (bool) preg_match('/^(ELC|BEL)-T[12]-/', $code);
 
 $prefix = getenv('ELASTIC_PREFIX');
 
-// 已經在 index 裡的議員候選人代碼（從公報匯入的），不要動
+// 已經在 index 裡、從公報匯入而且有學經歷或政見的議員候選人代碼，不要動
+//（只有名冊資料的、或公報那筆什麼內容都沒有的，照名冊與早年公報辨識結果重寫）
 $existing = [];
 foreach (['ELC-T1-', 'ELC-T2-', 'BEL-T1-', 'BEL-T2-'] as $p) {
     $r = Elastic::dbQuery("/{$prefix}candidate/_search", 'POST', json_encode([
-        'size' => 10000, '_source' => false, 'query' => ['prefix' => ['候選人代碼' => $p]],
+        'size' => 10000, '_source' => false, 'query' => ['bool' => [
+            'filter' => [['prefix' => ['候選人代碼' => $p]]],
+            'should' => [['exists' => ['field' => '學歷來源']], ['exists' => ['field' => '經歷來源']], ['exists' => ['field' => '政見來源']]],
+            'minimum_should_match' => 1,
+        ]],
     ]));
     foreach ($r->hits->hits ?? [] as $h) {
         $existing[$h->_id] = true;
@@ -179,6 +187,43 @@ foreach ($races as $codes) {
     }
 }
 
+// 早年掃描公報的辨識結果：依候選人代碼併入學歷、經歷、政見（名冊的學歷只有一行，有辨識結果就用辨識的）
+$early = [];
+foreach (array_filter(array_map('trim', explode(',', (string) getenv('IMPORT_CANDIDATE_EARLY_JSONL')))) as $path) {
+    if (!file_exists($path)) {
+        error_log("WARNING: 找不到早年公報辨識結果（IMPORT_CANDIDATE_EARLY_JSONL）：{$path}");
+        continue;
+    }
+    foreach (file($path) as $line) {
+        $d = json_decode($line, true);
+        if (isset($d['候選人代碼'], $candidates[$d['候選人代碼']])) {
+            $early[$d['候選人代碼']] = $d;
+        }
+    }
+}
+foreach ($early as $code => $d) {
+    foreach (['學歷', '經歷', '政見'] as $field) {
+        if (trim((string) ($d[$field] ?? '')) !== '') {
+            $candidates[$code][$field] = $d[$field];
+            $candidates[$code][$field . '來源'] = $d[$field . '來源'] ?? 'paddleocr';
+        }
+    }
+    foreach (['來源PDF', '來源頁碼', '來源'] as $field) {
+        if (!empty($d[$field])) {
+            $candidates[$code][$field] = $d[$field];
+        }
+    }
+    // 相片、學經歷政見的原圖（網頁「查看原圖」）：路徑相對 block root，轉成公開網址
+    $image_url = fn($path) => 'https://lydata.ronny-s3.click/bulletin/' . implode('/', array_map('rawurlencode', explode('/', preg_replace('#^files/#', '', $path))));
+    if (!empty($d['相片路徑'])) {
+        $candidates[$code]['相片路徑'] = $image_url($d['相片路徑']);
+    }
+    if (!empty($d['欄位圖片']) && is_array($d['欄位圖片'])) {
+        $candidates[$code]['欄位圖片'] = array_map($image_url, $d['欄位圖片']);
+    }
+    $candidates[$code]['其他欄位'] = array_merge(array_filter($d['其他欄位'] ?? [], fn($v) => $v !== ''), $candidates[$code]['其他欄位']);
+}
+
 $added = [];
 foreach ($candidates as $code => $c) {
     if (isset($existing[$code])) {
@@ -190,6 +235,6 @@ foreach ($candidates as $code => $c) {
 }
 Elastic::dbBulkCommit('candidate');
 ksort($added);
-error_log(sprintf('Done. 名冊 %d 位議員候選人，已有 %d 位（公報匯入，不動），新增 %d 位（%s）；%d skipped.',
+error_log(sprintf('Done. 名冊 %d 位議員候選人，已有 %d 位（公報匯入，不動），匯入 %d 位（%s；含早年公報辨識 %d 位）；%d skipped.',
     count($candidates), count(array_intersect_key($candidates, $existing)), array_sum($added),
-    implode('、', array_map(fn($k, $v) => "{$k} {$v}", array_keys($added), $added)), $skipped));
+    implode('、', array_map(fn($k, $v) => "{$k} {$v}", array_keys($added), $added)), count(array_diff_key($early, $existing)), $skipped));

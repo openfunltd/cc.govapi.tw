@@ -196,8 +196,10 @@ $jsonl_path = getenv('IMPORT_CANDIDATE_JSONL') ?: (__DIR__ . '/../bulletin.jsonl
 // 另外用 OCR 辨識政見圖的結果（每行 {候選人代碼, 政見, 政見來源}）。只在公報本身的政見不是可用
 // 文字時才用，不覆蓋可用的文字
 $manifesto_supplement = [];
-$supplement_path = getenv('IMPORT_CANDIDATE_MANIFESTO_SUPPLEMENT_JSONL');
-if ($supplement_path && file_exists($supplement_path)) {
+foreach (array_filter(array_map('trim', explode(',', (string) getenv('IMPORT_CANDIDATE_MANIFESTO_SUPPLEMENT_JSONL')))) as $supplement_path) {
+    if (!file_exists($supplement_path)) {
+        continue;
+    }
     foreach (file($supplement_path) as $line) {
         $d = json_decode($line, true);
         if (!empty($d['候選人代碼']) && trim((string) ($d['政見'] ?? '')) !== '') {
@@ -475,6 +477,8 @@ foreach ($grouped as $code => $records) {
         $dedup_dropped += count($records) - 1;
     }
 
+    // 欄位錯位時學經歷、政見會裝到別的欄位的內容（政黨、出生地、公報標題），那種不採用（見 BulletinFieldHelper）
+    [$chosen] = BulletinFieldHelper::sanitize($chosen);
     $doc = $apply_supplement(import_candidate_doc($chosen, $code, $county_to_cc_code, $votes_by_code, $votes_rank, $person_by_code, $elected_by_code));
     if (!isset($doc['議會代碼'])) {
         $no_council_code_field++;

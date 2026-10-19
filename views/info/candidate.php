@@ -45,6 +45,10 @@ foreach ($groups as $g) {
       </strong>
       <?php if ($c->{'當選'} ?? false): ?>
       <span class="badge bg-success">當選</span>
+      <?php elseif ($c->{'登記階段'} ?? false): ?>
+      <span class="badge bg-info text-dark">登記參選</span>
+      <?php elseif (($c->{'得票數'} ?? null) === null && (int) ($c->{'年份'} ?? 0) >= InfoController::NEXT_ELECTION_YEAR): ?>
+      <span class="badge bg-info text-dark">尚未投票</span>
       <?php else: ?>
       <span class="badge bg-secondary">落選</span>
       <?php endif; ?>
@@ -99,7 +103,8 @@ foreach ($groups as $g) {
           </thead>
           <tbody>
             <?php foreach ($group->{'race'} as $rc): ?>
-            <?php $is_self = ($rc->{'候選人代碼'} ?? null) === ($c->{'候選人代碼'} ?? null); ?>
+            <?php // 登記階段的參選人沒有候選人代碼（都是 null），要用 doc 的「代碼」比，不然同一場每個人都會變成「本人」
+            $is_self = ($rc->{'代碼'} ?? $rc->{'候選人代碼'} ?? null) === ($c->{'代碼'} ?? $c->{'候選人代碼'} ?? null); ?>
             <tr class="<?= $is_self ? 'table-primary' : '' ?>">
               <td><?= htmlspecialchars($rc->{'得票排名'} ?? '—') ?></td>
               <td><?= htmlspecialchars($rc->{'號次'} ?? '—') ?></td>

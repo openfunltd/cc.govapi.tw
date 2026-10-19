@@ -35,6 +35,11 @@ class CCAPI
                 'Authorization: Bearer ' . getenv('CCAPI_TOKEN'),
             ]);
         }
+        // Referer 帶目前頁面的完整網址，讓 API 端知道這個請求是哪一頁發出的
+        // （CLI 執行的 script 沒有頁面網址，就不帶）
+        if ($referer = self::currentPageUrl()) {
+            curl_setopt($curl, CURLOPT_REFERER, $referer);
+        }
         curl_setopt($curl, CURLOPT_URL, $full_url);
         curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
         $res = curl_exec($curl);
@@ -44,5 +49,16 @@ class CCAPI
         self::$log[] = [$full_url, $reason];
 
         return $res_json;
+    }
+
+    protected static function currentPageUrl()
+    {
+        if (empty($_SERVER['HTTP_HOST']) || !isset($_SERVER['REQUEST_URI'])) {
+            return null;
+        }
+        // 前面有 reverse proxy 時，原始協定在 X-Forwarded-Proto
+        $scheme = $_SERVER['HTTP_X_FORWARDED_PROTO']
+            ?? ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
+        return $scheme . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI'];
     }
 }
