@@ -66,6 +66,41 @@ $person = function ($c) {
 <?php endif; ?>
 <?php if (!$tree && !$ticket): ?>
 <div class="alert alert-light border">目前尚無這個議會監督的行政機關資料</div>
+<?php elseif (isset($tree['院'])): ?>
+<div class="alert alert-light border small mb-4">
+  立法院監督的中央機關：總統府、國家安全會議與各院，以及各院直屬的二級機關、中央二級機關主管的國營事業。
+  機關名稱與上下層關係依行政院人事行政總處的機關代碼資料（現行機關）。
+</div>
+<?php foreach ($tree['院'] as $yuan): ?>
+<h2 class="h6 fw-semibold mb-1"><?= htmlspecialchars($yuan->{'名稱'}) ?>
+  <span class="fw-normal text-body-secondary small"><?= $yuan->_children ? '（所屬二級機關 ' . count($yuan->_children) . ' 個）' : '' ?></span></h2>
+<?php if ($yuan->_children): ?>
+<div class="row g-2 mb-4">
+  <?php foreach ($yuan->_children as $a): ?>
+  <div class="col-12 col-md-6 col-lg-4"><?= $agency_card_html($a) ?></div>
+  <?php endforeach; ?>
+</div>
+<?php else: ?>
+<div class="mb-4"></div>
+<?php endif; ?>
+<?php endforeach; ?>
+<?php if ($tree['國營事業']): ?>
+<h2 class="h6 fw-semibold mb-1">國營事業 <span class="fw-normal text-body-secondary small">（依主管機關，<?= array_sum(array_map(fn($a) => count($a->_soe), $tree['國營事業'])) ?> 家）</span></h2>
+<div class="row g-2 mb-4">
+  <?php foreach ($tree['國營事業'] as $ministry): ?>
+  <div class="col-12 col-md-6 col-lg-4">
+    <div class="card h-100 shadow-sm"><div class="card-body p-2">
+      <div class="small text-body-secondary"><?= htmlspecialchars($ministry->{'名稱'}) ?></div>
+      <ul class="mb-0 ps-3">
+        <?php foreach ($ministry->_soe as $c): ?>
+        <li><?= htmlspecialchars($c->{'名稱'}) ?><?= $c->_head ? ' <span class="small text-body-secondary">（' . $head_text($c->_head) . '）</span>' : '' ?></li>
+        <?php endforeach; ?>
+      </ul>
+    </div></div>
+  </div>
+  <?php endforeach; ?>
+</div>
+<?php endif; ?>
 <?php elseif (!$tree): ?>
 <p class="small text-body-secondary"><?= implode('、', $titles) ?>是中選會的選舉當選人；點選姓名查看歷次參選紀錄、得票與政見。<?= ($this->cc_code ?? '') === 'tpg' ? '臺灣省政府所屬機關資料尚未收錄。' : '行政院與所屬機關資料尚未收錄。' ?></p>
 <?php else: ?>

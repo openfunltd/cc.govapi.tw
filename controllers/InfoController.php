@@ -584,6 +584,21 @@ class InfoController extends MiniEngine_Controller
             }
         }
 
+        // 立法院：中央機關（院 → 二級機關 → 國營事業），import-agency.php 依人事行政總處機關代碼匯入
+        if (array_filter($agencies, fn($a) => ($a->{'分類'} ?? '') === '院')) {
+            $tree = ['院' => [], '國營事業' => []];
+            foreach ($agencies as $a) {
+                $a->_children = array_values(array_filter($children[$a->{'代碼'}] ?? [], fn($c) => ($c->{'分類'} ?? '') === '二級機關'));
+                $a->_soe = array_values(array_filter($children[$a->{'代碼'}] ?? [], fn($c) => ($c->{'分類'} ?? '') === '國營事業'));
+                if (($a->{'分類'} ?? '') === '院') {
+                    $tree['院'][] = $a;
+                } elseif ($a->_soe) {
+                    $tree['國營事業'][] = $a;
+                }
+            }
+            return $tree;
+        }
+
         $tree = ['縣市政府' => null, '一級內部單位' => [], '一級外部單位' => [], '其他單位' => []];
         foreach ($agencies as $a) {
             $category = $a->{'分類'} ?? '其他單位';

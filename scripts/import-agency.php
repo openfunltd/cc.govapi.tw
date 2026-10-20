@@ -31,6 +31,9 @@
  *   - 組織架構裡的職位（縣長、秘書長、參議…）不是機關，不匯入；分組名稱（「直屬單位」
  *     「學校」「財稅主計」等）只當分類參考，不成為節點
  *
+ * 立法院（ly）另外收中央機關（院、二級機關、國營事業），完全依機關代碼階層裡人事行政總處的現行機關
+ * 與上下層關係，見檔案最後一段。
+ *
  * Doc ID：{議會代碼}-{機關代碼}，對不到機關代碼的用 {議會代碼}-org-{名稱雜湊}
  */
 
@@ -53,6 +56,7 @@ $index_mapping = [
         '內部單位'   => ['type' => 'keyword'],
         '網址'       => ['type' => 'keyword', 'index' => false],
         '比對方式'   => ['type' => 'keyword'],
+        '舊名稱'     => ['type' => 'keyword'],
         '來源網址'   => ['type' => 'keyword', 'index' => false],
         '歷任首長'   => ['properties' => [
             '年份'       => ['type' => 'integer'],
@@ -324,6 +328,56 @@ foreach (glob("{$org_dir}/*.json") as $file) {
     }
     $total += count($docs);
 }
+// 立法院（ly）監督的中央機關：只收機關代碼階層裡人事行政總處（dgpa）的現行機關，上下層關係照 dgpa
+//   院：第一層的中央機關（總統府、國家安全會議、行政院、立法院、司法院、考試院、監察院；國民大會已停止
+//       適用，不收）
+//   二級機關：各院直屬的第二層機關（部、會、署、獨立機關、法院…）
+//   國營事業：中央二級機關直屬、名稱是「股份有限公司」的第三層（主管機關就是 dgpa 的上層）
+$is_dgpa = fn($u) => ($u['source'] ?? '') === 'dgpa' && (($u['dgpa_status']['status'] ?? '') === '現行');
+$central_docs = [];
+$order = 0;
+$by_budget = fn($a, $b) => [($units[$a]['budget_order'] ?? '') ?: 'zzz', $a] <=> [($units[$b]['budget_order'] ?? '') ?: 'zzz', $b];
+$tops = array_keys(array_filter($units, fn($u) => $is_dgpa($u) && $u['level'] == 1 && ($u['top_zone'] ?? '') === '中央單位'
+    && $u['original_name'] !== '國民大會'));
+usort($tops, $by_budget);
+$central_doc = function ($u, $category, $parent) use (&$order) {
+    $old = $u['dgpa_status']['old_name'] ?? '';
+    return [
+        '代碼'       => 'ly-' . $u['id'],
+        '議會代碼'   => 'ly',
+        '名稱'       => $u['original_name'],
+        '全名'       => $u['full_name'] ?? $u['original_name'],
+        '機關代碼'   => $u['id'],
+        '分類'       => $category,
+        '上層代碼'   => $parent ? 'ly-' . $parent : null,
+        '排序'       => ++$order,
+        '舊名稱'     => ($old && $old !== $u['original_name']) ? $old : null,
+        '比對方式'   => 'dgpa',
+    ];
+};
+foreach ($tops as $top) {
+    $central_docs['ly-' . $top] = $central_doc($units[$top], '院', null);
+    $level2 = array_values(array_filter($children[$top] ?? [], fn($id) => $is_dgpa($units[$id]) && $units[$id]['level'] == 2));
+    usort($level2, $by_budget);
+    foreach ($level2 as $id) {
+        $central_docs['ly-' . $id] = $central_doc($units[$id], '二級機關', $top);
+        $soe = array_values(array_filter($children[$id] ?? [], fn($cid) => $is_dgpa($units[$cid]) && $units[$cid]['level'] == 3
+            && str_contains($units[$cid]['original_name'], '股份有限公司')));
+        usort($soe, $by_budget);
+        foreach ($soe as $cid) {
+            $central_docs['ly-' . $cid] = $central_doc($units[$cid], '國營事業', $id);
+        }
+    }
+}
+$central_stats = array_count_values(array_column($central_docs, '分類'));
+printf("ly   中央 院 %d／二級機關 %d／國營事業 %d\n", $central_stats['院'] ?? 0, $central_stats['二級機關'] ?? 0, $central_stats['國營事業'] ?? 0);
+if (!$dry_run) {
+    foreach ($central_docs as $doc_id => $doc) {
+        Elastic::dbBulkInsert('agency', $doc_id, $doc);
+    }
+}
+$total += count($central_docs);
+
 if (!$dry_run) {
     Elastic::dbBulkCommit('agency');
 }
