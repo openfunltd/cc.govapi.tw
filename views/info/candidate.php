@@ -131,3 +131,54 @@ foreach ($groups as $g) {
   </div>
   <?php endforeach; ?>
 </div>
+
+<?php $declarations = $this->declarations ?? []; ?>
+<?php if ($declarations): ?>
+<?php
+$money = fn($v) => ($v === null || $v === '') ? '—' : number_format((float) $v);
+$sum_of = fn($d, $k) => $d->{'總金額'}->{$k} ?? null;
+?>
+<h2 class="h5 mt-4 mb-2">財產申報 <span class="small text-body-secondary fw-normal">（監察院廉政專刊，<?= count($declarations) ?> 份）</span></h2>
+<p class="small text-body-secondary mb-2">
+  依申報資料記載的參選人代碼對應到本人。金額是申報表上的總金額（新臺幣元）；土地、建物、汽車是申報筆數。
+  點「原始」看廉政專刊刊登的申報原文。
+</p>
+<div class="table-responsive">
+  <table class="table table-sm table-hover small align-middle">
+    <thead>
+      <tr>
+        <th>申報日</th>
+        <th>種類</th>
+        <th>服務機關／職稱</th>
+        <th class="text-end">存款</th>
+        <th class="text-end">有價證券</th>
+        <th class="text-end">現金</th>
+        <th class="text-end">債務</th>
+        <th class="text-end">土地</th>
+        <th class="text-end">建物</th>
+        <th class="text-end">汽車</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <?php foreach ($declarations as $d): ?>
+      <?php $n = $d->{'各類筆數'} ?? new stdClass; ?>
+      <tr>
+        <td class="text-nowrap"><?= htmlspecialchars($d->{'申報日'} ?? '') ?></td>
+        <td><?= htmlspecialchars($d->{'種類'} ?? '') ?><?php if ($d->{'申報類別'} ?? null): ?><div class="text-body-secondary"><?= htmlspecialchars($d->{'申報類別'}) ?></div><?php endif; ?></td>
+        <td><?= implode('<br>', array_map(fn($o) => htmlspecialchars(trim(($o->{'服務機關'} ?? '') . ' ' . ($o->{'職稱'} ?? ''))), $d->{'服務機關紀錄'} ?? [])) ?></td>
+        <td class="text-end"><?= $money($sum_of($d, '存款')) ?></td>
+        <td class="text-end"><?= $money($sum_of($d, '有價證券')) ?></td>
+        <td class="text-end"><?= $money($sum_of($d, '現金')) ?></td>
+        <td class="text-end"><?= $money($sum_of($d, '債務')) ?></td>
+        <td class="text-end"><?= (int) ($n->{'土地'} ?? 0) ?: '—' ?></td>
+        <td class="text-end"><?= (int) ($n->{'建物'} ?? 0) ?: '—' ?></td>
+        <td class="text-end"><?= (int) ($n->{'汽車'} ?? 0) ?: '—' ?></td>
+        <td class="text-nowrap"><a href="<?= htmlspecialchars($d->{'來源'}->{'官方網址'} ?? '#') ?>" target="_blank" rel="noopener">原始</a>
+          <span class="text-body-secondary"><?= htmlspecialchars(($d->{'來源'}->{'刊物'} ?? '') . ' p.' . ($d->{'來源'}->{'頁碼'} ?? '')) ?></span></td>
+      </tr>
+      <?php endforeach; ?>
+    </tbody>
+  </table>
+</div>
+<?php endif; ?>

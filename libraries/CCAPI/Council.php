@@ -59,9 +59,9 @@ class CCAPI_Council
 
     /**
      * 不受隱藏議會限制的型別：all 查詢照常包含隱藏議會的資料。候選人先開放，讓跨選舉的
-     * 參選紀錄完整（例：同一人的立委選舉與縣市長選舉出現在同一個候選人頁）
+     * 參選紀錄完整（例：同一人的立委選舉與縣市長選舉出現在同一個候選人頁）；財產申報跟著候選人頁一起開放
      */
-    protected static $hidden_exempt_types = ['candidate'];
+    protected static $hidden_exempt_types = ['candidate', 'declaration'];
 
     /**
      * 議會種類（國民大會／立法院／縣市議會／鄉鎮市區代表會／省議會），沒列出的一律是

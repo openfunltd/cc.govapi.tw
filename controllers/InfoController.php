@@ -1720,6 +1720,12 @@ class InfoController extends MiniEngine_Controller
         $person_code = urldecode($person_code);
         $this->view->candidate_person_code = $person_code;
 
+        // 財產申報（監察院公報）：依申報資料記載的候選人代碼對應到人物代碼
+        $this->view->declarations = CCAPI::apiQuery(
+            '/declarations?limit=300&' . urlencode('人物代碼') . '=' . urlencode($person_code),
+            '該候選人的財產申報'
+        )->declarations ?? [];
+
         $r = CCAPI::apiQuery(
             '/candidates?limit=50&' . urlencode('人物代碼') . '=' . urlencode($person_code) . '&sort=' . urlencode('年份>'),
             '該候選人歷年參選紀錄'
