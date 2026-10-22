@@ -160,6 +160,24 @@ class CCAPI_Council
     }
 
     /**
+     * 屆期的顯示名稱：不是延續編號的特殊屆期用自己的名稱（94 年任務型國民大會是為了複決修憲案臨時選出、
+     * 政黨比例代表制，中選會稱「94年任務型國民大會代表選舉」，叫「第4屆」容易誤會跟前三屆一脈相承），
+     * 其他一律「第 N 屆」。$spaced 為 true 時數字前後留空白（「第 3 屆」，跟原本頁面寫法一致）
+     */
+    protected static $term_labels = [
+        'na' => [4 => '94年任務型'],
+    ];
+
+    public static function termLabel($cc_code, $term_no, $spaced = false)
+    {
+        $label = self::$term_labels[$cc_code][(int) $term_no] ?? null;
+        if ($label !== null) {
+            return $label;
+        }
+        return $spaced ? "第 {$term_no} 屆" : "第{$term_no}屆";
+    }
+
+    /**
      * 取得所有議會代碼清單
      */
     public static function getAll()

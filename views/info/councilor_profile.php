@@ -32,7 +32,7 @@ $spans_multiple_councils = count(array_unique(array_map(fn($r) => $r->{'議會�
   <a href="/info/councilor/<?= urlencode($person_code) ?>/<?= (int) ($r->{'屆次'} ?? 0) ?>"
      class="badge text-decoration-none me-1 <?= $r === $selected ? 'bg-primary' : 'bg-light text-dark border' ?>">
     <?php if ($spans_multiple_councils): ?><?= htmlspecialchars($r->{'議會代碼'} ?? '') ?><?php endif; ?>
-    第<?= htmlspecialchars($r->{'屆次'} ?? '') ?>屆
+    <?= htmlspecialchars(CCAPI_Council::termLabel($r->{'議會代碼'} ?? '', $r->{'屆次'} ?? '')) ?>
   </a>
   <?php endforeach; ?>
 </div>
@@ -49,7 +49,7 @@ $spans_multiple_councils = count(array_unique(array_map(fn($r) => $r->{'議會�
   <div class="col-md-9">
     <p class="text-body-secondary mb-2">
       <?= htmlspecialchars($selected->{'議會代碼'} ?? '') ?>
-      第 <?= htmlspecialchars($selected->{'屆次'} ?? '') ?> 屆
+      <?= htmlspecialchars(CCAPI_Council::termLabel($selected->{'議會代碼'} ?? '', $selected->{'屆次'} ?? '', true)) ?>
       <?php if (!in_array($selected->{'職稱'} ?? '議員', ['議員', CCAPI_Council::localize('議員', $selected->{'議會代碼'} ?? '')], true)): ?>
       <span class="badge bg-warning text-dark"><?= htmlspecialchars($selected->{'職稱'}) ?></span>
       <?php endif; ?>
@@ -111,7 +111,7 @@ $spans_multiple_councils = count(array_unique(array_map(fn($r) => $r->{'議會�
       <?php foreach ($records as $r): ?>
       <tr<?= $r === $selected ? ' class="table-active"' : '' ?>>
         <td>
-          <a href="/info/councilor/<?= urlencode($person_code) ?>/<?= (int) ($r->{'屆次'} ?? 0) ?>">第 <?= htmlspecialchars($r->{'屆次'} ?? '') ?> 屆</a>
+          <a href="/info/councilor/<?= urlencode($person_code) ?>/<?= (int) ($r->{'屆次'} ?? 0) ?>"><?= htmlspecialchars(CCAPI_Council::termLabel($r->{'議會代碼'} ?? '', $r->{'屆次'} ?? '', true)) ?></a>
           <a href="/info/<?= (int) ($r->{'屆次'} ?? 0) ?>/councilors" class="text-body-secondary small ms-1" title="<?= htmlspecialchars(CCAPI_Council::localize('查看該屆議員名單', $r->{'議會代碼'} ?? '')) ?>">（名單）</a>
         </td>
         <td><?= htmlspecialchars($r->{'議會代碼'} ?? '') ?></td>

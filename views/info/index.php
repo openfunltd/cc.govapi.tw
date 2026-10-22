@@ -315,7 +315,7 @@ document.addEventListener('click', function (e) {
                 <a href="<?= htmlspecialchars($council_url) ?>" class="text-decoration-none"><?= htmlspecialchars($o->{'議會名稱'}) ?></a>
               </h5>
               <p class="text-body-secondary small mb-2">
-                <?= $o->{'屆次'} ? '第 ' . (int)$o->{'屆次'} . ' 屆' : '無屆期資料' ?>
+                <?= $o->{'屆次'} ? htmlspecialchars(CCAPI_Council::termLabel($o->{'代碼'}, (int)$o->{'屆次'}, true)) : '無屆期資料' ?>
               </p>
               <ul class="list-unstyled small mb-3">
                 <li>👤 議長：<?= htmlspecialchars($o->{'議長姓名'} ?? '—') ?></li>

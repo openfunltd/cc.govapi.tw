@@ -6,14 +6,14 @@
     <?php if (!empty($this->all_terms)): ?>
     <div class="dropdown">
       <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
-        第 <?= (int)$this->term_no ?> 屆
+        <?= htmlspecialchars(CCAPI_Council::termLabel($this->cc_code, (int)$this->term_no, true)) ?>
       </button>
       <ul class="dropdown-menu dropdown-menu-end" style="max-height: 320px; overflow-y: auto;">
         <?php foreach ($this->all_terms as $t): ?>
         <li>
           <a class="dropdown-item <?= (int)$t->{'屆次'} === (int)$this->term_no ? 'active' : '' ?>"
              href="/info/<?= (int)$t->{'屆次'} ?>/<?= htmlspecialchars($this->tab) ?>">
-            第 <?= (int)$t->{'屆次'} ?> 屆
+            <?= htmlspecialchars(CCAPI_Council::termLabel($this->cc_code, (int)$t->{'屆次'}, true)) ?>
           </a>
         </li>
         <?php endforeach; ?>
@@ -29,7 +29,7 @@
     <div class="row g-3">
       <div class="col-6 col-md-3">
         <div class="text-body-secondary small">目前屆次</div>
-        <div class="fs-5 fw-semibold">第 <?= (int)$h->{'屆次'} ?> 屆</div>
+        <div class="fs-5 fw-semibold"><?= htmlspecialchars(CCAPI_Council::termLabel($this->cc_code, (int)$h->{'屆次'}, true)) ?></div>
       </div>
       <div class="col-6 col-md-3">
         <div class="text-body-secondary small"><?= htmlspecialchars(CouncilHelper::t('議長')) ?></div>

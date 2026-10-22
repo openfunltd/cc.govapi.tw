@@ -70,7 +70,7 @@ class InfoController extends MiniEngine_Controller
                     $district = $selected->{'區域'} ?? '';
                 }
                 $this->setOg(
-                    ($selected->{'姓名'} ?? '') . ' — ' . $council_name . '第' . ($selected->{'屆次'} ?? '') . '屆' . CCAPI_Council::localize('議員', $selected->{'議會代碼'} ?? ''),
+                    ($selected->{'姓名'} ?? '') . ' — ' . $council_name . CCAPI_Council::termLabel($selected->{'議會代碼'} ?? '', $selected->{'屆次'} ?? '') . CCAPI_Council::localize('議員', $selected->{'議會代碼'} ?? ''),
                     trim(($selected->{'黨籍'} ?? '') . '・' . $district . '，共任職 ' . count($records) . ' 屆', '・')
                 );
             }
@@ -176,8 +176,8 @@ class InfoController extends MiniEngine_Controller
         $this->view->all_terms = $this->loadAllTerms($cc_code);
         $this->view->header = $this->loadHeader($cc_code, $term_no);
         $this->setOg(
-            $this->view->council_name . '第' . $term_no . '屆・' . ($this->tabs[$tab] ?? $tab),
-            $this->view->council_name . '第' . $term_no . '屆的' . CouncilHelper::t('議員') . '、會期、議案等開放資料。'
+            $this->view->council_name . CCAPI_Council::termLabel($cc_code, $term_no) . '・' . ($this->tabs[$tab] ?? $tab),
+            $this->view->council_name . CCAPI_Council::termLabel($cc_code, $term_no) . '的' . CouncilHelper::t('議員') . '、會期、議案等開放資料。'
         );
 
         switch ($tab) {
@@ -220,7 +220,7 @@ class InfoController extends MiniEngine_Controller
                 if ($bill) {
                     $this->setOg(
                         ($bill->{'案由'} ?? '議案詳情'),
-                        $this->view->council_name . '第' . ($bill->{'屆'} ?? $term_no) . '屆・' . ($bill->{'案號'} ?? '')
+                        $this->view->council_name . CCAPI_Council::termLabel($cc_code, $bill->{'屆'} ?? $term_no) . '・' . ($bill->{'案號'} ?? '')
                     );
                 }
                 break;
@@ -248,7 +248,7 @@ class InfoController extends MiniEngine_Controller
                     $m = $this->view->meet_meta;
                     $this->setOg(
                         ($m->{'日期'} ?? '') . '・' . ($m->{'委員會或主旨'} ?? '會議詳情'),
-                        $this->view->council_name . '第' . $term_no . '屆・' . ($m->{'場次代碼'} ?? '')
+                        $this->view->council_name . CCAPI_Council::termLabel($cc_code, $term_no) . '・' . ($m->{'場次代碼'} ?? '')
                     );
                 }
                 break;
