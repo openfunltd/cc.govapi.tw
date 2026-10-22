@@ -48,10 +48,11 @@ if ($reset) {
 try { Elastic::createIndex('overview', $index_mapping); error_log("Created index: overview"); }
 catch (Exception $e) { error_log("Index exists: " . $e->getMessage()); }
 
-// ── 1. 取得現存議會 ──────────────────────────────────────────────────────────
+// ── 1. 取得議會 ──────────────────────────────────────────────────────────────
+// 已廢除的議會（國民大會、臺灣省議會）也要有快照：/info 沒帶屆次時靠這裡的「屆次」導向最後一屆
 
 $councils_result = Elastic::dbQuery('/{prefix}council/_search', 'GET',
-    json_encode(['size' => 100, 'query' => ['term' => ['現存' => true]]]));
+    json_encode(['size' => 100, 'query' => ['match_all' => (object)[]]]));
 
 $councils = [];
 foreach ($councils_result->hits->hits as $h) {
@@ -60,9 +61,10 @@ foreach ($councils_result->hits->hits as $h) {
         '代碼'     => $s->{'代碼'},
         '議會名稱' => $s->{'議會名稱'},
         '議會類別' => $s->{'議會類別'} ?? '',
+        '現存'     => (bool)($s->{'現存'} ?? true),
     ];
 }
-error_log("Loaded " . count($councils) . " 現存議會");
+error_log("Loaded " . count($councils) . " 議會");
 
 // ── 2. 各議會屆期，取最新一屆 ─────────────────────────────────────────────────
 
@@ -71,9 +73,15 @@ $terms_result = Elastic::dbQuery('/{prefix}term/_search', 'GET',
         'sort' => [['屆次' => 'desc']]]));
 
 $latest_term_by_council = [];   // cc_code => {屆次, 就職日, 任期屆滿日}
+$terms_by_council = [];         // cc_code => 屆次 => {屆次, 就職日, 任期屆滿日}
 foreach ($terms_result->hits->hits as $h) {
     $s = $h->_source;
     $cc = $s->{'議會代碼'};
+    $terms_by_council[$cc][(int)($s->{'屆次'} ?? 0)] = [
+        '屆次'       => (int)($s->{'屆次'} ?? 0),
+        '就職日'     => $s->{'就職日'} ?? null,
+        '任期屆滿日' => $s->{'任期屆滿日'} ?? null,
+    ];
     if (array_key_exists($cc, $latest_term_by_council)) {
         continue;   // 已排序 desc，第一筆就是最新屆
     }
@@ -214,6 +222,18 @@ foreach ($councils as $cc => $council) {
     $deputy_speaker = null;
     $councilor_count = null;
 
+    // 已廢除的議會最後一屆沒有議員資料（國民大會第 4 屆任務型國代）：改用最近一屆有議員資料的，
+    // 不然 /info 導過去是空名單
+    if ($term_no && !$council['現存'] && !count_councilors($cc, $term_no)) {
+        $r = Elastic::dbQuery('/{prefix}councilor/_search', 'POST', json_encode(['size' => 0,
+            'query' => ['term' => ['議會代碼' => $cc]], 'aggs' => ['t' => ['max' => ['field' => '屆次']]]]));
+        $with_data = (int)($r->aggregations->t->value ?? 0);
+        if ($with_data) {
+            $term_no = $with_data;
+            $term = $terms_by_council[$cc][$with_data] ?? ['屆次' => $with_data];
+        }
+    }
+
     if ($term_no) {
         // 職稱用詞依議會種類而定（立法院是院長／副院長），見 CCAPI_Council::localize()
         $speaker = find_councilor_name($cc, $term_no, CCAPI_Council::localize('議長', $cc));
@@ -251,7 +271,7 @@ foreach ($councils as $cc => $council) {
         '代碼'       => $cc,
         '議會名稱'   => $council['議會名稱'],
         '議會類別'   => $council['議會類別'],
-        '現存'       => true,
+        '現存'       => $council['現存'],
         '屆次'       => $term_no,
         '就職日'     => $term['就職日'] ?? null,
         '任期屆滿日' => $term['任期屆滿日'] ?? null,
