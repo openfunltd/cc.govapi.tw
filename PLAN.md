@@ -452,6 +452,11 @@ https://all.cc.govapi.tw/knowledge.md
 - [x] 縣市長 111 年少 5 筆、直轄市議員 99 年少 19 筆等零星缺漏查明
 - [x] 立委補選名冊 155 筆、候選人資料 105 筆的落差查明（名冊有 50 筆重複列，實際沒有缺）
 
+### 開放資料
+
+- [x] 2026-10-28 HuggingFace [openfun/tw-cc-data](https://huggingface.co/datasets/openfun/tw-cc-data)：export-dataset.php 從 ES 匯出、build-hf-dataset.py 轉 Parquet 與 README，12 個型別各一個 subset（不含隱藏議會、財產申報、完整度／概況）
+- [ ] 每月自動更新（排程跑兩支腳本 + `--upload`）
+
 ## 未來規劃
 
 ### 長期規劃（規模較大，先列著，之後再挑來做）
