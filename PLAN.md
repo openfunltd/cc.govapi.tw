@@ -460,7 +460,7 @@ https://all.cc.govapi.tw/knowledge.md
 ### 行政體系整合歐噴其他 API（不同步資料，後端帶 CCAPI_TOKEN 直接呼叫）
 
 - [x] 2026-10-29 單一機關頁 /info/{屆}/agencies/{代碼}：首長、上下層機關、標案列表（pcc-api listbyunit，機關代碼換算 unit_id）
-- [ ] 縣政府各處標案：等 pcc-api 依「單位名稱」篩選；標案統計（unitstat）
+- [x] 2026-10-29 機關頁「議會發言記錄」分頁（逐字稿對應代碼，含所屬機關）；標案改用 dept_name 篩縣政府各處、unitstat 年度統計與得標廠商，連到 pcc-viewer
 - [ ] 預算：等 budget API 的單一機關端點
 - [ ] 新聞公告：elastic-govnews（org_id＝機關代碼）
 

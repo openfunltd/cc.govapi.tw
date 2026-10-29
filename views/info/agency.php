@@ -28,7 +28,7 @@ $dept = $this->pcc_dept_name ?? null;
 
 <?php if ($a->_head): ?>
 <p class="mb-3">首長：<?= $head_text($a->_head) ?>
-  <span class="small text-body-secondary">（本屆最後一次在議會答詢：<?= htmlspecialchars($a->_head->{'最後'} ?? '') ?>，從會議逐字稿彙整，不是官方人事資料）</span></p>
+  <span class="small text-body-secondary">（最後答詢 <?= htmlspecialchars($a->_head->{'最後'} ?? '') ?>）</span></p>
 <?php endif; ?>
 
 <?php if ($children): ?>
@@ -42,19 +42,21 @@ $dept = $this->pcc_dept_name ?? null;
 </details>
 <?php endif; ?>
 
-<h3 class="h5 fw-semibold mt-4 mb-2">標案</h3>
+<?php $base = '/info/' . $term_no . '/agencies/' . rawurlencode($a->{'代碼'}); ?>
+<ul class="nav nav-pills mt-4 mb-3">
+  <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') !== 'speeches' ? ' active' : '' ?>" href="<?= htmlspecialchars($base) ?>">標案</a></li>
+  <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'speeches' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/speeches') ?>">議會發言記錄</a></li>
+</ul>
+
+<?php if (($this->agency_page ?? '') === 'speeches'): ?>
+<?= $this->partial('info/agency_speeches', $this) ?>
+<?php return; endif; ?>
+
 <?php if (!$unit_id): ?>
-<p class="small text-body-secondary">這個機關沒有可以對應到政府電子採購網的機關代碼，暫時無法列出標案。</p>
+<p class="small text-body-secondary">查無標案資料</p>
 <?php else: ?>
-<?php if ($dept): ?>
-<div class="alert alert-light border small">
-  <?= htmlspecialchars($a->{'名稱'}) ?>是<?= htmlspecialchars($parent->{'名稱'} ?? '') ?>的內部單位，在政府電子採購網沒有自己的機關代碼，標案都以<?= htmlspecialchars($parent->{'名稱'} ?? '') ?>名義公告。
-  下面列出<?= htmlspecialchars($parent->{'名稱'} ?? '') ?>的全部標案，承辦單位是<?= htmlspecialchars($a->{'名稱'}) ?>的標案會特別標示。
-</div>
-<?php endif; ?>
 <?php
 $t = $this->tenders;
-$base = '/info/' . $term_no . '/agencies/' . rawurlencode($a->{'代碼'});
 // 篩選、換頁都是一般連結（標案由後端呼叫 pcc-api 取得），只改動指定的參數
 $tender_url = function ($override) use ($t, $base, $dept) {
     $q = array_merge(['type' => $t['type'], 'children' => $t['children'] ? '1' : '0', 'page' => 1], $override);
@@ -65,6 +67,32 @@ $tender_url = function ($override) use ($t, $base, $dept) {
 };
 ?>
 <div id="tenders">
+<?php if ($t['years']): ?>
+<div class="row g-3 mb-3">
+  <div class="col-12 col-lg-6">
+    <table class="table table-sm small mb-0">
+      <thead><tr><th>年度</th><th class="text-end">標案數</th><th class="text-end">決標件數</th><th class="text-end">決標金額</th></tr></thead>
+      <tbody>
+        <?php foreach (array_slice($t['years'], 0, 10) as $y): ?>
+        <tr><td><?= (int) $y->year ?></td><td class="text-end"><?= number_format($y->tenders) ?></td><td class="text-end"><?= number_format($y->awards) ?></td><td class="text-end"><?= number_format($y->award_amount) ?> 元</td></tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+  <?php if ($t['winners']): ?>
+  <div class="col-12 col-lg-6">
+    <table class="table table-sm small mb-0">
+      <thead><tr><th>得標廠商</th><th class="text-end">決標件數</th><th class="text-end">決標金額</th></tr></thead>
+      <tbody>
+        <?php foreach ($t['winners'] as $w): ?>
+        <tr><td><a href="https://openfunltd.github.io/pcc-viewer/searchbycompany.html?query=<?= rawurlencode($w->company_name ?? '') ?>" target="_blank" rel="noopener"><?= htmlspecialchars($w->company_name ?? '') ?></a></td><td class="text-end"><?= number_format($w->awards) ?></td><td class="text-end"><?= number_format($w->amount) ?> 元</td></tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
   <div class="d-flex flex-wrap align-items-center gap-2 mb-2 small">
     <div class="btn-group btn-group-sm" role="group">
       <?php foreach (InfoController::TENDER_TYPES as $type => $label): ?>
@@ -87,18 +115,15 @@ $tender_url = function ($override) use ($t, $base, $dept) {
         <?php endif; ?>
         <?php foreach ($t['records'] as $r): ?>
         <?php
-          $det = $r->detail ?? new stdClass;
-          $dept_name = $det->{'機關資料:單位名稱'} ?? '';
-          $amount = ($det->{'決標資料:總決標金額'} ?? null) ?: ($det->{'採購資料:預算金額'} ?? '');
+          $amount = $r->award_amount ?? $r->budget_amount ?? null;
           $date = preg_replace('/^(\d{4})(\d{2})(\d{2})$/', '$1-$2-$3', (string) ($r->date ?? ''));
-          $mine = $dept && $dept_name !== '' && strpos($dept_name, $dept) === 0;
         ?>
-        <tr<?= $mine ? ' class="table-warning"' : '' ?>>
+        <tr>
           <td class="text-nowrap"><?= htmlspecialchars($date) ?></td>
-          <td><a href="<?= htmlspecialchars('https://pcc-api.openfun.app' . ($r->url ?? '')) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($r->brief->title ?? '') ?></a></td>
+          <td><a href="https://openfunltd.github.io/pcc-viewer/tender.html?<?= htmlspecialchars(http_build_query(['unit_id' => $r->unit_id ?? '', 'job_number' => $r->job_number ?? ''])) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($r->brief->title ?? '') ?></a></td>
           <td class="text-nowrap"><?= htmlspecialchars($r->brief->type ?? '') ?></td>
-          <td><?php if ($t['children']): ?><?= htmlspecialchars($r->unit_name ?? '') ?><?= $dept_name !== '' ? '<br>' : '' ?><?php endif; ?><span class="text-body-secondary"><?= htmlspecialchars($dept_name) ?></span></td>
-          <td class="text-end text-nowrap"><?= htmlspecialchars($amount) ?></td>
+          <td><?php if ($t['children']): ?><?= htmlspecialchars($r->unit_name ?? '') ?><?= ($r->dept_name ?? '') !== '' ? '<br>' : '' ?><?php endif; ?><span class="text-body-secondary"><?= htmlspecialchars($r->dept_name ?? '') ?></span></td>
+          <td class="text-end text-nowrap"><?= $amount !== null ? number_format($amount) . ' 元' : '' ?></td>
         </tr>
         <?php endforeach; ?>
       </tbody>
@@ -111,9 +136,6 @@ $tender_url = function ($override) use ($t, $base, $dept) {
     <a class="btn btn-sm btn-outline-secondary<?= $t['page'] >= $t['total_page'] ? ' disabled' : '' ?>" href="<?= $tender_url(['page' => $t['page'] + 1]) ?>">下一頁</a>
   </div>
   <?php endif; ?>
-  <p class="small text-body-secondary mt-2">
-    資料來源：政府電子採購網，經歐噴<a href="https://pcc-api.openfun.app/" target="_blank" rel="noopener">政府採購公告 API</a>整理；點標案名稱看公告全文。
-    金額為決標公告的總決標金額，其他公告為預算金額。
-  </p>
+  <p class="small text-body-secondary mt-2">資料來源：<a href="https://pcc-api.openfun.app/" target="_blank" rel="noopener">政府採購公告 API</a></p>
 </div>
 <?php endif; ?>

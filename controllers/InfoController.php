@@ -204,7 +204,8 @@ class InfoController extends MiniEngine_Controller
                 if ($this->view->agency_section === 'villages') {
                     $this->loadVillagesTab($cc_code, $term_no, $sub_id2);
                 } elseif ($this->view->agency_section === 'detail') {
-                    $this->loadAgencyDetail($term_no, urldecode($sub_id));
+                    $this->view->agency_page = $sub_id2 === 'speeches' ? 'speeches' : 'overview';
+                    $this->loadAgencyDetail($term_no, urldecode($sub_id), $this->view->agency_page);
                     if ($a = $this->view->agency ?? null) {
                         $full = ($a->{'全名'} ?? '') ?: $a->{'名稱'};
                         $this->setOg(
@@ -679,7 +680,7 @@ class InfoController extends MiniEngine_Controller
      * {縣市政府代碼}-U……）在採購網沒有自己的機關代碼，標案掛在縣市政府底下，只能靠
      * 標案的「單位名稱」區分
      */
-    protected function loadAgencyDetail($term_no, $code)
+    protected function loadAgencyDetail($term_no, $code, $page = 'overview')
     {
         $r = CCAPI::apiQuery('/agency/' . rawurlencode($code), '行政機關資料');
         $agency = ($r->error ?? true) ? null : $r->data;
@@ -715,49 +716,138 @@ class InfoController extends MiniEngine_Controller
             $this->view->pcc_unit_id = self::pccUnitId($parent->{'機關代碼'} ?? null);
             $this->view->pcc_dept_name = $agency->{'名稱'};
         }
-        if ($this->view->pcc_unit_id) {
-            $this->loadAgencyTenders($this->view->pcc_unit_id, (bool) $children && !$this->view->pcc_dept_name);
+        if ($page === 'speeches') {
+            $this->loadAgencySpeeches($agency, $children, $term_no);
+        } elseif ($this->view->pcc_unit_id) {
+            $this->loadAgencyTenders($this->view->pcc_unit_id, $this->view->pcc_dept_name, (bool) $children && !$this->view->pcc_dept_name);
         }
+    }
+
+    /**
+     * 單一機關頁 → 議會發言記錄：本屆會議逐字稿裡這個機關官員的發言（逐字稿的「對應代碼」
+     * 是機關代碼去掉議會代碼前綴，縣市政府內部單位也是同一套），每頁 50 筆（問候、簡短應答在頁面上收起來）、依日期新到舊，
+     * 同一場會議的發言併在一起。?children=1 連同所屬機關（預設有所屬機關就含）
+     */
+    protected function loadAgencySpeeches($agency, $children, $term_no)
+    {
+        $cc_prefix = ($agency->{'議會代碼'} ?? '') . '-';
+        $strip = fn($c) => strpos($c, $cc_prefix) === 0 ? substr($c, strlen($cc_prefix)) : $c;
+        $with_children = $children && (isset($_GET['children']) ? $_GET['children'] === '1' : true);
+        $codes = [$strip($agency->{'代碼'})];
+        if ($with_children) {
+            foreach ($children as $c) {
+                $codes[] = $strip($c->{'代碼'});
+            }
+        }
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $qs = urlencode('屆') . '=' . (int) $term_no . '&' . urlencode('對應代碼類型') . '=' . urlencode('機關')
+            . implode('', array_map(fn($c) => '&' . urlencode('對應代碼') . '=' . urlencode($c), $codes));
+        $r = CCAPI::apiQuery(
+            '/meet_transcripts?limit=50&page=' . $page . '&' . $qs
+                . '&sort=' . urlencode('日期>') . '&sort=' . urlencode('順序<')
+                . '&agg=' . urlencode('姓名')
+                . '&output_fields=' . urlencode('代碼') . '&output_fields=' . urlencode('會議代碼')
+                . '&output_fields=' . urlencode('會期代碼') . '&output_fields=' . urlencode('日期')
+                . '&output_fields=' . urlencode('姓名') . '&output_fields=' . urlencode('職稱')
+                . '&output_fields=' . urlencode('對應單位全名') . '&output_fields=' . urlencode('發言內容'),
+            '這個機關官員在議會的發言（逐字稿「對應代碼」精確比對，依日期新到舊）'
+        );
+        $items = $r->meet_transcripts ?? [];
+
+        // 補上會議的委員會或主旨：每個會期查一次該會期全部會議，不逐筆查
+        $meets_by_code = [];
+        foreach (array_unique(array_map(fn($t) => $t->{'會期代碼'} ?? '', $items)) as $session_code) {
+            if ($session_code === '') continue;
+            foreach ($this->loadMeetsForSession($session_code) as $meets_of_sitting) {
+                foreach ($meets_of_sitting as $m) {
+                    $meets_by_code[$m->{'代碼'}] = $m;
+                }
+            }
+        }
+        // 同一場會議的連續發言併成一組（已依日期新到舊、會議內依順序排列）
+        $groups = [];
+        foreach ($items as $t) {
+            $meet_code = $t->{'會議代碼'} ?? '';
+            $last = end($groups);
+            if (!$last || $last->{'會議代碼'} !== $meet_code) {
+                $groups[] = (object) [
+                    '會議代碼' => $meet_code,
+                    '日期' => $t->{'日期'} ?? '',
+                    '會期名稱' => CCAPI_Type_Session::getFriendlyName($t->{'會期代碼'} ?? ''),
+                    '會議主旨' => $meets_by_code[$meet_code]->{'委員會或主旨'} ?? null,
+                    'items' => [],
+                ];
+            }
+            $groups[count($groups) - 1]->items[] = $t;
+        }
+
+        $speakers = [];
+        foreach (($r->aggs ?? []) as $agg) {
+            if (($agg->agg ?? '') === '姓名') {
+                $speakers = array_slice($agg->buckets ?? [], 0, 10);
+            }
+        }
+
+        // 查無發言時分清楚是「這個議會逐字稿還沒收錄」還是真的沒有發言
+        $no_coverage = false;
+        if (!$items && $page === 1) {
+            $comp = CCAPI::apiQuery('/completeness/' . rawurlencode($agency->{'議會代碼'} ?? ''), '議會逐字稿收錄狀態（判斷查無發言記錄的真正原因）');
+            $transcript = $comp->data->types->transcript ?? null;
+            $no_coverage = $transcript && ($transcript->total ?? 0) === 0;
+        }
+
+        $this->view->agency_speeches = [
+            'groups' => $groups,
+            'total' => (int) ($r->total ?? 0),
+            'total_page' => (int) ($r->total_page ?? 0),
+            'page' => $page,
+            'children' => $with_children,
+            'speakers' => $speakers,
+            'no_coverage' => $no_coverage,
+        ];
     }
 
     // 標案列表的公告類型篩選（pcc-api 的 type 是完全比對）
     const TENDER_TYPES = ['' => '全部公告', '公開招標公告' => '公開招標', '決標公告' => '決標'];
 
     /**
-     * 單一機關頁的標案列表：後端呼叫 pcc-api listbyunit（每頁 20 筆），篩選條件放在網址
-     * ?type=&children=&page=；children 沒帶時，有所屬機關的預設含所屬機關
+     * 單一機關頁的標案：後端呼叫 pcc-api 的 listbyunit（公告列表，每頁 20 筆）與 unitstat
+     * （各年度件數、決標金額、得標廠商排行）。篩選條件放在網址 ?type=&children=&page=；
+     * children 沒帶時，有所屬機關的預設含所屬機關。縣市政府內部單位用 dept_name（標案的
+     * 「機關資料:單位名稱」前綴）在縣市政府的標案裡篩出來
      */
-    protected function loadAgencyTenders($unit_id, $default_children)
+    protected function loadAgencyTenders($unit_id, $dept_name, $default_children)
     {
         $type = array_key_exists($_GET['type'] ?? '', self::TENDER_TYPES) ? ($_GET['type'] ?? '') : '';
         $with_children = isset($_GET['children']) ? $_GET['children'] === '1' : $default_children;
         $page = max(1, (int) ($_GET['page'] ?? 1));
-        $params = [
-            'unit_id' => $unit_id,
-            'limit' => 20,
-            'page' => $page,
-            'columns' => ['機關資料:單位名稱', '決標資料:總決標金額', '採購資料:預算金額'],
-        ];
+        $scope = ['unit_id' => $unit_id];
         if ($with_children) {
-            $params['include_children'] = 1;
+            $scope['include_children'] = 1;
         }
-        if ($type !== '') {
-            $params['type'] = $type;
+        if ($dept_name) {
+            $scope['dept_name'] = $dept_name;
         }
-        $qs = preg_replace('/%5B\d+%5D=/', '%5B%5D=', http_build_query($params));
-        $r = CCAPI::externalQuery(
-            'https://pcc-api.openfun.app/api/listbyunit?' . $qs,
+        $list = CCAPI::externalQuery(
+            'https://pcc-api.openfun.app/api/listbyunit?' . http_build_query($scope + ['limit' => 20, 'page' => $page] + ($type !== '' ? ['type' => $type] : [])),
             '這個機關的標案公告（政府採購公告 API）',
             'https://pcc-api.openfun.app/skill.md'
         );
+        $stat = CCAPI::externalQuery(
+            'https://pcc-api.openfun.app/api/unitstat?' . http_build_query($scope + ['top' => 10]),
+            '這個機關的標案統計：各年度件數、決標金額、得標廠商排行（政府採購公告 API）',
+            'https://pcc-api.openfun.app/skill.md'
+        );
         $this->view->tenders = [
-            'ok' => $r !== null && isset($r->records),
-            'records' => $r->records ?? [],
-            'total' => (int) ($r->total ?? 0),
-            'total_page' => (int) ($r->total_page ?? 0),
+            'ok' => $list !== null && isset($list->records),
+            'records' => $list->records ?? [],
+            'total' => (int) ($list->total ?? 0),
+            'total_page' => (int) ($list->total_page ?? 0),
             'page' => $page,
             'type' => $type,
             'children' => $with_children,
+            'years' => array_reverse($stat->years ?? []),
+            'winners' => $stat->winners ?? [],
         ];
     }
 
