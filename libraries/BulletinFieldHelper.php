@@ -50,4 +50,17 @@ class BulletinFieldHelper
         }
         return false;
     }
+
+    /**
+     * 公報的「推薦之政黨」：直書欄位萃取出來常常每個字中間有換行（「中\n國\n國\n民\n黨」），
+     * 政黨名稱本身不含空白，全部去掉；去掉後是空字串，或是欄位標題「推薦之政黨」被打散的，回傳 null
+     */
+    public static function normalizeParty(?string $party): ?string
+    {
+        $flat = preg_replace('/[\s\x{3000}]+/u', '', (string) $party);
+        if ($flat === '' || count(array_diff(mb_str_split($flat), mb_str_split('推薦之政黨'))) === 0) {
+            return null;
+        }
+        return $flat;
+    }
 }

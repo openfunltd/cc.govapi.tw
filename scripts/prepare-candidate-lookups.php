@@ -74,7 +74,7 @@ if ($person_source && file_exists($person_source)) {
     error_log("IMPORT_CANDIDATE_PERSON_SOURCE_JSONL 未設定或檔案不存在，略過人物代碼.jsonl 重新產生");
 }
 
-// ── 當選註記.jsonl：候選人代碼 → 中選會 cand.csv 當選註記（ELC-T1/ELC-T2）──────
+// ── 當選註記.jsonl：候選人代碼 → 中選會 cand.csv 當選註記、政黨（ELC-T1/ELC-T2）──
 
 $elected_source = getenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV');
 $elected_out = getenv('IMPORT_CANDIDATE_ELECTED_JSONL') ?: (__DIR__ . '/../當選註記.jsonl');
@@ -94,6 +94,7 @@ if ($elected_source && file_exists($elected_source)) {
         fwrite($out, json_encode([
             '候選人代碼' => $cand_code,
             '當選註記'   => $row[$col['當選註記']] ?? '',
+            '政黨'       => $row[$col['政黨']] ?? '',
         ], JSON_UNESCAPED_UNICODE) . "\n");
         $count++;
     }

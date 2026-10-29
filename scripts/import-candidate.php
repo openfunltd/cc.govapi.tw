@@ -318,7 +318,7 @@ if (file_exists($elected_path)) {
         if (!$erecord) continue;
         $ecode = $erecord['候選人代碼'] ?? '';
         if ($ecode === '') continue;
-        $elected_by_code[$ecode] = $erecord['當選註記'] ?? '';
+        $elected_by_code[$ecode] = $erecord;
     }
     fclose($efh);
     error_log("Loaded elected marker for " . count($elected_by_code) . " candidates");
@@ -428,6 +428,16 @@ function import_candidate_doc($record, $doc_id, $county_to_cc_code, $votes_by_co
         }
     }
 
+    // 推薦之政黨以中選會候選人名冊為準：公報萃取會有直書欄位的換行、簡稱（「國民黨」）、
+    // 漏抓，或同名候選人別場選舉的公報被併進來；名冊沒有政黨的才用公報的值
+    $party = BulletinFieldHelper::normalizeParty($elected_by_code[$record['候選人代碼'] ?? '']['政黨'] ?? null)
+        ?? BulletinFieldHelper::normalizeParty($doc['其他欄位']['推薦之政黨'] ?? null);
+    if ($party !== null) {
+        $doc['其他欄位']['推薦之政黨'] = $party;
+    } elseif (isset($doc['其他欄位'])) {
+        unset($doc['其他欄位']['推薦之政黨']);
+    }
+
     // 候選人代碼格式固定是 {選舉代碼}:{行政區代碼}-{選區}:{號次}（例：
     // ELC-T1-111:68000-7:1），沒比對到候選人名冊時來源不會算出選舉代碼／
     // 行政區代碼，這裡從候選人代碼反解出來，不然「同選區得票比較」查不到同一場選舉
@@ -453,7 +463,7 @@ function import_candidate_doc($record, $doc_id, $county_to_cc_code, $votes_by_co
             $doc['人物代碼'] = $person_by_code[$candidate_code];
         }
         if (isset($elected_by_code[$candidate_code])) {
-            $marker = $elected_by_code[$candidate_code];
+            $marker = $elected_by_code[$candidate_code]['當選註記'] ?? '';
             $doc['當選'] = in_array($marker, ['*', '!'], true);
             if ($marker !== '') {
                 $doc['當選註記'] = $marker;

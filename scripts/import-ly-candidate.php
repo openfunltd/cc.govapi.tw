@@ -204,6 +204,8 @@ foreach ($bulletins as $code => $r) {
             $val = array_map($bulletin_image_url, $val);
         } elseif ($key === '其他欄位' && is_array($val)) {
             $val = array_merge($val, $candidates[$code]['其他欄位']);
+            $val['推薦之政黨'] = BulletinFieldHelper::normalizeParty($val['推薦之政黨'] ?? null);
+            $val = array_filter($val, fn($v) => $v !== null);
         }
         $candidates[$code][$key] = $val;
     }
