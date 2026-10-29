@@ -229,6 +229,54 @@ foreach (glob("{$org_dir}/*.json") as $file) {
         '來源網址'   => $org['source_url'] ?? null,
         '歷任首長'   => $county_mayors,
     ];
+    // 組織圖把所屬機關放在上層單位的 sub_units（例：教育處底下的家庭教育中心、警察局底下的
+    // 各分局），展開成緊接在上層後面的單位，上層就是那個單位；名稱尾端的數量註記
+    // （「國小122」「戶政事務所 (12 所)」「國民小學 [一五二]」）與舊名註記（「地方稅務局(原稅捐稽徵處)」）去掉
+    $strip_count = fn($s) => trim(preg_replace(['/\s*[\(（]原[^\)）]*[\)）]$/u', '/\s*[\(（\[]?\s*[0-9一二三四五六七八九十百]+\s*[所科校間]?\s*[\)）\]]?$/u'], '', trim($s)));
+    $departments = [];
+    foreach ($org['departments'] as $dep) {
+        $dep['name'] = $strip_count($dep['name']);
+        $departments[] = $dep;
+        foreach ((array) ($dep['sub_units'] ?? []) as $sub) {
+            // 各機關內部的科、室、組，以及公營事業（捷運公司等）底下的部門不是機關，不展開
+            if (is_string($sub) && $strip_count($sub) !== '' && !preg_match('/(科|室|組|課|股)$/u', $strip_count($sub))
+                && !preg_match('/公司$/u', $dep['name'])) {
+                $departments[] = ['name' => $strip_count($sub), 'parent' => $dep['name'], 'sub_units' => [], 'url' => null];
+            }
+        }
+    }
+    $org['departments'] = $departments;
+    $names_in_org = array_flip(array_map(fn($d) => $d['name'], $org['departments']));
+
+    // 機關代碼階層的全名是層層串接上層名稱，不一定是機關的正式全銜，改成：
+    // - 上層名稱之後又以縣市名開頭的，從最後一次出現縣市名的地方取（新竹市政府新竹市立體育場
+    //   → 新竹市立體育場、澎湖縣政府澎湖縣馬公市公所 → 澎湖縣馬公市公所、臺北市政府衛生局
+    //   臺北市士林區健康服務中心 → 臺北市士林區健康服務中心）
+    // - 縣市政府後面直接接本身就帶地名的機關（臺北市政府臺北自來水事業處 → 臺北自來水事業處）
+    // - 公營事業的公司（金門縣政府金門酒廠實業股份有限公司 → 金門酒廠實業股份有限公司）
+    // 縣市政府的局處與其下屬機關（臺北市政府警察局北投分局）、內部單位（彰化縣政府民政處）維持原樣
+    $official_name = function ($full) use ($county) {
+        $variants = array_unique([$county, str_replace('臺', '台', $county)]);
+        foreach ($variants as $c) {
+            $p = mb_strrpos($full, $c);
+            if ($p > 0) {
+                return mb_substr($full, $p);
+            }
+        }
+        foreach ($variants as $c) {
+            if (mb_strpos($full, $c . '政府') === 0) {
+                $rest = mb_substr($full, mb_strlen($c) + 2);
+                if ($rest !== '' && mb_strpos($rest, mb_substr($c, 0, 2)) === 0) {
+                    return $rest;
+                }
+                if (preg_match('/公司$/u', $rest)) {
+                    return preg_replace('/^[^局]{1,6}局(?=.+公司$)/u', '', $rest);
+                }
+            }
+        }
+        return $full;
+    };
+
     $stats = ['一級內部單位' => 0, '一級外部單位' => 0, '二級機關' => 0, '其他單位' => 0, '未對到' => [], '略過' => 0];
     foreach ($org['departments'] as $order => $dep) {
         $name = trim($dep['name']);
@@ -297,7 +345,7 @@ foreach (glob("{$org_dir}/*.json") as $file) {
             '代碼'       => $doc_id,
             '議會代碼'   => $cc_code,
             '名稱'       => $name,
-            '全名'       => $uid ? ($units[$uid]['full_name'] ?? $units[$uid]['original_name']) : null,
+            '全名'       => $uid ? $official_name($units[$uid]['full_name'] ?? $units[$uid]['original_name']) : null,
             '機關代碼'   => $dgpa_code,
             '分類'       => $category,
             '上層代碼'   => $parent_doc,
