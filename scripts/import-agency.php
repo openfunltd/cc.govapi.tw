@@ -195,7 +195,10 @@ foreach (glob("{$org_dir}/*.json") as $file) {
     $stack = [[$root, 0]];
     while ($stack) {
         [$id, $depth] = array_pop($stack);
-        if ($depth > 0 && ($depth === 1 || $units[$id]['source'] !== 'dgpa+unitId')) {
+        // source=self 是機關代碼階層從預算書等來源自行補上的單位（id 形如 376582400E--動物園），
+        // 名稱常跟正式單位重複（例：「新竹市立動物園」底下又一個「動物園」），不當候選，
+        // 避免組織圖上的簡稱優先比對到它而不是正式的機關
+        if ($depth > 0 && $units[$id]['source'] !== 'self' && ($depth === 1 || $units[$id]['source'] !== 'dgpa+unitId')) {
             $candidates[$norm($units[$id]['sub_name'] ?: $units[$id]['original_name'])] = [$id, $depth];
         }
         if ($depth < 2) {
