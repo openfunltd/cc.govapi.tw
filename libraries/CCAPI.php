@@ -51,6 +51,34 @@ class CCAPI
         return $res_json;
     }
 
+    /**
+     * 呼叫歐噴其他服務的 API（例：pcc-api 政府採購公告），同樣帶 CCAPI_TOKEN（歐噴共用的
+     * data.openfun.tw token）避免頁面請求被匿名流量限制擋掉，並記進「本頁使用 API」清單；
+     * $skill_url 是那個服務給 AI 讀的使用說明，「複製給 AI 的提示詞」會一併列出
+     */
+    public static function externalQuery($full_url, $reason, $skill_url)
+    {
+        $curl = curl_init();
+        if (getenv('CCAPI_TOKEN')) {
+            curl_setopt($curl, CURLOPT_HTTPHEADER, [
+                'Authorization: Bearer ' . getenv('CCAPI_TOKEN'),
+            ]);
+        }
+        if ($referer = self::currentPageUrl()) {
+            curl_setopt($curl, CURLOPT_REFERER, $referer);
+        }
+        curl_setopt($curl, CURLOPT_URL, $full_url);
+        curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($curl, CURLOPT_TIMEOUT, 20);
+        $res = curl_exec($curl);
+        $res_json = json_decode($res);
+        curl_close($curl);
+
+        self::$log[] = [$full_url, $reason, $skill_url];
+
+        return $res_json;
+    }
+
     protected static function currentPageUrl()
     {
         if (empty($_SERVER['HTTP_HOST']) || !isset($_SERVER['REQUEST_URI'])) {

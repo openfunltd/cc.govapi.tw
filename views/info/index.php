@@ -354,17 +354,21 @@ document.addEventListener('click', function (e) {
         <?php
         // 「複製給 AI 的提示詞」：把本頁用到的 API 和用途包成一段 prompt，貼給代理型 AI 接著做資料分析
         $api_logs = CCAPI::getLogs();
-        $api_base = preg_replace('#^(https://[^/]+).*$#', '$1', $api_logs[0][0] ?? '');
+        // 第三個元素是外部服務（CCAPI::externalQuery()，例：pcc-api）的使用說明網址，CCAPI 自己的呼叫沒有
+        $ccapi_logs = array_values(array_filter($api_logs, fn($l) => !isset($l[2])));
+        $external_skills = array_unique(array_filter(array_map(fn($l) => $l[2] ?? null, $api_logs)));
+        $api_base = preg_replace('#^(https://[^/]+).*$#', '$1', $ccapi_logs[0][0] ?? '');
         $page_url = 'https://' . ($_SERVER['HTTP_HOST'] ?? '') . urldecode(preg_replace('/[?&]x=\d+$/', '', $_SERVER['REQUEST_URI'] ?? ''));
         $uses_candidate = (bool) array_filter($api_logs, fn($l) => preg_match('#/api/candidates?[/?]#', $l[0]));
         $prompt = "我正在看「" . ($og_title ?? '') . "」這個網頁：\n{$page_url}\n\n"
-            . "這頁的資料來自地方議會開放 API（CCAPI），請你直接呼叫下面這些 API 取得同樣的資料，幫我做進一步的分析。\n\n"
+            . "這頁的資料來自地方議會開放 API（CCAPI）" . ($external_skills ? "與歐噴其他開放資料 API" : '') . "，請你直接呼叫下面這些 API 取得同樣的資料，幫我做進一步的分析。\n\n"
             . "## 這頁用到的 API\n"
             . implode('', array_map(fn($l) => "- {$l[1]}：" . urldecode($l[0]) . "\n", $api_logs))
             . "\n## 使用方式\n"
             . "- 呼叫前請先讀 {$api_base}/skill.md（API 使用說明：篩選、分頁、欄位）和 {$api_base}/knowledge.md（資料的背景知識，例如「議員」「議會」在這裡的精確意思）。欄位定義與可用的篩選條件見 {$api_base}/swagger。\n"
             . "- 回應是 JSON，有 total、total_page、page、limit；資料多時用 page 參數分頁抓完，可以用 output_fields 只取需要的欄位，也可以改用其他篩選欄位查更多資料。\n"
             . "- 不需要 token 也能呼叫，但匿名請求有流量限制，請控制呼叫頻率；不要抓 HTML 網頁，直接呼叫 API。\n"
+            . implode('', array_map(fn($u) => "- " . preg_replace('#^https://([^/]+).*$#', '$1', $u) . " 的 API 不是 CCAPI，呼叫前請先讀它自己的使用說明 {$u}。\n", $external_skills))
             . ($uses_candidate ? "\n## 候選人資料的限制\n"
                 . "- 選舉公報（學歷、經歷、政見、相片）只回溯到民國 98 年，更早的選舉多半只有得票資料。\n"
                 . "- 「學歷來源」「經歷來源」「政見來源」是 paddleocr、cell-image-vision、manifesto-image-vision、page-image-vision 的，是從公報圖片辨識出來的文字，可能有錯字；text-garbled 是亂碼，不能當文字用；沒有來源欄位代表那一欄是圖片或空白（政見圖見「政見圖路徑」）。\n"

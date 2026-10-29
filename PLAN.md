@@ -457,6 +457,13 @@ https://all.cc.govapi.tw/knowledge.md
 - [x] 2026-10-28 HuggingFace [openfun/tw-cc-data](https://huggingface.co/datasets/openfun/tw-cc-data)：export-dataset.php 從 ES 匯出、build-hf-dataset.py 轉 Parquet 與 README，12 個型別各一個 subset（不含隱藏議會、財產申報、完整度／概況）
 - [ ] 每月自動更新（排程跑兩支腳本 + `--upload`）
 
+### 行政體系整合歐噴其他 API（不同步資料，後端帶 CCAPI_TOKEN 直接呼叫）
+
+- [x] 2026-10-29 單一機關頁 /info/{屆}/agencies/{代碼}：首長、上下層機關、標案列表（pcc-api listbyunit，機關代碼換算 unit_id）
+- [ ] 縣政府各處標案：等 pcc-api 依「單位名稱」篩選；標案統計（unitstat）
+- [ ] 預算：等 budget API 的單一機關端點
+- [ ] 新聞公告：elastic-govnews（org_id＝機關代碼）
+
 ## 未來規劃
 
 ### 長期規劃（規模較大，先列著，之後再挑來做）

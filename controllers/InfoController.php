@@ -199,9 +199,19 @@ class InfoController extends MiniEngine_Controller
                     '/candidates?limit=0&' . urlencode('參選職位') . '=' . urlencode('鄉鎮市長'),
                     '本議會有沒有鄉鎮市長選舉資料'
                 )->total ?? 0) > 0;
-                $this->view->agency_section = ($sub_id === 'villages' && $this->view->has_villages) ? 'villages' : 'agencies';
+                $this->view->agency_section = ($sub_id === 'villages' && $this->view->has_villages) ? 'villages'
+                    : ($sub_id ? 'detail' : 'agencies');
                 if ($this->view->agency_section === 'villages') {
                     $this->loadVillagesTab($cc_code, $term_no, $sub_id2);
+                } elseif ($this->view->agency_section === 'detail') {
+                    $this->loadAgencyDetail($term_no, urldecode($sub_id));
+                    if ($a = $this->view->agency ?? null) {
+                        $full = ($a->{'全名'} ?? '') ?: $a->{'名稱'};
+                        $this->setOg(
+                            $full . '・行政體系',
+                            $this->view->council_name . '監督的行政機關：' . $full . '的首長、所屬機關與標案'
+                        );
+                    }
                 } else {
                     $this->view->agency_tree = $this->loadAgencyTree($cc_code, $term_no);
                     if (in_array($cc_code, ['ly', 'tpg'], true)) {
@@ -567,18 +577,9 @@ class InfoController extends MiniEngine_Controller
             return null;
         }
 
-        // 每個機關取本屆最後一次答詢的首長級職稱當作（最新）首長；首長紀錄由
-        // generate-agency-heads.php 從會議逐字稿彙整
-        $head_pattern = '/^(代理)?(局長|處長|主任委員|主委|執行秘書|總經理|董事長|館長|院長|所長|主任|大隊長|總隊長|隊長|團長|區長|校長|執行長|秘書長|總幹事|場長|廠長)$/u';
         $children = [];
         foreach ($agencies as $a) {
-            $a->_head = null;
-            foreach (($a->{'首長紀錄'} ?? []) as $rec) {
-                if ((int) $rec->{'屆'} === (int) $term_no && preg_match($head_pattern, $rec->{'職稱'} ?? '')
-                    && (!$a->_head || $rec->{'最後'} > $a->_head->{'最後'})) {
-                    $a->_head = $rec;
-                }
-            }
+            $a->_head = $this->pickAgencyHead($a, $term_no);
             if ($a->{'上層代碼'} ?? null) {
                 $children[$a->{'上層代碼'}][] = $a;
             }
@@ -637,6 +638,127 @@ class InfoController extends MiniEngine_Controller
             }
         }
         return $tree;
+    }
+
+    /**
+     * 機關本屆最後一次答詢的首長級職稱當作（最新）首長；首長紀錄由 generate-agency-heads.php
+     * 從會議逐字稿彙整
+     */
+    protected function pickAgencyHead($a, $term_no)
+    {
+        $head_pattern = '/^(代理)?(局長|處長|主任委員|主委|執行秘書|總經理|董事長|館長|院長|所長|主任|大隊長|總隊長|隊長|團長|區長|校長|執行長|秘書長|總幹事|場長|廠長)$/u';
+        $head = null;
+        foreach (($a->{'首長紀錄'} ?? []) as $rec) {
+            if ((int) $rec->{'屆'} === (int) $term_no && preg_match($head_pattern, $rec->{'職稱'} ?? '')
+                && (!$head || $rec->{'最後'} > $head->{'最後'})) {
+                $head = $rec;
+            }
+        }
+        return $head;
+    }
+
+    /**
+     * 人事行政總處機關代碼換成政府電子採購網的機關代碼（pcc-api 的 unit_id）：第一碼照抄，
+     * 之後每兩碼一層轉成整數，去掉結尾的 0，例：379110500A → 3.79.11.5
+     */
+    public static function pccUnitId($org_code)
+    {
+        if (!preg_match('/^([0-9A-Z])(\d{2})(\d{2})(\d{2})(\d{2})[A-Z]$/', (string) $org_code, $m)) {
+            return null;
+        }
+        $parts = array_merge([$m[1]], array_map('intval', array_slice($m, 2)));
+        while (count($parts) > 1 && end($parts) === 0) {
+            array_pop($parts);
+        }
+        return implode('.', $parts);
+    }
+
+    /**
+     * 行政體系 → 單一機關頁：/info/{屆}/agencies/{機關代碼}，顯示首長、上層與所屬機關，
+     * 標案列表由前端直接呼叫 pcc-api（依 unit_id 查詢）。縣市政府的內部單位（代碼
+     * {縣市政府代碼}-U……）在採購網沒有自己的機關代碼，標案掛在縣市政府底下，只能靠
+     * 標案的「單位名稱」區分
+     */
+    protected function loadAgencyDetail($term_no, $code)
+    {
+        $r = CCAPI::apiQuery('/agency/' . rawurlencode($code), '行政機關資料');
+        $agency = ($r->error ?? true) ? null : $r->data;
+        $this->view->agency = $agency;
+        if (!$agency) {
+            return;
+        }
+        $agency->_head = $this->pickAgencyHead($agency, $term_no);
+
+        $is_internal = !($agency->{'機關代碼'} ?? null) && preg_match('/^(.+)-U\w+$/', $agency->{'代碼'}, $m);
+        $parent_code = $agency->{'上層代碼'} ?? ($is_internal ? $m[1] : null);
+        $parent = null;
+        if ($parent_code) {
+            $r = CCAPI::apiQuery('/agency/' . rawurlencode($parent_code), '上層機關資料');
+            $parent = ($r->error ?? true) ? null : $r->data;
+        }
+        $this->view->agency_parent = $parent;
+
+        $r = CCAPI::apiQuery(
+            '/agencies?limit=1000&sort=' . urlencode('排序<') . '&' . urlencode('上層代碼') . '=' . urlencode($agency->{'代碼'}),
+            '所屬機關'
+        );
+        $children = $r->agencies ?? [];
+        foreach ($children as $c) {
+            $c->_head = $this->pickAgencyHead($c, $term_no);
+        }
+        $this->view->agency_children = $children;
+
+        // 標案查詢條件：有機關代碼的直接換算；內部單位用縣市政府的 unit_id，前端再依單位名稱標示
+        $this->view->pcc_unit_id = self::pccUnitId($agency->{'機關代碼'} ?? null);
+        $this->view->pcc_dept_name = null;
+        if (!$this->view->pcc_unit_id && $is_internal && $parent) {
+            $this->view->pcc_unit_id = self::pccUnitId($parent->{'機關代碼'} ?? null);
+            $this->view->pcc_dept_name = $agency->{'名稱'};
+        }
+        if ($this->view->pcc_unit_id) {
+            $this->loadAgencyTenders($this->view->pcc_unit_id, (bool) $children && !$this->view->pcc_dept_name);
+        }
+    }
+
+    // 標案列表的公告類型篩選（pcc-api 的 type 是完全比對）
+    const TENDER_TYPES = ['' => '全部公告', '公開招標公告' => '公開招標', '決標公告' => '決標'];
+
+    /**
+     * 單一機關頁的標案列表：後端呼叫 pcc-api listbyunit（每頁 20 筆），篩選條件放在網址
+     * ?type=&children=&page=；children 沒帶時，有所屬機關的預設含所屬機關
+     */
+    protected function loadAgencyTenders($unit_id, $default_children)
+    {
+        $type = array_key_exists($_GET['type'] ?? '', self::TENDER_TYPES) ? ($_GET['type'] ?? '') : '';
+        $with_children = isset($_GET['children']) ? $_GET['children'] === '1' : $default_children;
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $params = [
+            'unit_id' => $unit_id,
+            'limit' => 20,
+            'page' => $page,
+            'columns' => ['機關資料:單位名稱', '決標資料:總決標金額', '採購資料:預算金額'],
+        ];
+        if ($with_children) {
+            $params['include_children'] = 1;
+        }
+        if ($type !== '') {
+            $params['type'] = $type;
+        }
+        $qs = preg_replace('/%5B\d+%5D=/', '%5B%5D=', http_build_query($params));
+        $r = CCAPI::externalQuery(
+            'https://pcc-api.openfun.app/api/listbyunit?' . $qs,
+            '這個機關的標案公告（政府採購公告 API）',
+            'https://pcc-api.openfun.app/skill.md'
+        );
+        $this->view->tenders = [
+            'ok' => $r !== null && isset($r->records),
+            'records' => $r->records ?? [],
+            'total' => (int) ($r->total ?? 0),
+            'total_page' => (int) ($r->total_page ?? 0),
+            'page' => $page,
+            'type' => $type,
+            'children' => $with_children,
+        ];
     }
 
     /**

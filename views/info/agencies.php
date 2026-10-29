@@ -7,22 +7,29 @@
 <?php if (($this->agency_section ?? '') === 'villages'): ?>
 <?= $this->partial('info/villages', $this) ?>
 <?php return; endif; ?>
+<?php if (($this->agency_section ?? '') === 'detail'): ?>
+<?= $this->partial('info/agency', $this) ?>
+<?php return; endif; ?>
 <?php
 $tree = $this->agency_tree ?? null;
 
 $head_text = fn($rec) => $rec ? htmlspecialchars(($rec->{'職稱'} ?? '') . ' ' . ($rec->{'姓名'} ?? '')) : '';
+$term_no = (int) $this->term_no;
+// 機關名稱連到單一機關頁（首長、所屬機關、標案）
+$agency_link = fn($a) => '<a href="/info/' . $term_no . '/agencies/' . rawurlencode($a->{'代碼'}) . '" class="text-decoration-none">'
+    . htmlspecialchars($a->{'名稱'} ?? '') . '</a>';
 
 // 一個機關的卡片：名稱、本屆最新首長（逐字稿彙整）、底下的所屬機關
-$agency_card_html = function ($a) use ($head_text) {
+$agency_card_html = function ($a) use ($head_text, $agency_link) {
     $html = '<div class="card h-100 shadow-sm"><div class="card-body p-2">';
-    $html .= '<div class="fw-semibold">' . htmlspecialchars($a->{'名稱'} ?? '') . '</div>';
+    $html .= '<div class="fw-semibold">' . $agency_link($a) . '</div>';
     if ($a->_head) {
         $html .= '<div class="small">' . $head_text($a->_head) . '</div>';
     }
     if ($a->_children) {
         $html .= '<details class="small mt-1"><summary class="text-body-secondary">所屬機關 ' . count($a->_children) . ' 個</summary><ul class="mb-0 ps-3">';
         foreach ($a->_children as $c) {
-            $html .= '<li>' . htmlspecialchars($c->{'名稱'} ?? '')
+            $html .= '<li>' . $agency_link($c)
                 . ($c->_head ? ' <span class="text-body-secondary">（' . $head_text($c->_head) . '）</span>' : '') . '</li>';
         }
         $html .= '</ul></details>';
@@ -72,7 +79,7 @@ $person = function ($c) {
   機關名稱與上下層關係依行政院人事行政總處的機關代碼資料（現行機關）。
 </div>
 <?php foreach ($tree['院'] as $yuan): ?>
-<h2 class="h6 fw-semibold mb-1"><?= htmlspecialchars($yuan->{'名稱'}) ?>
+<h2 class="h6 fw-semibold mb-1"><?= $agency_link($yuan) ?>
   <span class="fw-normal text-body-secondary small"><?= $yuan->_children ? '（所屬二級機關 ' . count($yuan->_children) . ' 個）' : '' ?></span></h2>
 <?php if ($yuan->_children): ?>
 <div class="row g-2 mb-4">
@@ -93,7 +100,7 @@ $person = function ($c) {
       <div class="small text-body-secondary"><?= htmlspecialchars($ministry->{'名稱'}) ?></div>
       <ul class="mb-0 ps-3">
         <?php foreach ($ministry->_soe as $c): ?>
-        <li><?= htmlspecialchars($c->{'名稱'}) ?><?= $c->_head ? ' <span class="small text-body-secondary">（' . $head_text($c->_head) . '）</span>' : '' ?></li>
+        <li><?= $agency_link($c) ?><?= $c->_head ? ' <span class="small text-body-secondary">（' . $head_text($c->_head) . '）</span>' : '' ?></li>
         <?php endforeach; ?>
       </ul>
     </div></div>
@@ -112,7 +119,7 @@ $person = function ($c) {
 <?php if ($gov = $tree['縣市政府']): ?>
 <div class="card shadow-sm mb-4 border-primary">
   <div class="card-body py-2">
-    <div class="fw-semibold fs-5"><?= htmlspecialchars($gov->{'名稱'}) ?></div>
+    <div class="fw-semibold fs-5"><?= $agency_link($gov) ?></div>
     <?php if ($gov->_mayor): ?>
     <div><?= htmlspecialchars($gov->_mayor->{'職稱'}) ?>
       <?php if ($gov->_mayor->_person_code ?? null): ?>
