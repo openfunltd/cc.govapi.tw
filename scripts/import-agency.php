@@ -210,6 +210,7 @@ foreach (glob("{$org_dir}/*.json") as $file) {
 
     $names_in_org = array_flip(array_map(fn($d) => $d['name'], $org['departments']));
     $docs = [];
+    $doc_by_name = [];
     // 最上層：縣市政府本身
     $county_mayors = $mayors[str_replace('台', '臺', $county)] ?? [];
     usort($county_mayors, fn($a, $b) => $b['年份'] <=> $a['年份']);
@@ -295,6 +296,12 @@ foreach (glob("{$org_dir}/*.json") as $file) {
         $key = $norm($name);
         $match = $candidates[$key] ?? null;
         $how = $match ? 'exact' : null;
+        // 組織圖寫全名、帶上層名稱（「新北市政府警察局板橋分局」），機關代碼階層的簡稱是「板橋分局」
+        $group_key = ($dep['parent'] ?? null) ? $norm($dep['parent']) : '';
+        if (!$match && $group_key !== '' && mb_strpos($key, $group_key) === 0 && mb_strlen($key) > mb_strlen($group_key)) {
+            $match = $candidates[mb_substr($key, mb_strlen($group_key))] ?? null;
+            $how = $match ? 'exact' : null;
+        }
         if (!$match) {
             $k2 = preg_replace('/\s*\(\d+\)$/u', '', $key);
             $hits = array_filter(array_keys($candidates), fn($c) => mb_strlen($k2) >= 2 && $subseq($k2, $c));
@@ -326,7 +333,7 @@ foreach (glob("{$org_dir}/*.json") as $file) {
             $category = '一級內部單位';
         } elseif ($group && preg_match('/(一級機關|所屬一級)/u', $group)) {
             $category = '一級外部單位';
-        } elseif (preg_match('/局$/u', $name)) {
+        } elseif (preg_match('/(?<!分)局$/u', $name)) {
             $category = '一級外部單位';
         } elseif (preg_match('/(處|室|委員會)$/u', $name) && (!$group || !isset($names_in_org[$group]))) {
             $category = '一級內部單位';
@@ -340,6 +347,12 @@ foreach (glob("{$org_dir}/*.json") as $file) {
         $parent_doc = null;
         if ($uid && ($units[$uid]['parent_id'] ?? null) && $units[$uid]['parent_id'] !== $root) {
             $parent_doc = "{$cc_code}-{$units[$uid]['parent_id']}";
+        } elseif (!$uid && $group && isset($doc_by_name[$group])) {
+            // 對不到機關代碼的，掛在組織圖上的上層機關底下（例：新北市工務局的建築工程處）
+            $parent_doc = $doc_by_name[$group];
+            if ($category !== '其他單位') {
+                $category = '二級機關';
+            }
         }
         $docs[$doc_id] = [
             '代碼'       => $doc_id,
@@ -356,6 +369,7 @@ foreach (glob("{$org_dir}/*.json") as $file) {
             '比對方式'   => $how,
             '來源網址'   => $org['source_url'] ?? null,
         ];
+        $doc_by_name[$name] = $doc_id;
         if ($category !== '其他單位' && !$match) {
             $stats['未對到'][] = $name;
         }
