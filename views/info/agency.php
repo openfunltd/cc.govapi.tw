@@ -44,12 +44,16 @@ $dept = $this->pcc_dept_name ?? null;
 
 <?php $base = '/info/' . $term_no . '/agencies/' . rawurlencode($a->{'代碼'}); ?>
 <ul class="nav nav-pills mt-4 mb-3">
-  <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') !== 'speeches' ? ' active' : '' ?>" href="<?= htmlspecialchars($base) ?>">標案</a></li>
+  <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'overview' ? ' active' : '' ?>" href="<?= htmlspecialchars($base) ?>">標案</a></li>
+  <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'news' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/news') ?>">新聞公告</a></li>
   <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'speeches' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/speeches') ?>">議會發言記錄</a></li>
 </ul>
 
 <?php if (($this->agency_page ?? '') === 'speeches'): ?>
 <?= $this->partial('info/agency_speeches', $this) ?>
+<?php return; endif; ?>
+<?php if (($this->agency_page ?? '') === 'news'): ?>
+<?= $this->partial('info/agency_news', $this) ?>
 <?php return; endif; ?>
 
 <?php if (!$unit_id): ?>

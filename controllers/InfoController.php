@@ -204,7 +204,7 @@ class InfoController extends MiniEngine_Controller
                 if ($this->view->agency_section === 'villages') {
                     $this->loadVillagesTab($cc_code, $term_no, $sub_id2);
                 } elseif ($this->view->agency_section === 'detail') {
-                    $this->view->agency_page = $sub_id2 === 'speeches' ? 'speeches' : 'overview';
+                    $this->view->agency_page = in_array($sub_id2, ['speeches', 'news'], true) ? $sub_id2 : 'overview';
                     $this->loadAgencyDetail($term_no, urldecode($sub_id), $this->view->agency_page);
                     if ($a = $this->view->agency ?? null) {
                         $full = ($a->{'全名'} ?? '') ?: $a->{'名稱'};
@@ -718,6 +718,8 @@ class InfoController extends MiniEngine_Controller
         }
         if ($page === 'speeches') {
             $this->loadAgencySpeeches($agency, $children, $term_no);
+        } elseif ($page === 'news') {
+            $this->loadAgencyNews($agency, $children, $is_internal ? $parent : null);
         } elseif ($this->view->pcc_unit_id) {
             $this->loadAgencyTenders($this->view->pcc_unit_id, $this->view->pcc_dept_name, (bool) $children && !$this->view->pcc_dept_name);
         }
@@ -804,6 +806,61 @@ class InfoController extends MiniEngine_Controller
             'children' => $with_children,
             'speakers' => $speakers,
             'no_coverage' => $no_coverage,
+        ];
+    }
+
+    /**
+     * 單一機關頁 → 新聞公告：後端呼叫 elastic-govnews（全政府新聞公告），org_id 就是機關代碼
+     * 去掉議會代碼前綴（縣市政府內部單位的代碼 {縣市政府代碼}-U…… 也是同一套）。內部單位
+     * 沒有自己來源的，另外查縣市政府公告裡「發布單位」以單位名稱開頭的。?children=1 連同
+     * 所屬機關（預設有所屬機關就含），?q= 在這個範圍內搜尋，每頁 20 筆、依時間新到舊
+     */
+    protected function loadAgencyNews($agency, $children, $internal_parent)
+    {
+        $cc_prefix = ($agency->{'議會代碼'} ?? '') . '-';
+        $strip = fn($c) => strpos($c, $cc_prefix) === 0 ? substr($c, strlen($cc_prefix)) : $c;
+        $quote = fn($v) => '"' . addcslashes($v, '"\\') . '"';
+        $with_children = $children && (isset($_GET['children']) ? $_GET['children'] === '1' : true);
+        $org_ids = [$strip($agency->{'代碼'})];
+        if ($with_children) {
+            foreach ($children as $c) {
+                $org_ids[] = $strip($c->{'代碼'});
+            }
+        }
+        $clauses = array_map(fn($id) => 'org_id.keyword:' . $quote($id), $org_ids);
+        if ($internal_parent) {
+            // query_string 語法的特殊字元要跳脫（單位名稱可能有括號、空白）
+            $unit_prefix = addcslashes($agency->{'名稱'}, '+-=&|><!(){}[]^"~*?:\\/ ');
+            $clauses[] = '(org_id.keyword:' . $quote($strip($internal_parent->{'代碼'})) . ' AND unit.keyword:' . $unit_prefix . '*)';
+        }
+        // ?q= 關鍵字：空白分開的每個詞都要出現在標題或內文（中文用片語比對，跟 govnews 建議的 match_phrase 一樣）
+        $keyword = trim((string) ($_GET['q'] ?? ''));
+        $query = '(' . implode(' OR ', $clauses) . ')';
+        foreach (array_filter(preg_split('/\s+/u', $keyword)) as $term) {
+            $query .= ' AND (title:' . $quote($term) . ' OR content_text:' . $quote($term) . ')';
+        }
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $r = CCAPI::externalQuery(
+            'https://elastic-govnews.api.openfun.dev/gov-news_announcements/_search?' . http_build_query([
+                'q' => $query,
+                'sort' => 'time:desc',
+                'size' => 20,
+                'from' => ($page - 1) * 20,
+                'track_total_hits' => 'true',
+                '_source' => 'title,org_name,unit,category,time,source_url',
+            ]),
+            '這個機關的新聞稿與公告（全政府公告搜尋 API）',
+            'https://data.openfun.tw/datasets/tw.openfun~api~elastic-govnews/skill.md'
+        );
+        $total = (int) ($r->hits->total->value ?? 0);
+        $this->view->agency_news = [
+            'ok' => isset($r->hits),
+            'items' => array_map(fn($h) => $h->_source, $r->hits->hits ?? []),
+            'total' => $total,
+            'total_page' => (int) ceil(min($total, 10000) / 20),
+            'page' => $page,
+            'children' => $with_children,
+            'keyword' => $keyword,
         ];
     }
 
