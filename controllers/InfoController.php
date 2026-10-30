@@ -204,7 +204,7 @@ class InfoController extends MiniEngine_Controller
                 if ($this->view->agency_section === 'villages') {
                     $this->loadVillagesTab($cc_code, $term_no, $sub_id2);
                 } elseif ($this->view->agency_section === 'detail') {
-                    $this->view->agency_page = in_array($sub_id2, ['speeches', 'news'], true) ? $sub_id2 : 'overview';
+                    $this->view->agency_page = in_array($sub_id2, ['speeches', 'news', 'budget'], true) ? $sub_id2 : 'overview';
                     $this->loadAgencyDetail($term_no, urldecode($sub_id), $this->view->agency_page);
                     if ($a = $this->view->agency ?? null) {
                         $full = ($a->{'全名'} ?? '') ?: $a->{'名稱'};
@@ -720,6 +720,8 @@ class InfoController extends MiniEngine_Controller
             $this->loadAgencySpeeches($agency, $children, $term_no);
         } elseif ($page === 'news') {
             $this->loadAgencyNews($agency, $children, $is_internal ? $parent : null);
+        } elseif ($page === 'budget') {
+            $this->loadAgencyBudget($agency, $is_internal ? $parent : null);
         } elseif ($this->view->pcc_unit_id) {
             $this->loadAgencyTenders($this->view->pcc_unit_id, $this->view->pcc_dept_name, (bool) $children && !$this->view->pcc_dept_name);
         }
@@ -862,6 +864,51 @@ class InfoController extends MiniEngine_Controller
             'children' => $with_children,
             'keyword' => $keyword,
         ];
+    }
+
+    /**
+     * 單一機關頁的預算：後端呼叫 budget.openfun.app 的 /agency/{縣市}/{機關代碼}（歷年總額＋指定年度
+     * 的工作計劃）。縣市政府內部單位沒有自己的單位預算，改查縣市政府、只留「承辦單位」是這個單位的
+     * 工作計劃；承辦單位只有部分年度有，沒指定年度時往前找最近有承辦單位的年度。?year=&type=歲出|歲入
+     */
+    protected function loadAgencyBudget($agency, $internal_parent)
+    {
+        $county = array_search($agency->{'議會代碼'} ?? '', CountyCodeHelper::getMap(), true);
+        $org_code = $internal_parent ? ($internal_parent->{'機關代碼'} ?? null) : ($agency->{'機關代碼'} ?? null);
+        $type = ($_GET['type'] ?? '') === '歲入' ? '歲入' : '歲出';
+        $year = (int) ($_GET['year'] ?? 0);
+        $this->view->agency_budget = ['ok' => true, 'type' => $type, 'year' => null, 'years' => [], 'history' => [], 'plans' => [], 'unit' => $internal_parent ? $agency->{'名稱'} : null];
+        if (!$county || !$org_code) {
+            return;
+        }
+        $fetch = fn($y) => CCAPI::externalQuery(
+            'https://budget.openfun.app/api/agency/' . rawurlencode($county) . '/' . rawurlencode($org_code) . '?' . http_build_query(array_filter(['year' => $y, 'type' => $type])),
+            $internal_parent ? '縣市政府的工作計劃，篩出這個單位承辦的（政府預算查詢平台 API）' : '這個機關的歷年預算與工作計劃（政府預算查詢平台 API）',
+            'https://budget.openfun.app/skill.md'
+        );
+        $r = $fetch($year ?: null);
+        if (!isset($r->歷年)) {
+            $this->view->agency_budget['ok'] = false;
+            return;
+        }
+        $years = array_map(fn($h) => (int) $h->年, $r->歷年);
+        $mine = fn($r) => array_values(array_filter($r->工作計劃 ?? [], fn($p) => in_array($agency->{'名稱'}, (array) ($p->承辦單位 ?? []), true)));
+        $plans = $internal_parent ? $mine($r) : ($r->工作計劃 ?? []);
+        if ($internal_parent && !$year && !$plans) {
+            foreach (array_slice(array_filter($years, fn($y) => $y < (int) $r->year), 0, 3) as $y) {
+                $older = $fetch($y);
+                if ($plans = $older ? $mine($older) : []) {
+                    $r->year = $older->year;
+                    break;
+                }
+            }
+        }
+        $this->view->agency_budget = array_merge($this->view->agency_budget, [
+            'year' => (int) $r->year,
+            'years' => $years,
+            'history' => $internal_parent ? [] : $r->歷年,
+            'plans' => $plans,
+        ]);
     }
 
     // 標案列表的公告類型篩選（pcc-api 的 type 是完全比對）
