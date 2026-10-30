@@ -398,7 +398,8 @@ foreach (glob("{$org_dir}/*.json") as $file) {
 //       適用，不收）
 //   二級機關：各院直屬的第二層機關（部、會、署、獨立機關、法院…）
 //   國營事業：中央二級機關直屬、名稱是「股份有限公司」的第三層（主管機關就是 dgpa 的上層）
-//   三級機關：中央二級機關直屬的其他第三層機關（署、局、所…）
+//   三級機關：中央二級機關直屬的其他第三層機關（署、局、所…），以及院直屬的第三層機關（核能安全委員會、
+//             福建金門地方法院等）
 $is_dgpa = fn($u) => ($u['source'] ?? '') === 'dgpa' && (($u['dgpa_status']['status'] ?? '') === '現行');
 $central_docs = [];
 $order = 0;
@@ -433,6 +434,11 @@ foreach ($tops as $top) {
             $is_soe = str_contains($units[$cid]['original_name'], '股份有限公司');
             $central_docs['ly-' . $cid] = $central_doc($units[$cid], $is_soe ? '國營事業' : '三級機關', $id);
         }
+    }
+    $top_level3 = array_values(array_filter($children[$top] ?? [], fn($id) => $is_dgpa($units[$id]) && $units[$id]['level'] == 3));
+    usort($top_level3, $by_budget);
+    foreach ($top_level3 as $id) {
+        $central_docs['ly-' . $id] = $central_doc($units[$id], '三級機關', $top);
     }
 }
 $central_stats = array_count_values(array_column($central_docs, '分類'));
