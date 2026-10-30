@@ -31,7 +31,7 @@
  *   - 組織架構裡的職位（縣長、秘書長、參議…）不是機關，不匯入；分組名稱（「直屬單位」
  *     「學校」「財稅主計」等）只當分類參考，不成為節點
  *
- * 立法院（ly）另外收中央機關（院、二級機關、國營事業），完全依機關代碼階層裡人事行政總處的現行機關
+ * 立法院（ly）另外收中央機關（院、二級機關、三級機關、國營事業），完全依機關代碼階層裡人事行政總處的現行機關
  * 與上下層關係，見檔案最後一段。
  *
  * Doc ID：{議會代碼}-{機關代碼}，對不到機關代碼的用 {議會代碼}-org-{名稱雜湊}
@@ -398,6 +398,7 @@ foreach (glob("{$org_dir}/*.json") as $file) {
 //       適用，不收）
 //   二級機關：各院直屬的第二層機關（部、會、署、獨立機關、法院…）
 //   國營事業：中央二級機關直屬、名稱是「股份有限公司」的第三層（主管機關就是 dgpa 的上層）
+//   三級機關：中央二級機關直屬的其他第三層機關（署、局、所…）
 $is_dgpa = fn($u) => ($u['source'] ?? '') === 'dgpa' && (($u['dgpa_status']['status'] ?? '') === '現行');
 $central_docs = [];
 $order = 0;
@@ -426,16 +427,17 @@ foreach ($tops as $top) {
     usort($level2, $by_budget);
     foreach ($level2 as $id) {
         $central_docs['ly-' . $id] = $central_doc($units[$id], '二級機關', $top);
-        $soe = array_values(array_filter($children[$id] ?? [], fn($cid) => $is_dgpa($units[$cid]) && $units[$cid]['level'] == 3
-            && str_contains($units[$cid]['original_name'], '股份有限公司')));
-        usort($soe, $by_budget);
-        foreach ($soe as $cid) {
-            $central_docs['ly-' . $cid] = $central_doc($units[$cid], '國營事業', $id);
+        $level3 = array_values(array_filter($children[$id] ?? [], fn($cid) => $is_dgpa($units[$cid]) && $units[$cid]['level'] == 3));
+        usort($level3, $by_budget);
+        foreach ($level3 as $cid) {
+            $is_soe = str_contains($units[$cid]['original_name'], '股份有限公司');
+            $central_docs['ly-' . $cid] = $central_doc($units[$cid], $is_soe ? '國營事業' : '三級機關', $id);
         }
     }
 }
 $central_stats = array_count_values(array_column($central_docs, '分類'));
-printf("ly   中央 院 %d／二級機關 %d／國營事業 %d\n", $central_stats['院'] ?? 0, $central_stats['二級機關'] ?? 0, $central_stats['國營事業'] ?? 0);
+printf("ly   中央 院 %d／二級機關 %d／三級機關 %d／國營事業 %d\n", $central_stats['院'] ?? 0, $central_stats['二級機關'] ?? 0,
+    $central_stats['三級機關'] ?? 0, $central_stats['國營事業'] ?? 0);
 if (!$dry_run) {
     foreach ($central_docs as $doc_id => $doc) {
         Elastic::dbBulkInsert('agency', $doc_id, $doc);

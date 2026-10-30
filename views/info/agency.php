@@ -2,20 +2,18 @@
 $a = $this->agency ?? null;
 $term_no = (int) $this->term_no;
 $agency_url = fn($x) => '/info/' . $term_no . '/agencies/' . rawurlencode($x->{'代碼'});
-$head_text = fn($rec) => $rec ? htmlspecialchars(($rec->{'職稱'} ?? '') . ' ' . ($rec->{'姓名'} ?? '')) : '';
 ?>
 <?php if (!$a): ?>
 <div class="alert alert-light border">找不到這個機關的資料。<a href="/info/<?= $term_no ?>/agencies">回行政體系</a></div>
 <?php return; endif; ?>
 <?php
 $parent = $this->agency_parent ?? null;
-$children = $this->agency_children ?? [];
 $unit_id = $this->pcc_unit_id ?? null;
 $dept = $this->pcc_dept_name ?? null;
 ?>
 <nav class="small mb-2">
   <a href="/info/<?= $term_no ?>/agencies">行政體系</a>
-  <?php if ($parent): ?> › <a href="<?= $agency_url($parent) ?>"><?= htmlspecialchars($parent->{'名稱'}) ?></a><?php endif; ?>
+  <?php foreach (($this->agency_ancestors ?? null) ?: ($parent ? [$parent] : []) as $p): ?> › <a href="<?= $agency_url($p) ?>"><?= htmlspecialchars($p->{'名稱'}) ?></a><?php endforeach; ?>
   › <?= htmlspecialchars($a->{'名稱'}) ?>
 </nav>
 
@@ -23,33 +21,20 @@ $dept = $this->pcc_dept_name ?? null;
 <div class="small text-body-secondary mb-3">
   <?= htmlspecialchars(($a->{'全名'} ?? '') ?: '') ?>
   <?php if ($a->{'分類'} ?? null): ?><span class="badge bg-light text-dark border ms-1"><?= htmlspecialchars($a->{'分類'}) ?></span><?php endif; ?>
-  <?php if ($a->{'機關代碼'} ?? null): ?><span class="ms-1">機關代碼 <?= htmlspecialchars($a->{'機關代碼'}) ?></span><?php endif; ?>
 </div>
-
-<?php if ($a->_head): ?>
-<p class="mb-3">首長：<?= $head_text($a->_head) ?>
-  <span class="small text-body-secondary">（最後答詢 <?= htmlspecialchars($a->_head->{'最後'} ?? '') ?>）</span></p>
-<?php endif; ?>
-
-<?php if ($children): ?>
-<details class="mb-4">
-  <summary>所屬機關 <?= count($children) ?> 個</summary>
-  <ul class="mb-0 ps-3 mt-1">
-    <?php foreach ($children as $c): ?>
-    <li><a href="<?= $agency_url($c) ?>"><?= htmlspecialchars($c->{'名稱'}) ?></a><?= $c->_head ? ' <span class="small text-body-secondary">（' . $head_text($c->_head) . '）</span>' : '' ?></li>
-    <?php endforeach; ?>
-  </ul>
-</details>
-<?php endif; ?>
 
 <?php $base = '/info/' . $term_no . '/agencies/' . rawurlencode($a->{'代碼'}); ?>
 <ul class="nav nav-pills mt-4 mb-3">
-  <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'overview' ? ' active' : '' ?>" href="<?= htmlspecialchars($base) ?>">標案</a></li>
+  <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'info' ? ' active' : '' ?>" href="<?= htmlspecialchars($base) ?>">基本資料</a></li>
+  <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'tenders' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/tenders') ?>">標案</a></li>
   <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'budget' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/budget') ?>">預算</a></li>
   <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'news' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/news') ?>">新聞公告</a></li>
   <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'speeches' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/speeches') ?>">議會發言記錄</a></li>
 </ul>
 
+<?php if (($this->agency_page ?? '') === 'info'): ?>
+<?= $this->partial('info/agency_info', $this) ?>
+<?php return; endif; ?>
 <?php if (($this->agency_page ?? '') === 'speeches'): ?>
 <?= $this->partial('info/agency_speeches', $this) ?>
 <?php return; endif; ?>
@@ -71,10 +56,10 @@ $tender_url = function ($override) use ($t, $base, $dept) {
     if ($q['type'] === '') unset($q['type']);
     if ($dept) unset($q['children']);
     if ((int) $q['page'] === 1) unset($q['page']);
-    return htmlspecialchars($base . ($q ? '?' . http_build_query($q) : '') . '#tenders');
+    return htmlspecialchars($base . '/tenders' . ($q ? '?' . http_build_query($q) : ''));
 };
 ?>
-<div id="tenders">
+<div>
 <?php if ($t['years']): ?>
 <div class="row g-3 mb-3">
   <div class="col-12 col-lg-6">

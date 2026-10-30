@@ -2,6 +2,9 @@
 
 class InfoController extends MiniEngine_Controller
 {
+    // 首長級職稱（逐字稿答詢官員的職稱，用來從首長紀錄挑出機關首長）
+    const HEAD_TITLE_PATTERN = '/^(代理)?(局長|處長|主任委員|主委|執行秘書|總經理|董事長|館長|院長|所長|主任|大隊長|總隊長|隊長|團長|區長|校長|執行長|秘書長|總幹事|場長|廠長)$/u';
+
     protected $term_data = null;
 
     // 選舉指南預設顯示的選舉年份（民國）。有新的登記名冊匯入時改這裡
@@ -204,7 +207,7 @@ class InfoController extends MiniEngine_Controller
                 if ($this->view->agency_section === 'villages') {
                     $this->loadVillagesTab($cc_code, $term_no, $sub_id2);
                 } elseif ($this->view->agency_section === 'detail') {
-                    $this->view->agency_page = in_array($sub_id2, ['speeches', 'news', 'budget'], true) ? $sub_id2 : 'overview';
+                    $this->view->agency_page = in_array($sub_id2, ['tenders', 'speeches', 'news', 'budget'], true) ? $sub_id2 : 'info';
                     $this->loadAgencyDetail($term_no, urldecode($sub_id), $this->view->agency_page);
                     if ($a = $this->view->agency ?? null) {
                         $full = ($a->{'全名'} ?? '') ?: $a->{'名稱'};
@@ -606,22 +609,10 @@ class InfoController extends MiniEngine_Controller
             $category = $a->{'分類'} ?? '其他單位';
             $a->_children = array_values(array_filter($children[$a->{'代碼'}] ?? [], fn($c) => ($c->{'分類'} ?? '') !== '其他單位'));
             if ($category === '縣市政府') {
-                // 縣市長：中選會歷屆當選人，取這一屆議會選舉同年（或之前最近一次）選出的
-                $vote_date = $this->term_data->{'投票日'} ?? ($this->term_data->{'就職日'} ?? null);
-                $roc_year = $vote_date ? ((int) substr($vote_date, 0, 4) - 1911) : null;
-                $a->_mayor = null;
-                foreach (($a->{'歷任首長'} ?? []) as $m) {
-                    if ($roc_year && $m->{'年份'} <= $roc_year && (!$a->_mayor || $m->{'年份'} > $a->_mayor->{'年份'})) {
-                        $a->_mayor = $m;
-                    }
-                }
+                $a->_mayor = $this->pickMayor($a);
                 // 縣市長姓名連到候選人歷年參選頁（學經歷、政見），用當選人的候選人代碼查人物代碼
-                if ($a->_mayor && ($a->_mayor->{'候選人代碼'} ?? null)) {
-                    $r = CCAPI::apiQuery(
-                        '/candidates?limit=1&' . urlencode('候選人代碼') . '=' . urlencode($a->_mayor->{'候選人代碼'}),
-                        '縣市長的候選人資料'
-                    );
-                    $a->_mayor->_person_code = $r->candidates[0]->{'人物代碼'} ?? null;
+                if ($a->_mayor) {
+                    $this->attachPersonCodes([$a->_mayor], '縣市長的候選人資料');
                 }
                 $tree['縣市政府'] = $a;
             } elseif ($category === '其他單位') {
@@ -642,15 +633,50 @@ class InfoController extends MiniEngine_Controller
     }
 
     /**
+     * 縣市長：中選會歷屆當選人（縣市政府的「歷任首長」），取這一屆議會選舉同年（或之前最近一次）選出的
+     */
+    protected function pickMayor($a)
+    {
+        $vote_date = $this->term_data->{'投票日'} ?? ($this->term_data->{'就職日'} ?? null);
+        $roc_year = $vote_date ? ((int) substr($vote_date, 0, 4) - 1911) : null;
+        $mayor = null;
+        foreach (($a->{'歷任首長'} ?? []) as $m) {
+            if ($roc_year && $m->{'年份'} <= $roc_year && (!$mayor || $m->{'年份'} > $mayor->{'年份'})) {
+                $mayor = $m;
+            }
+        }
+        return $mayor;
+    }
+
+    /**
+     * 中選會當選人（有候選人代碼的）一次查出人物代碼，寫進 _person_code，姓名才能連到候選人歷年參選頁
+     */
+    protected function attachPersonCodes($list, $reason)
+    {
+        $codes = array_values(array_unique(array_filter(array_map(fn($m) => $m->{'候選人代碼'} ?? null, $list))));
+        if (!$codes) {
+            return;
+        }
+        $query = implode('&', array_map(fn($c) => urlencode('候選人代碼') . '=' . urlencode($c), $codes));
+        $r = CCAPI::apiQuery('/candidates?limit=' . count($codes) . '&' . $query, $reason);
+        $person = [];
+        foreach (($r->candidates ?? []) as $c) {
+            $person[$c->{'候選人代碼'}] = $c->{'人物代碼'} ?? null;
+        }
+        foreach ($list as $m) {
+            $m->_person_code = $person[$m->{'候選人代碼'} ?? ''] ?? null;
+        }
+    }
+
+    /**
      * 機關本屆最後一次答詢的首長級職稱當作（最新）首長；首長紀錄由 generate-agency-heads.php
      * 從會議逐字稿彙整
      */
     protected function pickAgencyHead($a, $term_no)
     {
-        $head_pattern = '/^(代理)?(局長|處長|主任委員|主委|執行秘書|總經理|董事長|館長|院長|所長|主任|大隊長|總隊長|隊長|團長|區長|校長|執行長|秘書長|總幹事|場長|廠長)$/u';
         $head = null;
         foreach (($a->{'首長紀錄'} ?? []) as $rec) {
-            if ((int) $rec->{'屆'} === (int) $term_no && preg_match($head_pattern, $rec->{'職稱'} ?? '')
+            if ((int) $rec->{'屆'} === (int) $term_no && preg_match(self::HEAD_TITLE_PATTERN, $rec->{'職稱'} ?? '')
                 && (!$head || $rec->{'最後'} > $head->{'最後'})) {
                 $head = $rec;
             }
@@ -680,7 +706,7 @@ class InfoController extends MiniEngine_Controller
      * {縣市政府代碼}-U……）在採購網沒有自己的機關代碼，標案掛在縣市政府底下，只能靠
      * 標案的「單位名稱」區分
      */
-    protected function loadAgencyDetail($term_no, $code, $page = 'overview')
+    protected function loadAgencyDetail($term_no, $code, $page = 'info')
     {
         $r = CCAPI::apiQuery('/agency/' . rawurlencode($code), '行政機關資料');
         $agency = ($r->error ?? true) ? null : $r->data;
@@ -696,6 +722,10 @@ class InfoController extends MiniEngine_Controller
         if ($parent_code) {
             $r = CCAPI::apiQuery('/agency/' . rawurlencode($parent_code), '上層機關資料');
             $parent = ($r->error ?? true) ? null : $r->data;
+        } elseif ($this->isTopLevelAgency($agency)) {
+            // 縣市政府直屬的一級單位沒有上層代碼，上層就是縣市政府
+            $r = CCAPI::apiQuery('/agencies?limit=1&' . urlencode('分類') . '=' . urlencode('縣市政府'), '縣市政府');
+            $parent = $r->agencies[0] ?? null;
         }
         $this->view->agency_parent = $parent;
 
@@ -722,9 +752,75 @@ class InfoController extends MiniEngine_Controller
             $this->loadAgencyNews($agency, $children, $is_internal ? $parent : null);
         } elseif ($page === 'budget') {
             $this->loadAgencyBudget($agency, $is_internal ? $parent : null);
+        } elseif ($page === 'info') {
+            $this->loadAgencyInfo($agency, $parent, $term_no);
         } elseif ($this->view->pcc_unit_id) {
             $this->loadAgencyTenders($this->view->pcc_unit_id, $this->view->pcc_dept_name, (bool) $children && !$this->view->pcc_dept_name);
         }
+    }
+
+    /**
+     * 縣市政府直屬的一級單位（沒有上層代碼、不是縣市政府本身或學校戶所等其他單位）
+     */
+    public function isTopLevelAgency($a)
+    {
+        return !($a->{'上層代碼'} ?? null) && in_array($a->{'分類'} ?? '', ['一級內部單位', '一級外部單位', '二級機關'], true);
+    }
+
+    /**
+     * 單一機關頁 → 基本資料：上層機關一路到最上層（麵包屑）、同層機關、首長與歷任首長。
+     * 縣市政府的首長是中選會歷屆縣市長；其他機關是各屆在議會答詢過的首長級官員（首長紀錄）
+     */
+    protected function loadAgencyInfo($agency, $parent, $term_no)
+    {
+        $ancestors = [];
+        for ($p = $parent; $p && count($ancestors) < 6; ) {
+            array_unshift($ancestors, $p);
+            $code = $p->{'上層代碼'} ?? null;
+            $r = $code ? CCAPI::apiQuery('/agency/' . rawurlencode($code), '上層機關資料') : null;
+            $p = ($r && !($r->error ?? true)) ? $r->data : null;
+        }
+        $this->view->agency_ancestors = $ancestors;
+
+        // 縣市政府底下的一級單位沒有上層代碼，所屬／同層機關要另外查（跟行政體系總覽的分法一致）
+        $top_level = null;
+        if (($agency->{'分類'} ?? '') === '縣市政府' || ($parent && ($parent->{'分類'} ?? '') === '縣市政府' && !($agency->{'上層代碼'} ?? null))) {
+            $r = CCAPI::apiQuery('/agencies?limit=1000&sort=' . urlencode('排序<'), '本議會監督的行政機關');
+            $top_level = array_values(array_filter($r->agencies ?? [], [$this, 'isTopLevelAgency']));
+            foreach ($top_level as $t) {
+                $t->_head = $this->pickAgencyHead($t, $term_no);
+            }
+        }
+        if (($agency->{'分類'} ?? '') === '縣市政府') {
+            $this->view->agency_children = $top_level;
+        }
+
+        $siblings = [];
+        if ($top_level !== null && $parent) {
+            $siblings = array_values(array_filter($top_level, fn($s) => $s->{'代碼'} !== $agency->{'代碼'}));
+        } elseif ($parent) {
+            $r = CCAPI::apiQuery(
+                '/agencies?limit=1000&sort=' . urlencode('排序<') . '&' . urlencode('上層代碼') . '=' . urlencode($parent->{'代碼'}),
+                '同層機關'
+            );
+            $siblings = array_values(array_filter($r->agencies ?? [], fn($s) => $s->{'代碼'} !== $agency->{'代碼'}));
+            foreach ($siblings as $s) {
+                $s->_head = $this->pickAgencyHead($s, $term_no);
+            }
+        }
+        $this->view->agency_siblings = $siblings;
+
+        if (($agency->{'分類'} ?? '') === '縣市政府') {
+            $agency->_mayor = $this->pickMayor($agency);
+            $history = $agency->{'歷任首長'} ?? [];
+            usort($history, fn($x, $y) => $y->{'年份'} <=> $x->{'年份'});
+            $this->attachPersonCodes($history, '歷任縣市長的候選人資料');
+            $this->view->agency_mayors = $history;
+            return;
+        }
+        $heads = array_values(array_filter($agency->{'首長紀錄'} ?? [], fn($rec) => preg_match(self::HEAD_TITLE_PATTERN, $rec->{'職稱'} ?? '')));
+        usort($heads, fn($x, $y) => [$y->{'屆'}, $y->{'最後'}] <=> [$x->{'屆'}, $x->{'最後'}]);
+        $this->view->agency_heads = $heads;
     }
 
     /**
