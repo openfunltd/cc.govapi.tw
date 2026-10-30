@@ -969,7 +969,8 @@ class InfoController extends MiniEngine_Controller
      */
     protected function loadAgencyBudget($agency, $internal_parent)
     {
-        $county = array_search($agency->{'議會代碼'} ?? '', CountyCodeHelper::getMap(), true);
+        // 立法院監督的中央機關在 budget API 的縣市是「中央」
+        $county = ($agency->{'議會代碼'} ?? '') === 'ly' ? '中央' : array_search($agency->{'議會代碼'} ?? '', CountyCodeHelper::getMap(), true);
         $org_code = $internal_parent ? ($internal_parent->{'機關代碼'} ?? null) : ($agency->{'機關代碼'} ?? null);
         $type = ($_GET['type'] ?? '') === '歲入' ? '歲入' : '歲出';
         $year = (int) ($_GET['year'] ?? 0);
