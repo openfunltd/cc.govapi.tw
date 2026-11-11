@@ -56,6 +56,7 @@ var table_config = {
     aggs: <?= json_encode(TypeHelper::getCurrentAgg($this->type)) ?>,
     data_column: <?= json_encode(TypeHelper::getDataColumn($this->type)) ?>,
     columns: <?= json_encode(TypeHelper::getColumns($this->type)) ?>,
+    default_sort: <?= json_encode(CCAPI_Type::run($this->type, 'sortFields')) ?>,
     filter: <?= json_encode(TypeHelper::getCurrentFilter()) ?>,
     viewer_base: <?= json_encode(viewer_url()) ?>,
 };
@@ -87,6 +88,8 @@ $(document).ready(function() {
     data_table_config = {
         dom: '<"top"lif>rt<"bottom"ip><"clear">',
         serverSide: true,
+        order: [],
+        columnDefs: [{targets: -1, orderable: false}],
         ajax: function(data, callback, settings){
             var records_api_url = records_api_url_base;
             var filter_fields = [];
@@ -115,6 +118,16 @@ $(document).ready(function() {
             api_terms.push('頁數:' + page);
             if (page != 1) {
                 page_params.push('page=' + page);
+            }
+            for (let order of data.order) {
+                var field = table_config.columns[order.column];
+                if (!field) {
+                    continue;
+                }
+                var sort = field + (order.dir == 'asc' ? '<' : '>');
+                records_api_url += '&sort=' + encodeURIComponent(sort);
+                api_terms.push('排序:' + sort);
+                page_params.push('sort=' + encodeURIComponent(sort));
             }
             if (data.search.value) {
                 var v = data.search.value.split(/\s+/).map(function(v){ return '"' + v + '"'; }).join(' ');
@@ -257,14 +270,29 @@ $(document).ready(function() {
     };
 
     var url = new URL(window.location.href);
-    for (let key of url.searchParams.keys()) {
-        if (key == 'page') {
-            data_table_config.displayStart = (parseInt(url.searchParams.get(key)) - 1) * (data_table_config.pageLength || 10);
-        } else if (key == 'limit') {
-            data_table_config.pageLength = parseInt(url.searchParams.get(key));
-        } else if (key == 'q') {
-            data_table_config.search = {search: url.searchParams.get(key)};
+    var sort_fields = url.searchParams.getAll('sort');
+    if (!sort_fields.length) {
+        sort_fields = table_config.default_sort;
+    }
+    var initial_order = [];
+    for (let sort of sort_fields) {
+        var column = table_config.columns.indexOf(sort.slice(0, -1));
+        var direction = sort.slice(-1);
+        if (column == -1 || (direction != '<' && direction != '>')) {
+            initial_order = [];
+            break;
         }
+        initial_order.push([column, direction == '<' ? 'asc' : 'desc']);
+    }
+    data_table_config.order = initial_order;
+    if (url.searchParams.has('limit')) {
+        data_table_config.pageLength = parseInt(url.searchParams.get('limit'));
+    }
+    if (url.searchParams.has('page')) {
+        data_table_config.displayStart = (parseInt(url.searchParams.get('page')) - 1) * (data_table_config.pageLength || 10);
+    }
+    if (url.searchParams.has('q')) {
+        data_table_config.search = {search: url.searchParams.get('q')};
     }
 
     $('#dataTable').DataTable(data_table_config);
