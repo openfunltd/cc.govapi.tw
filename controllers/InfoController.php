@@ -2140,10 +2140,9 @@ class InfoController extends MiniEngine_Controller
     }
 
     /**
-     * 提案記錄 tab：議案的「提案人」欄位直接就是議員姓名（不像逐字稿說話者標記
-     * 需要猜測姓+職稱+名的格式），用「議會代碼＋姓名」直接查詢即可，比發言記錄
-     * 準確很多。依「屆」（議案來源本身沒有會期/場次可以分組，屆是從來源檔名
-     * 解析出來的推測值）由新到舊分組。
+     * 提案記錄 tab：議案的「提案人」拆成個別姓名後，用「議會代碼＋姓名」直接查詢
+     * （含聯合提案），比發言記錄準確很多。可依「屆」篩選（議案來源本身沒有會期/
+     * 場次可以分組，屆是從來源檔名解析出來的推測值），每頁 50 筆。
      */
     protected function loadCouncilorBills($records)
     {
@@ -2154,14 +2153,41 @@ class InfoController extends MiniEngine_Controller
         }
 
         $cc_code = $records[0]->{'議會代碼'};
-        $name = $records[0]->{'姓名'};
+        $page = max(1, (int) ($_GET['page'] ?? 1));
+        $term = (string) ($_GET['term'] ?? '');
+        $qs = urlencode('議會代碼') . '=' . urlencode($cc_code);
+        // 名冊各屆姓名寫法可能不同（原住民族議員有沒有加羅馬拼音），每種寫法都查（同欄位多值是「或」）
+        $names = array_unique(array_map(fn($r) => CCAPI_Type_Bill::proposerKey($r->{'姓名'} ?? ''), $records));
+        foreach (array_filter($names) as $name) {
+            $qs .= '&' . urlencode('提案人') . '=' . urlencode($name);
+        }
+
+        // 各屆提案數：不受屆次篩選影響，另外查一次聚合
+        $agg = CCAPI::apiQuery(
+            '/bills?limit=0&' . $qs . '&agg=' . urlencode('屆') . '&agg_size=100',
+            '該議員各屆的提案數'
+        );
+        $counts = [];
+        foreach (($agg->aggs[0]->buckets ?? []) as $b) {
+            $counts[(string) $b->{'屆'}] = $b->count;
+        }
+        krsort($counts, SORT_NUMERIC);
+        if (!isset($counts[$term])) {
+            $term = '';
+        }
+        $this->view->bill_terms = $counts;
+        $this->view->bill_term = $term;
+        $this->view->bill_all_total = $agg->total ?? array_sum($counts);
 
         $r = CCAPI::apiQuery(
-            '/bills?limit=200&' . urlencode('議會代碼') . '=' . urlencode($cc_code)
-                . '&' . urlencode('提案人') . '=' . urlencode($name),
-            '該議員提案記錄'
+            '/bills?limit=50&page=' . $page . '&' . $qs
+                . ($term !== '' ? '&' . urlencode('屆') . '=' . urlencode($term) : '')
+                . '&sort=' . urlencode('屆>') . '&sort=' . urlencode('會議代碼>'),
+            '該議員提案記錄（含聯合提案）'
         );
         $this->view->bill_total = $r->total ?? 0;
+        $this->view->bill_page = $page;
+        $this->view->bill_total_page = (int) ($r->total_page ?? 0);
 
         $groups = [];
         foreach (($r->bills ?? []) as $b) {

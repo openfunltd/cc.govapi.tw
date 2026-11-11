@@ -51,11 +51,27 @@ class CCAPI_Type_Bill extends CCAPI_Type
                 'type' => 'string',
             ],
             '提案人' => [
-                'es_field' => '提案人.keyword',
-                'description' => '提案議員姓名（政府提案時通常是空的）',
+                'es_field' => '提案人姓名',
+                'description' => '提案議員姓名，多人聯合提案時任一位符合即可（政府提案時通常是空的）',
                 'type' => 'string',
             ],
         ];
+    }
+
+    /**
+     * 提案人姓名的比對寫法：原住民族議員姓名有漢名也有羅馬拼音時只留漢名（「蔡依靜 Lamen．Panay」
+     * 「Ingay Tali穎艾達利」「石慶龍Rungquan．Lhkatafatu」→ 蔡依靜／穎艾達利／石慶龍），各份文件、
+     * 甚至議員名冊不同屆的寫法都不一樣，統一後同一個人才不會分成好幾個名字
+     */
+    public static function proposerKey($name)
+    {
+        $name = trim((string) $name);
+        if (preg_match('/\p{Han}/u', $name) && preg_match('/[A-Za-z]/u', $name)
+            && preg_match_all('/\p{Han}(?:[\p{Han}．‧·・]*\p{Han})?/u', $name, $m)) {
+            usort($m[0], fn($a, $b) => mb_strlen($b) <=> mb_strlen($a));
+            return $m[0][0];
+        }
+        return $name;
     }
 
     public static function queryFields()

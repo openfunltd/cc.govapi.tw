@@ -42,7 +42,9 @@ $index_mapping = [
         '類別'     => ['type' => 'keyword'],
         '案號'     => ['type' => 'keyword'],
         '提案單位' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
-        '提案人'   => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        // ignore_above：少數 OCR 錯置的議案把整段會議紀錄塞進提案人（超過 keyword 長度上限，整筆匯入失敗）
+        '提案人'   => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword', 'ignore_above' => 2000]]],
+        '提案人姓名' => ['type' => 'keyword', 'ignore_above' => 2000], // 衍生：「提案人」拆成一人一個值，給篩選／統計用
         '連署人'   => ['type' => 'text'],
         '案由'     => ['type' => 'text'],
         '說明'     => ['type' => 'text'],
@@ -82,6 +84,9 @@ try {
     error_log("Created index: bill");
 } catch (Exception $e) {
     error_log("Index exists or created: " . $e->getMessage());
+    // index 已存在時也更新 mapping，讓新增的衍生欄位套用正確型別
+    $prefix = getenv('ELASTIC_PREFIX');
+    Elastic::dbQuery("/{$prefix}bill/_mapping", 'PUT', json_encode($index_mapping));
 }
 
 $jsonl_path = getenv('IMPORT_BILL_JSONL') ?: (__DIR__ . '/../議案.jsonl');
@@ -94,6 +99,87 @@ $fh = fopen($jsonl_path, 'r');
 $bom = fread($fh, 3);
 if ($bom !== "\xEF\xBB\xBF") {
     rewind($fh);
+}
+
+/**
+ * 「提案人」是多人串成的一個字串，各議會分隔方式不同（逗號、頓號、分號、
+ * 換行、兩個以上半形空白、「及」）。單一空白只在每一段都是 2~4 個漢字時才拆
+ * （「江勝雄 何欣純」要拆，「縣長 張花冠」「李 中」「Ingay Tali穎艾達利」不拆）。
+ * 每個名字再去掉頭銜（縣長／議長／副議長／議員，含「黃議員大祐」這種夾在姓名
+ * 中間的寫法）和括號註記（「林武忠(106.2.16已解職)」）。
+ */
+function clean_proposer_name($name)
+{
+    $name = preg_replace('/^[\s\x{3000}]+|[\s\x{3000}]+$/u', '', $name);
+    $name = preg_replace('/\s*[(（〈][^)）〉]*[)）〉]\s*/u', '', $name);
+    $name = preg_replace('/^提案議員[:：]\s*/u', '', $name);
+    $name = preg_replace('/^(?:縣長|市長|副議長|議長)[\s\x{3000}]*(?=\S{2,})/u', '', $name);
+    $name = preg_replace('/^(\p{Han})(?:副議長|議長|議員)(\p{Han}{1,3})$/u', '$1$2', $name);
+    $name = preg_replace('/^(.{2,}?)[\s\x{3000}]*(?:副議長|議長|議員|縣長|市長)$/u', '$1', $name);
+    // 原住民族名字羅馬拼音和漢名之間有沒有空白，各份文件不一致
+    return preg_replace('/([A-Za-z])[\s\x{3000}]+(\p{Han})/u', '$1$2', $name);
+}
+
+function split_proposers($s)
+{
+    $names = [];
+    foreach (preg_split('/[,，、;；\r\n\t]+| {2,}|[\s\x{3000}]+及[\s\x{3000}]+/u', $s) as $part) {
+        $part = clean_proposer_name($part);
+        $pieces = preg_split('/[ \x{3000}]+/u', $part);
+        if (count($pieces) > 1 && count(array_filter($pieces, fn($p) => preg_match('/^\p{Han}{2,4}$/u', $p))) === count($pieces)) {
+            $pieces = array_map('clean_proposer_name', $pieces);
+        } else {
+            $pieces = [$part];
+        }
+        foreach ($pieces as $name) {
+            if ($name !== '' && !in_array($name, $names, true)) {
+                $names[] = $name;
+            }
+        }
+    }
+    return $names;
+}
+
+/**
+ * 議員代碼 → 議員資料上的姓名。提案人有對到議員代碼時用名冊上的寫法（來源文件常有錯字、
+ * 黏字切開時也只有名冊寫法），再經過 CCAPI_Type_Bill::proposerKey() 統一
+ */
+function councilor_name_by_code($code)
+{
+    static $names = null;
+    if ($names === null) {
+        $names = [];
+        $path = getenv('IMPORT_COUNCILOR_JSONL') ?: (__DIR__ . '/../議員.jsonl');
+        if ($fp = @fopen($path, 'r')) {
+            while (($line = fgets($fp)) !== false) {
+                $d = json_decode($line);
+                if (($d->代碼 ?? '') !== '' && ($d->姓名 ?? '') !== '') {
+                    $names[$d->代碼] = $d->姓名;
+                }
+            }
+            fclose($fp);
+        }
+    }
+    return $names[$code] ?? null;
+}
+
+/**
+ * 來源已經拆好的「提案人結構」優先（有用該屆議員名冊切開黏在一起的姓名、去掉頭銜），
+ * 沒有結構化資料的才自己拆「提案人」字串
+ */
+function proposer_names($doc)
+{
+    $names = [];
+    foreach (($doc['提案人結構'] ?? []) as $p) {
+        $name = CCAPI_Type_Bill::proposerKey(councilor_name_by_code($p['議員代碼'] ?? '') ?? clean_proposer_name((string) ($p['姓名'] ?? '')));
+        if ($name !== '' && !in_array($name, $names, true)) {
+            $names[] = $name;
+        }
+    }
+    if (!$names && is_string($doc['提案人'] ?? null)) {
+        $names = array_values(array_unique(array_map(['CCAPI_Type_Bill', 'proposerKey'], split_proposers($doc['提案人']))));
+    }
+    return $names;
 }
 
 /**
@@ -194,6 +280,9 @@ while (($line = fgets($fh)) !== false) {
         if ($key === '屆') continue; // 已經在上面處理過（優先用來源值，備援用檔名猜測），避免原始字串值蓋掉正確的整數值
         if ($val === '' || $val === null) continue;
         $doc[$key] = $val;
+    }
+    if ($names = proposer_names($doc)) {
+        $doc['提案人姓名'] = $names;
     }
 
     $seen_codes[$code] = ($seen_codes[$code] ?? 0) + 1;
