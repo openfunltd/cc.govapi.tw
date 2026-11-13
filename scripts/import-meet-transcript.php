@@ -126,7 +126,17 @@ $count = 0;
 $errors = 0;
 $malformed = 0;
 
-while (($row = fgetcsv($fh)) !== false) {
+while (true) {
+    $pos = ftell($fh);
+    if (($row = fgetcsv($fh)) === false) {
+        break;
+    }
+    if (count($row) !== count($headers)) {
+        // 發言內容以反斜線結尾時，預設跳脫字元會把結尾的 \" 當成跳脫的引號，連下一列一起吃掉；
+        // 退回這一列開頭，不用跳脫字元重讀
+        fseek($fh, $pos);
+        $row = fgetcsv($fh, 0, ',', '"', '');
+    }
     if (count($row) !== count($headers)) {
         $malformed++;
         continue;
