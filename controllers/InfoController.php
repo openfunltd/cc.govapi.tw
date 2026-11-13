@@ -3,7 +3,9 @@
 class InfoController extends MiniEngine_Controller
 {
     // 首長級職稱（逐字稿答詢官員的職稱，用來從首長紀錄挑出機關首長）
-    const HEAD_TITLE_PATTERN = '/^(代理)?(局長|處長|主任委員|主委|執行秘書|總經理|董事長|館長|院長|所長|主任|大隊長|總隊長|隊長|團長|區長|校長|執行長|秘書長|總幹事|場長|廠長)$/u';
+    const HEAD_TITLE_PATTERN = '/^(代理)?(局長|分局長|處長|主任委員|主委|執行秘書|總經理|董事長|館長|院長|所長|主任|大隊長|總隊長|隊長|團長|區長|校長|執行長|秘書長|總幹事|場長|廠長)$/u';
+    // 「○長」職稱的單位字要出現在機關名稱裡，才算這個機關的首長（交通局底下答詢的「處長」是所屬處的首長）
+    const HEAD_TITLE_UNIT = ['局長' => '局', '分局長' => '局', '處長' => '處', '館長' => '館', '院長' => '院', '所長' => '所', '場長' => '場', '廠長' => '廠', '團長' => '團', '隊長' => '隊', '大隊長' => '隊', '總隊長' => '隊', '區長' => '區'];
 
     protected $term_data = null;
 
@@ -695,12 +697,22 @@ class InfoController extends MiniEngine_Controller
     {
         $head = null;
         foreach (($a->{'首長紀錄'} ?? []) as $rec) {
-            if ((int) $rec->{'屆'} === (int) $term_no && preg_match(self::HEAD_TITLE_PATTERN, $rec->{'職稱'} ?? '')
+            if ((int) $rec->{'屆'} === (int) $term_no && $this->isHeadRecord($a, $rec)
                 && (!$head || $rec->{'最後'} > $head->{'最後'})) {
                 $head = $rec;
             }
         }
         return $head;
+    }
+
+    protected function isHeadRecord($a, $rec)
+    {
+        if (!preg_match(self::HEAD_TITLE_PATTERN, $rec->{'職稱'} ?? '', $m)) {
+            return false;
+        }
+        $unit = self::HEAD_TITLE_UNIT[$m[2]] ?? null;
+        $names = ($a->{'名稱'} ?? '') . ($a->{'全名'} ?? '') . implode('', (array) ($a->{'舊名稱'} ?? []));
+        return !$unit || mb_strpos($names, $unit) !== false;
     }
 
     /**
@@ -837,7 +849,7 @@ class InfoController extends MiniEngine_Controller
             $this->view->agency_mayors = $history;
             return;
         }
-        $heads = array_values(array_filter($agency->{'首長紀錄'} ?? [], fn($rec) => preg_match(self::HEAD_TITLE_PATTERN, $rec->{'職稱'} ?? '')));
+        $heads = array_values(array_filter($agency->{'首長紀錄'} ?? [], fn($rec) => $this->isHeadRecord($agency, $rec)));
         usort($heads, fn($x, $y) => [$y->{'屆'}, $y->{'最後'}] <=> [$x->{'屆'}, $x->{'最後'}]);
         $this->view->agency_heads = $heads;
     }
