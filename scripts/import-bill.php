@@ -3,7 +3,7 @@
  * 匯入議案資料到 Elasticsearch
  *
  * 用法：
- *   php scripts/import-bill.php            # 匯入資料（upsert）
+ *   php scripts/import-bill.php            # 匯入資料（只送新增／改過的，來源沒有的刪掉，見 ImportDiff）
  *   php scripts/import-bill.php --reset    # 先刪除 index 再重建並匯入
  *
  * 來源：議案.jsonl（每行一筆 JSON，欄位：代碼/縣市/類別/案號/提案單位/提案人/
@@ -226,6 +226,7 @@ $headers_checked = false;
 // ES doc ID 會被 upsert 覆蓋掉，靜默遺失資料，這裡改成偵測到重複時
 // 對 doc ID 加上序號後綴，確保每筆來源記錄都保留下來
 $seen_codes = [];
+$diff = new ImportDiff('bill', $reset);
 
 while (($line = fgets($fh)) !== false) {
     $line = trim($line);
@@ -288,8 +289,12 @@ while (($line = fgets($fh)) !== false) {
     $seen_codes[$code] = ($seen_codes[$code] ?? 0) + 1;
     $doc_id = $seen_codes[$code] > 1 ? "{$code}-dup{$seen_codes[$code]}" : $code;
 
-    Elastic::dbBulkInsert('bill', $doc_id, $doc);
     $count++;
+    if ($diff->unchanged($doc_id, $doc)) {
+        continue;
+    }
+    // 整份取代：來源清空的欄位（例如誤放在提案人、後來移到提案單位的機關名稱）不會留在 ES
+    Elastic::dbBulkInsert('bill', $doc_id, $doc, true);
     if ($count % 500 === 0) {
         error_log("Imported {$count} bills...");
     }
@@ -297,4 +302,5 @@ while (($line = fgets($fh)) !== false) {
 fclose($fh);
 
 Elastic::dbBulkCommit('bill');
+$diff->finish();
 error_log("Done. Imported {$count} bills, skipped {$skip}.");

@@ -31,7 +31,8 @@
  *
  * 匯入預設用 upsert（不加 --reset），這也是每支 import-*.php 自己文件寫的一般用法；
  * --reset 只用來處理「來源刪除了某筆資料、upsert 不會主動刪除 ES 裡對應舊資料」這種
- * 情況，平常的每日排程不需要。
+ * 情況，平常的每日排程不需要。bill／meet／meet_note／meet_transcript 用 ImportDiff
+ * 逐筆比對，只送改過的文件、來源沒有的會自己刪掉，來源沒變時重跑一次也只要一兩分鐘。
  *
  * 建議排程（cron，每天凌晨跑一次，log 自己重導向到檔案）：
  *   0 5 * * * cd /path/to/cc.govapi.tw && php scripts/auto-refresh.php >> logs/auto-refresh.log 2>&1

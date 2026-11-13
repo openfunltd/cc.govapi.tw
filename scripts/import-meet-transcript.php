@@ -3,7 +3,7 @@
  * 匯入會議逐字稿（meet_transcript）資料到 Elasticsearch
  *
  * 用法：
- *   php scripts/import-meet-transcript.php            # 匯入資料（upsert）
+ *   php scripts/import-meet-transcript.php            # 匯入資料（只送新增／改過的，來源沒有的刪掉，見 ImportDiff）
  *   php scripts/import-meet-transcript.php --reset    # 先刪除 index 再重建並匯入
  *
  * 來源：meet_transcripts.csv（單一檔案，約523萬筆，欄位：代碼, 縣市, 場次代碼,
@@ -18,8 +18,8 @@
  *   議會代碼：從「縣市」欄位對照（CountyCodeHelper::getMap()）
  *   屆：來源CSV本身的「屆」欄位有值就直接採用（parser從檔名/場次標題等
  *     解析出來的，不依賴場次代碼能不能查到），沒有值（空字串，絕大多數
- *     縣市目前都是這樣）才退回原本的做法：查既有sitting index取得（同一個
- *     場次代碼在檔案內會重複很多次，用行程內快取避免重複查ES）。這是PM
+ *     縣市目前都是這樣）才退回原本的做法：查既有sitting index取得（
+ *     SittingContext 開頭一次讀進整個 sitting index）。這是PM
  *     測試回饋：臺北市2009~2010年「委員會分組審查」子格式track.csv比對
  *     大量失敗（場次代碼為空）導致約14.7萬筆（8%）查無屆別，但屆別其實
  *     從檔名就解析得出來，只是之前沒有管道傳下去，2026-10修正。
@@ -28,11 +28,9 @@
  *     依然是null，這不在這次修正範圍內）
  * Doc ID：代碼本身（例：tpe-8320eaa898-0）
  *
- * 效能設計：這個來源跟舊speech不同，是單一大檔案而非依縣市+年月拆檔，所以沒有
- * 沿用speech的.state.json檔案級跳過機制（單一檔案任何一行變動都會讓整份mtime
- * 改變，檔案級跳過在這裡起不了作用）。第一版採用最單純的做法：每次執行都整份
- * 重讀重寫，靠ES的upsert語意保證重覆匯入是安全的，只是比較慢（約523萬筆）。
- * 之後如果排程頻率造成負擔，再考慮換成逐筆比對雜湊或其他增量策略。
+ * 效能設計：這個來源是單一大檔案（約568萬筆），每次都整份重讀（約1分鐘），但用
+ * ImportDiff 逐筆比對上次寫進 ES 的內容，只送新增／改過的文件，來源已經沒有的
+ * 代碼從 ES 刪掉。第一次執行（或 --reset）沒有比對狀態，會整份寫入（約60-80分鐘）。
  */
 
 include(__DIR__ . '/../init.inc.php');
@@ -120,35 +118,10 @@ if ($unknown) {
     exit(1);
 }
 
-$sitting_context_cache = [];
-
-function derive_sitting_context($code, &$cache)
-{
-    if (!$code) {
-        return ['屆' => null, '會期代碼' => null];
-    }
-    if (array_key_exists($code, $cache)) {
-        return $cache[$code];
-    }
-    $context = ['屆' => null, '會期代碼' => null];
-    try {
-        $r = Elastic::dbQuery('/{prefix}sitting/_doc/' . rawurlencode($code), 'GET');
-        if ($r->found ?? false) {
-            $s = $r->_source;
-            $context = [
-                '屆'       => $s->{'屆'} ?? null,
-                '會期代碼' => $s->{'會期代碼'} ?? null,
-            ];
-        }
-    } catch (Exception $e) {
-        // 查不到就留空
-    }
-    $cache[$code] = $context;
-    return $context;
-}
 
 $county_to_cc_code = CountyCodeHelper::getMap();
 
+$diff = new ImportDiff('meet_transcript', $reset);
 $count = 0;
 $errors = 0;
 $malformed = 0;
@@ -182,7 +155,7 @@ while (($row = fgetcsv($fh)) !== false) {
 
     $doc['議會代碼'] = $county_to_cc_code[$data['縣市']] ?? null;
 
-    $context = derive_sitting_context($doc['場次代碼'], $sitting_context_cache);
+    $context = SittingContext::get($doc['場次代碼']);
     // 來源CSV本身的「屆」有值（目前只有臺北市會提供）就直接採用，不依賴
     // 場次代碼能不能查到sitting——否則退回原本查sitting index的做法
     if ($doc['屆'] === null) {
@@ -194,9 +167,12 @@ while (($row = fgetcsv($fh)) !== false) {
     $doc['年'] = $doc['日期'] ? (int)substr($doc['日期'], 0, 4) : null;
 
     $doc_id = $data['代碼'];
+    if ($diff->unchanged($doc_id, $doc)) {
+        continue;
+    }
 
     try {
-        Elastic::dbBulkInsert('meet_transcript', $doc_id, $doc);
+        Elastic::dbBulkInsert('meet_transcript', $doc_id, $doc, true);
         $count++;
         if ($count % 10000 === 0) {
             error_log("Imported {$count} meet_transcripts...");
@@ -209,4 +185,5 @@ while (($row = fgetcsv($fh)) !== false) {
 
 fclose($fh);
 Elastic::dbBulkCommit('meet_transcript');
+$diff->finish();
 error_log("Done. Imported: {$count}, Errors: {$errors}, 欄位數異常跳過: {$malformed}");

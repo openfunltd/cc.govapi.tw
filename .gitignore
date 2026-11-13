@@ -21,4 +21,5 @@ bulletin.jsonl
 人物代碼.jsonl
 當選註記.jsonl
 .auto-refresh-state.json
+.import-state/
 .speech-import-state.json

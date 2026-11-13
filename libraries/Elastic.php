@@ -37,6 +37,9 @@ class Elastic
 
     public static $_show_log = true;
 
+    // bulk 寫入失敗的文件：[mapping => [id => true]]，給 ImportDiff 排除在狀態外、下次重送
+    public static $_failed_ids = [];
+
     public static function dbBulkCommit($mapping = null)
     {
         if (is_null($mapping)) {
@@ -57,6 +60,7 @@ class Elastic
                         $ids[] = $result->_id;
                         continue;
                     }
+                    self::$_failed_ids[$mapping][$result->_id] = true;
                     file_put_contents('error.data', self::$_db_bulk_pool[$mapping]);
                     print_r($result);
                     continue;
@@ -70,12 +74,16 @@ class Elastic
         }
     }
 
-    public static function dbBulkInsert($mapping, $id, $data)
+    /**
+     * $replace = true：整份文件取代（bulk index），來源拿掉的欄位會跟著消失；只能用在這份
+     * 文件全部欄位都由同一支匯入腳本寫入的 index。預設是 update + doc_as_upsert，只合併欄位
+     */
+    public static function dbBulkInsert($mapping, $id, $data, $replace = false)
     {
         if (!array_key_exists($mapping, self::$_db_bulk_pool)) {
             self::$_db_bulk_pool[$mapping] = '';
         }
-        $encdata = json_encode([
+        $encdata = json_encode($replace ? $data : [
             'doc' => $data,
             'doc_as_upsert' => true,
         ]);
@@ -88,7 +96,7 @@ class Elastic
         }
         self::$_db_bulk_pool[$mapping] .=
             json_encode(array(
-                'update' => array('_id' => $id),
+                ($replace ? 'index' : 'update') => array('_id' => $id),
             )) . "\n"
             . $encdata . "\n";
         if (strlen(self::$_db_bulk_pool[$mapping]) > 1000000) {

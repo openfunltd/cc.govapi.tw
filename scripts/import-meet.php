@@ -3,7 +3,7 @@
  * 匯入會議（meet）資料到 Elasticsearch
  *
  * 用法：
- *   php scripts/import-meet.php            # 匯入資料（upsert）
+ *   php scripts/import-meet.php            # 匯入資料（只送新增／改過的，來源沒有的刪掉，見 ImportDiff）
  *   php scripts/import-meet.php --reset    # 先刪除 index 再重建並匯入
  *
  * 來源：meet.csv（欄位：代碼, 縣市, 場次代碼, 委員會或主旨, 日期, 時間資訊, 地點,
@@ -123,24 +123,10 @@ if ($unknown) {
  */
 function derive_sitting_context($code)
 {
-    if (!$code) {
-        return ['屆' => null, '會期代碼' => null];
-    }
-    try {
-        $r = Elastic::dbQuery('/{prefix}sitting/_doc/' . rawurlencode($code), 'GET');
-        if ($r->found ?? false) {
-            $s = $r->_source;
-            return [
-                '屆'       => $s->{'屆'} ?? null,
-                '會期代碼' => $s->{'會期代碼'} ?? null,
-            ];
-        }
-    } catch (Exception $e) {
-        // 找不到就留空
-    }
-    return ['屆' => null, '會期代碼' => null];
+    return SittingContext::get($code);
 }
 
+$diff = new ImportDiff('meet', $reset);
 $count = 0;
 $errors = 0;
 $no_cc_code = 0;
@@ -185,9 +171,12 @@ while (($row = fgetcsv($fh)) !== false) {
     $doc['會期代碼'] = $context['會期代碼'];
 
     $doc_id = $data['代碼'];
+    if ($diff->unchanged($doc_id, $doc)) {
+        continue;
+    }
 
     try {
-        Elastic::dbBulkInsert('meet', $doc_id, $doc);
+        Elastic::dbBulkInsert('meet', $doc_id, $doc, true);
         $count++;
         if ($count % 1000 === 0) {
             error_log("Imported {$count} meets...");
@@ -200,4 +189,5 @@ while (($row = fgetcsv($fh)) !== false) {
 
 fclose($fh);
 Elastic::dbBulkCommit('meet');
+$diff->finish();
 error_log("Done. Imported: {$count}, Errors: {$errors}, 無法對照議會代碼: {$no_cc_code}");
