@@ -1,6 +1,9 @@
 <?php
-$term_no = (int) $this->term_no;
-$base = '/info/' . $term_no . '/laws';
+$base = $this->law_base;
+$dataset = InfoController::LAW_DATASETS[$this->law_dataset];
+$central = $this->law_dataset === 'central';
+// 中央法規的函釋類沒有修正日期，改顯示公發布或發文日期
+$law_date = fn($law) => $law->LawModifiedDate ?? ($law->LawPublishedDate ?? ($law->LawIssuedDate ?? ''));
 // 關鍵字標示：先跳脫再把關鍵字包 <mark>
 $mark = function ($text, $keyword) {
     $html = htmlspecialchars($text);
@@ -21,7 +24,7 @@ if ($this->law ?? null):
 <p class="small mb-2"><a href="<?= htmlspecialchars($base) ?>">← 法規列表</a></p>
 <h2 class="h5 fw-semibold mb-2"><?= htmlspecialchars($law->LawName) ?></h2>
 <div class="d-flex flex-wrap gap-1 mb-2">
-  <span class="badge bg-secondary"><?= htmlspecialchars($law->LawLevel ?? '') ?></span>
+  <?php if ($law->LawLevel ?? null): ?><span class="badge bg-secondary"><?= htmlspecialchars($law->LawLevel) ?></span><?php endif; ?>
   <?php if ($law->LawAbandoned ?? false): ?>
   <span class="badge bg-danger">已廢止<?= ($law->LawAbandonedDate ?? null) ? ' ' . htmlspecialchars($law->LawAbandonedDate) : '' ?></span>
   <?php endif; ?>
@@ -30,27 +33,51 @@ if ($this->law ?? null):
   <?php endif; ?>
 </div>
 <?php if (!($law->LawIsCurrent ?? true)): ?>
-<div class="alert alert-warning small py-2">這是 <?= htmlspecialchars($law->LawModifiedDate ?? '') ?> 的版本，<a href="<?= $law_url($current_id) ?>">查看現行版本</a></div>
+<div class="alert alert-warning small py-2">這是<?= $law_date($law) !== '' ? ' ' . htmlspecialchars($law_date($law)) . ' 的' : '歷史' ?>版本，<a href="<?= $law_url($current_id) ?>">查看現行版本</a></div>
 <?php endif; ?>
 <table class="table table-sm small mb-3" style="max-width: 40rem">
   <tbody>
+    <?php if ($central): ?>
+    <?php if ($law->LawCategory ?? []): ?>
+    <tr><th class="text-nowrap" style="width: 7rem">類別</th><td><?= htmlspecialchars($law->LawCategory[0]) ?></td></tr>
+    <?php endif; ?>
+    <?php foreach (['LawIssuer' => '發布機關', 'LawPublishedDate' => '公發布日期', 'LawIssuedDate' => '發文日期', 'LawModifiedDate' => '修正日期', 'LawEffectiveDate' => '生效日期', 'LawSignedDate' => '簽署日期', 'LawDateNote' => '日期說明'] as $field => $label): ?>
+    <?php if ($law->$field ?? null): ?>
+    <tr><th class="text-nowrap" style="width: 7rem"><?= $label ?></th><td><?= htmlspecialchars($law->$field) ?></td></tr>
+    <?php endif; ?>
+    <?php endforeach; ?>
+    <?php else: ?>
     <?php if (count($law->LawCategory ?? []) > 1): ?>
     <tr><th class="text-nowrap" style="width: 7rem">類別</th><td><?= htmlspecialchars(implode(' > ', $law->LawCategory)) ?></td></tr>
     <?php endif; ?>
     <tr><th class="text-nowrap" style="width: 7rem">公發布日期</th><td><?= htmlspecialchars($law->LawEffectiveDate ?? '') ?></td></tr>
     <tr><th class="text-nowrap">修正日期</th><td><?= htmlspecialchars($law->LawModifiedDate ?? '') ?></td></tr>
+    <?php endif; ?>
     <tr><th class="text-nowrap">原始網頁</th><td><a href="<?= htmlspecialchars($law->LawURL ?? '') ?>" target="_blank" rel="noopener"><?= htmlspecialchars(parse_url($law->LawURL ?? '', PHP_URL_HOST) ?: '') ?></a></td></tr>
     <?php if ($this->law_versions): ?>
     <tr><th class="text-nowrap">版本</th><td>
       <select class="form-select form-select-sm d-inline-block w-auto" onchange="location.href = this.value">
         <?php foreach ($this->law_versions as $v): ?>
-        <option value="<?= $law_url($v->id) ?>"<?= $v->id === $law->LawId ? ' selected' : '' ?>><?= htmlspecialchars($v->date) ?><?= $v->current ? '（現行）' : '' ?></option>
+        <option value="<?= $law_url($v->id) ?>"<?= $v->id === $law->LawId ? ' selected' : '' ?>><?= htmlspecialchars($v->date ?: '日期不詳') ?><?= $v->current ? '（現行）' : '' ?></option>
         <?php endforeach; ?>
       </select>
     </td></tr>
     <?php endif; ?>
   </tbody>
 </table>
+
+<?php if ($law->LawSummary ?? null): ?>
+<h3 class="h6 fw-semibold">要旨</h3>
+<p class="small mb-3" style="white-space: pre-wrap"><?= htmlspecialchars($law->LawSummary) ?></p>
+<?php endif; ?>
+
+<?php if ($law->LawNotes ?? []): ?>
+<ul class="small text-body-secondary mb-3">
+  <?php foreach ($law->LawNotes as $n): ?>
+  <li><?= htmlspecialchars($n) ?></li>
+  <?php endforeach; ?>
+</ul>
+<?php endif; ?>
 
 <?php if ($law->LawAttachments ?? []): ?>
 <h3 class="h6 fw-semibold">附件</h3>
@@ -98,7 +125,7 @@ if ($this->law ?? null):
         if ($q['q'] === '' || $q['scope'] === 'all') unset($q['scope']);
         if ($q['q'] === '') unset($q['q']);
         if ($q['level'] === '') unset($q['level']);
-        if ($q['status'] === 'current') unset($q['status']);
+        if ($q['status'] === array_key_first($l['statuses'])) unset($q['status']);
         if ((int) $q['page'] === 1) unset($q['page']);
         return htmlspecialchars($base . ($q ? '?' . http_build_query($q) : ''));
     };
@@ -117,13 +144,13 @@ if ($this->law ?? null):
 ?>
 <form method="get" action="<?= htmlspecialchars($base) ?>" class="mb-2" style="max-width: 40rem">
   <div class="input-group input-group-sm">
-    <input type="search" name="q" class="form-control" value="<?= htmlspecialchars($l['keyword']) ?>" placeholder="搜尋<?= htmlspecialchars($l['county']) ?>法規">
+    <input type="search" name="q" class="form-control" value="<?= htmlspecialchars($l['keyword']) ?>" placeholder="搜尋<?= htmlspecialchars($l['label']) ?>法規">
     <select name="scope" class="form-select" style="max-width: 9rem">
       <option value="all">名稱與條文</option>
       <option value="name"<?= $l['scope'] === 'name' ? ' selected' : '' ?>>只搜名稱</option>
     </select>
     <?php if ($l['level'] !== ''): ?><input type="hidden" name="level" value="<?= htmlspecialchars($l['level']) ?>"><?php endif; ?>
-    <?php if ($l['status'] !== 'current'): ?><input type="hidden" name="status" value="<?= htmlspecialchars($l['status']) ?>"><?php endif; ?>
+    <?php if ($l['status'] !== array_key_first($l['statuses'])): ?><input type="hidden" name="status" value="<?= htmlspecialchars($l['status']) ?>"><?php endif; ?>
     <button class="btn btn-outline-secondary" type="submit">搜尋</button>
     <?php if ($l['keyword'] !== ''): ?><a class="btn btn-outline-secondary" href="<?= $list_url(['q' => '']) ?>">清除</a><?php endif; ?>
   </div>
@@ -134,7 +161,7 @@ if ($this->law ?? null):
   <a class="btn btn-sm btn-outline-secondary<?= $l['level'] === $name ? ' active' : '' ?>" href="<?= $list_url(['level' => $name]) ?>"><?= htmlspecialchars($name) ?> <span class="text-body-secondary"><?= number_format($count) ?></span></a>
   <?php endforeach; ?>
   <div class="btn-group btn-group-sm ms-auto">
-    <?php foreach (['current' => '現行', 'abandoned' => '已廢止', 'all' => '全部'] as $key => $label): ?>
+    <?php foreach ($l['statuses'] as $key => $label): ?>
     <a class="btn btn-outline-secondary<?= $l['status'] === $key ? ' active' : '' ?>" href="<?= $list_url(['status' => $key, 'level' => '']) ?>"><?= $label ?></a>
     <?php endforeach; ?>
   </div>
@@ -157,7 +184,7 @@ if ($this->law ?? null):
           <?php if ($s = $snippet($law)): ?><div class="text-body-secondary"><?= $mark($s, $l['keyword']) ?></div><?php endif; ?>
         </td>
         <td class="text-nowrap"><?= htmlspecialchars($law->LawLevel ?? '') ?></td>
-        <td class="text-nowrap"><?= htmlspecialchars($law->LawModifiedDate ?? '') ?></td>
+        <td class="text-nowrap"><?= htmlspecialchars($law_date($law)) ?></td>
       </tr>
       <?php endforeach; ?>
     </tbody>
@@ -172,4 +199,4 @@ if ($this->law ?? null):
 <?php endif; ?>
 <?php endif; ?>
 <?php endif; ?>
-<p class="small text-body-secondary mt-2">資料來源：<a href="https://data.openfun.tw/datasets/tw.openfun~ref~tw-country-law" target="_blank" rel="noopener">全縣市法規</a></p>
+<p class="small text-body-secondary mt-2">資料來源：<a href="<?= htmlspecialchars($dataset['page']) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($dataset['name']) ?></a></p>

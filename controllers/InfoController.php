@@ -22,7 +22,7 @@ class InfoController extends MiniEngine_Controller
         'bills'       => '議案',
     ];
 
-    public function indexAction($term_no = null, $tab = null, $sub_id = null, $sub_id2 = null)
+    public function indexAction($term_no = null, $tab = null, $sub_id = null, $sub_id2 = null, $sub_id3 = null)
     {
         $cc_code = $_SERVER['CCAPI_COUNCIL_CODE'] ?? 'all';
         $this->view->cc_code = $cc_code;
@@ -217,9 +217,11 @@ class InfoController extends MiniEngine_Controller
                 if ($this->view->agency_section === 'villages') {
                     $this->loadVillagesTab($cc_code, $term_no, $sub_id2);
                 } elseif ($this->view->agency_section === 'detail') {
-                    $this->view->agency_page = in_array($sub_id2, ['tenders', 'speeches', 'news', 'budget'], true) ? $sub_id2 : 'info';
-                    $this->loadAgencyDetail($term_no, urldecode($sub_id), $this->view->agency_page);
-                    if ($a = $this->view->agency ?? null) {
+                    $this->view->agency_page = in_array($sub_id2, ['tenders', 'speeches', 'news', 'budget', 'laws'], true) ? $sub_id2 : 'info';
+                    $this->loadAgencyDetail($term_no, urldecode($sub_id), $this->view->agency_page, $sub_id3);
+                    if ($law = $this->view->law ?? null) {
+                        $this->setOg($law->LawName . '・法規', ($this->view->agency->{'名稱'} ?? '') . '的法規：' . $law->LawName . '條文與沿革');
+                    } elseif ($a = $this->view->agency ?? null) {
                         $full = ($a->{'全名'} ?? '') ?: $a->{'名稱'};
                         $this->setOg(
                             $full . '・行政體系',
@@ -236,12 +238,13 @@ class InfoController extends MiniEngine_Controller
             case 'laws':
                 // /info/{屆}/laws：法規列表與搜尋；/info/{屆}/laws/{法規代碼}：單一法規（歷史版本用版本代碼）
                 if ($sub_id) {
-                    $this->loadLawDetail(urldecode($sub_id));
+                    $this->loadLawDetail('county', urldecode($sub_id), '/info/' . $term_no . '/laws');
                     if ($law = $this->view->law ?? null) {
                         $this->setOg($law->LawName . '・法規', $this->view->council_name . '的地方法規：' . $law->LawName . '條文與沿革');
                     }
                 } else {
-                    $this->loadLaws($cc_code);
+                    $county = $this->lawCounty($cc_code);
+                    $this->loadLaws('county', ['LawCounty' => $county], $county, '/info/' . $term_no . '/laws');
                 }
                 break;
             case 'committees':
@@ -737,7 +740,7 @@ class InfoController extends MiniEngine_Controller
      * {縣市政府代碼}-U……）在採購網沒有自己的機關代碼，標案掛在縣市政府底下，只能靠
      * 標案的「單位名稱」區分
      */
-    protected function loadAgencyDetail($term_no, $code, $page = 'info')
+    protected function loadAgencyDetail($term_no, $code, $page = 'info', $law_id = null)
     {
         $r = CCAPI::apiQuery('/agency/' . rawurlencode($code), '行政機關資料');
         $agency = ($r->error ?? true) ? null : $r->data;
@@ -777,7 +780,25 @@ class InfoController extends MiniEngine_Controller
             $this->view->pcc_unit_id = self::pccUnitId($parent->{'機關代碼'} ?? null);
             $this->view->pcc_dept_name = $agency->{'名稱'};
         }
-        if ($page === 'speeches') {
+        // 中央機關法規只收二級中央行政機關，來源清單裡有這個機關代碼才顯示法規分頁
+        $this->view->agency_law_source = null;
+        if (($agency->{'議會代碼'} ?? '') === 'ly' && ($agency->{'機關代碼'} ?? null)) {
+            $src = CCAPI::externalQuery(
+                'https://data.openfun.tw/api/v1/datasets/tw.openfun~ref~tw-central-law-source/records/' . rawurlencode($agency->{'機關代碼'}),
+                '這個機關有沒有收錄法規（中央機關法規來源清單）',
+                self::LAW_DATASETS['central']['page'] . '/skill.md'
+            );
+            $this->view->agency_law_source = $src->record ?? null;
+        }
+        if ($page === 'laws' && !$this->view->agency_law_source) {
+            $page = $this->view->agency_page = 'info';
+        }
+        $law_base = '/info/' . $term_no . '/agencies/' . rawurlencode($agency->{'代碼'}) . '/laws';
+        if ($page === 'laws' && $law_id !== null && $law_id !== '') {
+            $this->loadLawDetail('central', $law_id, $law_base);
+        } elseif ($page === 'laws') {
+            $this->loadLaws('central', ['LawSource' => $agency->{'機關代碼'}], $agency->{'名稱'}, $law_base);
+        } elseif ($page === 'speeches') {
             $this->loadAgencySpeeches($agency, $children, $term_no);
         } elseif ($page === 'news') {
             $this->loadAgencyNews($agency, $children, $is_internal ? $parent : null);
@@ -993,8 +1014,25 @@ class InfoController extends MiniEngine_Controller
         ];
     }
 
-    const LAW_DATASET = 'https://data.openfun.tw/api/v1/datasets/tw.openfun~ref~tw-country-law';
-    const LAW_SKILL = 'https://data.openfun.tw/datasets/tw.openfun~ref~tw-country-law/skill.md';
+    // 法規資料集：縣市議會的「法規」分頁查全縣市法規（依縣市），立法院的中央機關頁查中央機關法規（依機關代碼）
+    const LAW_DATASETS = [
+        'county' => [
+            'api' => 'https://data.openfun.tw/api/v1/datasets/tw.openfun~ref~tw-country-law',
+            'page' => 'https://data.openfun.tw/datasets/tw.openfun~ref~tw-country-law',
+            'name' => '全縣市法規',
+        ],
+        'central' => [
+            'api' => 'https://data.openfun.tw/api/v1/datasets/tw.openfun~ref~tw-central-law',
+            'page' => 'https://data.openfun.tw/datasets/tw.openfun~ref~tw-central-law',
+            'name' => '中央機關法規',
+        ],
+    ];
+
+    protected function lawQuery($dataset, $path, $reason)
+    {
+        $d = self::LAW_DATASETS[$dataset];
+        return CCAPI::externalQuery($d['api'] . $path, $reason . '（' . $d['name'] . '資料集）', $d['page'] . '/skill.md');
+    }
 
     // 議會代碼對應的縣市名稱（法規資料用「臺」的縣市全名），不是縣市議會的回傳 null
     protected function lawCounty($cc_code)
@@ -1006,50 +1044,55 @@ class InfoController extends MiniEngine_Controller
     }
 
     /**
-     * 法規列表：查全縣市法規資料集的現行版本。?q= 搜尋（預設名稱加條文，?scope=name 只搜名稱）、
-     * ?level= 位階、?status= 現行（預設）／abandoned 已廢止／all 全部、?page=
+     * 法規列表：查法規資料集的現行版本，$scope 是限定範圍的篩選（縣市或來源機關）。
+     * ?q= 搜尋（預設名稱加條文，?scope=name 只搜名稱）、?level= 位階、?status=、?page=
+     * status 分現行（預設）／abandoned 已廢止／all 全部；中央法規部分來源的未廢止是 null 而不是
+     * false，API 又不能篩「不是 true」，這種來源只分 all 全部（預設）／abandoned
      * 沒有關鍵字時依修正日期新到舊，有關鍵字時依相關度
      */
-    protected function loadLaws($cc_code)
+    protected function loadLaws($dataset, array $scope, $label, $base)
     {
-        $county = $this->lawCounty($cc_code);
         $keyword = trim((string) ($_GET['q'] ?? ''));
-        $scope = ($_GET['scope'] ?? '') === 'name' ? 'name' : 'all';
+        $search_in = ($_GET['scope'] ?? '') === 'name' ? 'name' : 'all';
         $level = trim((string) ($_GET['level'] ?? ''));
-        $status = in_array($_GET['status'] ?? '', ['abandoned', 'all'], true) ? $_GET['status'] : 'current';
+        $abandoned = $this->lawQuery($dataset, '/agg?' . http_build_query(['group_by' => 'LawAbandoned'] + $scope + ['LawIsCurrent' => 'true']), $label . '現行與已廢止法規數量');
+        $statuses = in_array('false', array_map(fn($g) => $g->key, $abandoned->groups ?? []), true)
+            ? ['current' => '現行', 'abandoned' => '已廢止', 'all' => '全部']
+            : ['all' => '全部', 'abandoned' => '已廢止'];
+        $status = array_key_exists($_GET['status'] ?? '', $statuses) ? $_GET['status'] : array_key_first($statuses);
         $page = max(1, (int) ($_GET['page'] ?? 1));
-        $filter = ['LawCounty' => $county, 'LawIsCurrent' => 'true'];
+        $filter = $scope + ['LawIsCurrent' => 'true'];
         if ($status !== 'all') {
             $filter['LawAbandoned'] = $status === 'abandoned' ? 'true' : 'false';
         }
-        $levels = CCAPI::externalQuery(
-            self::LAW_DATASET . '/agg?' . http_build_query(['group_by' => 'LawLevel'] + $filter),
-            '本縣市各位階法規數量（全縣市法規資料集）',
-            self::LAW_SKILL
-        );
+        $levels = $this->lawQuery($dataset, '/agg?' . http_build_query(['group_by' => 'LawLevel'] + $filter), $label . '各位階法規數量');
         $params = $filter + array_filter(['LawLevel' => $level]);
         if ($keyword !== '') {
-            $params[$scope === 'name' ? 'q[LawName]' : 'q'] = $keyword;
+            $params[$search_in === 'name' ? 'q[LawName]' : 'q'] = $keyword;
         } else {
             $params['sort'] = 'LawModifiedDate>';
         }
         $per_page = 30;
-        $r = CCAPI::externalQuery(
-            self::LAW_DATASET . '/records?' . http_build_query($params + ['page' => $page, 'per_page' => $per_page]),
-            $keyword !== '' ? '搜尋本縣市法規（全縣市法規資料集）' : '本縣市法規，依修正日期排序（全縣市法規資料集）',
-            self::LAW_SKILL
+        $r = $this->lawQuery(
+            $dataset,
+            '/records?' . http_build_query($params + ['page' => $page, 'per_page' => $per_page]),
+            $keyword !== '' ? '搜尋' . $label . '法規' : $label . '法規，依修正日期排序'
         );
         $total = (int) ($r->total ?? 0);
+        $this->view->law_dataset = $dataset;
+        $this->view->law_base = $base;
         $this->view->laws = [
             'ok' => isset($r->records),
-            'county' => $county,
+            'label' => $label,
             'items' => $r->records ?? [],
-            'levels' => array_map(fn($g) => [$g->key, $g->stats->count], $levels->groups ?? []),
+            // 沒有位階的（中央法規部分來源）不列成篩選按鈕
+            'levels' => array_values(array_filter(array_map(fn($g) => [$g->key, $g->stats->count], $levels->groups ?? []), fn($g) => (string) $g[0] !== '')),
+            'statuses' => $statuses,
             'total' => $total,
             'total_page' => (int) ceil(min($total, 10000) / $per_page),
             'page' => $page,
             'keyword' => $keyword,
-            'scope' => $scope,
+            'scope' => $search_in,
             'level' => $level,
             'status' => $status,
         ];
@@ -1058,25 +1101,23 @@ class InfoController extends MiniEngine_Controller
     /**
      * 單一法規：條文、沿革、附件，加上各版本的修正日期（版本代碼一次批次查回來，只用來列版本清單）
      */
-    protected function loadLawDetail($law_id)
+    protected function loadLawDetail($dataset, $law_id, $base)
     {
-        $r = CCAPI::externalQuery(
-            self::LAW_DATASET . '/records/' . rawurlencode($law_id),
-            '這部法規的條文、沿革與附件（全縣市法規資料集）',
-            self::LAW_SKILL
-        );
+        $r = $this->lawQuery($dataset, '/records/' . rawurlencode($law_id), '這部法規的條文、沿革與附件');
         $law = $r->record ?? null;
+        $this->view->law_dataset = $dataset;
+        $this->view->law_base = $base;
         $this->view->law_id = $law_id;
         $this->view->law = $law;
         $this->view->law_versions = [];
         $ids = $law->LawHistoryId ?? [];
         if (count($ids) > 1) {
-            $v = CCAPI::externalQuery(
-                self::LAW_DATASET . '/records?' . http_build_query(['_ids' => implode(',', $ids), 'per_page' => 100]),
-                '這部法規各版本的修正日期（全縣市法規資料集）',
-                self::LAW_SKILL
+            $v = $this->lawQuery(
+                $dataset,
+                '/records?' . http_build_query(['_ids' => implode(',', $ids), 'per_page' => 100]),
+                '這部法規各版本的修正日期'
             );
-            $versions = array_map(fn($x) => (object) ['id' => $x->LawId, 'date' => $x->LawModifiedDate ?? '', 'current' => $x->LawIsCurrent ?? false], $v->records ?? []);
+            $versions = array_map(fn($x) => (object) ['id' => $x->LawId, 'date' => $x->LawModifiedDate ?? ($x->LawPublishedDate ?? ''), 'current' => $x->LawIsCurrent ?? false], $v->records ?? []);
             usort($versions, fn($a, $b) => strcmp($b->date, $a->date));
             $this->view->law_versions = $versions;
         }

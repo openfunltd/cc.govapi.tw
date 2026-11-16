@@ -30,6 +30,9 @@ $dept = $this->pcc_dept_name ?? null;
   <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'budget' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/budget') ?>">預算</a></li>
   <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'news' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/news') ?>">新聞公告</a></li>
   <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'speeches' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/speeches') ?>">議會發言記錄</a></li>
+  <?php if ($this->agency_law_source ?? null): ?>
+  <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'laws' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/laws') ?>">法規</a></li>
+  <?php endif; ?>
 </ul>
 
 <?php if (($this->agency_page ?? '') === 'info'): ?>
@@ -40,6 +43,9 @@ $dept = $this->pcc_dept_name ?? null;
 <?php return; endif; ?>
 <?php if (($this->agency_page ?? '') === 'budget'): ?>
 <?= $this->partial('info/agency_budget', $this) ?>
+<?php return; endif; ?>
+<?php if (($this->agency_page ?? '') === 'laws'): ?>
+<?= $this->partial('info/laws', $this) ?>
 <?php return; endif; ?>
 <?php if (($this->agency_page ?? '') === 'news'): ?>
 <?= $this->partial('info/agency_news', $this) ?>
