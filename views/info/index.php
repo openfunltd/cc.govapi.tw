@@ -193,6 +193,10 @@ function info_candidate_field_html($tag, $label, $c, $field, $fallback_image_fie
     $source = $c->{$field . '來源'} ?? null;
     $text = $c->{$field} ?? null;
     $ocr_image = $c->{'欄位圖片'}->{$field} ?? null;
+    // 辨識政見圖得到的文字（例：paddleocr）沒有逐格小圖，原圖就是整張政見圖
+    if (!$ocr_image && $fallback_image_field && $source && $source !== 'text') {
+        $ocr_image = $c->{$fallback_image_field} ?? null;
+    }
     $has_toggle = (bool) $ocr_image;
 
     if (info_candidate_text_ok($source) && $text) {
