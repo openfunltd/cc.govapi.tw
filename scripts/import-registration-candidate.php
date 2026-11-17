@@ -11,6 +11,10 @@
  *   IMPORT_CANDIDATE_ELECTED_SOURCE_CSV  中選會歷屆候選人名冊 cand.csv（用來對應縣市／鄉鎮市區／村里代碼，
  *                                        以及跟過去的參選紀錄連人物代碼）
  *   IMPORT_CANDIDATE_PERSON_SOURCE_JSONL 人物代碼對照 person.jsonl
+ *   IMPORT_REGISTRATION_BULLETIN_JSONL   選舉公報萃取結果（逗號分隔，選填），每筆有「登記識別碼」對到名冊；
+ *                                        沒設時讀 IMPORT_CANDIDATE_JSONL 同目錄的 bulletin{,-village,-township}-115.jsonl
+ *   IMPORT_REGISTRATION_MANIFESTO_JSONL  政見圖辨識結果（選填，每筆有「登記識別碼」）；公報的政見沒有文字時才用。
+ *                                        沒設時讀同目錄的 bulletin-manifesto-paddle-115*.jsonl（逗號分隔可指定多個）
  *
  * 登記階段還沒有候選人代碼、號次、政見：
  *   代碼：REG-{年}:{識別碼}（識別碼是「選舉類型:選區:姓名」）
@@ -20,6 +24,8 @@
  *             看得到歷屆紀錄）；同縣市沒有就找全國性的（不分區立委、總統副總統）；對不到或同名多人的不連
  * 選區別比照歷屆同類選舉的寫法：議員「第01選舉區」（縣市在行政區代碼）、代表「竹北市第01選舉區」、
  * 村里長「中山區下埤里」、首長是縣市或鄉鎮市區名稱。
+ * 選舉公報出來之後：對到公報的補上號次、相片、學經歷、政見與原始公報連結；公報已經涵蓋的選舉
+ * （同選舉類型同選區至少一位對到）登記階段改成 false；縣市長、議員名冊沒有號次又不在公報裡的（未抽籤、已退出）不匯入。
  * 中選會公布正式候選人名冊（有候選人代碼與號次）之後，改由各選舉的匯入程式匯入正式資料，
  * 登記階段的紀錄要另外清掉（REG- 開頭的代碼）。
  */
@@ -111,6 +117,49 @@ $split = function ($text) use ($town_code) {
 $district_no = fn($text) => preg_match('/第(\d+)選舉區/u', $text, $m) ? sprintf('第%02d選舉區', (int) $m[1]) : null;
 
 $year = 115;
+
+// 選舉公報：登記識別碼 => 公報紀錄（同一人出現在多份公報時，留有可用政見的那筆）
+$bulletin_paths = getenv('IMPORT_REGISTRATION_BULLETIN_JSONL')
+    ? array_map('trim', explode(',', getenv('IMPORT_REGISTRATION_BULLETIN_JSONL')))
+    : array_map(fn($k) => dirname((string) getenv('IMPORT_CANDIDATE_JSONL')) . "/bulletin{$k}-{$year}.jsonl", ['', '-village', '-township']);
+$has_manifesto = fn($r) => in_array($r['政見來源'] ?? '', ['text', 'manifesto-image-vision', 'cell-image-vision', 'page-image-vision', 'paddleocr'], true);
+$bulletins = [];
+$covered_races = [];  // 公報已經涵蓋的選舉：「選舉類型:選區」
+foreach ($bulletin_paths as $bulletin_path) {
+    if (!file_exists($bulletin_path)) {
+        continue;
+    }
+    $bfh = fopen($bulletin_path, 'r');
+    while (($line = fgets($bfh)) !== false) {
+        $b = json_decode($line, true);
+        $id = $b['登記識別碼'] ?? null;
+        if (!$id) {
+            continue;
+        }
+        if (!isset($bulletins[$id]) || (!$has_manifesto($bulletins[$id]) && $has_manifesto($b))) {
+            $bulletins[$id] = $b;
+        }
+        $covered_races[substr($id, 0, strrpos($id, ':'))] = true;
+    }
+    fclose($bfh);
+}
+$bulletin_image_url = function ($path) {
+    $path = preg_replace('#^files/#', '', $path);
+    return 'https://lydata.ronny-s3.click/bulletin/' . implode('/', array_map('rawurlencode', explode('/', $path)));
+};
+// 政見圖辨識結果：登記識別碼 => 政見文字
+$manifesto_ocr = [];
+$manifesto_paths = getenv('IMPORT_REGISTRATION_MANIFESTO_JSONL')
+    ? array_map('trim', explode(',', getenv('IMPORT_REGISTRATION_MANIFESTO_JSONL')))
+    : glob(dirname((string) getenv('IMPORT_CANDIDATE_JSONL')) . "/bulletin-manifesto-paddle-{$year}*.jsonl");
+foreach (array_merge(...array_map(fn($p) => file_exists($p) ? file($p) : [], $manifesto_paths ?: [])) as $line) {
+    $m = json_decode($line, true);
+    if (isset($m['登記識別碼']) && trim((string) ($m['政見'] ?? '')) !== '') {
+        $manifesto_ocr[$m['登記識別碼']] = $m['政見'];
+    }
+}
+$BULLETIN_FIELDS = ['來源', '來源PDF', '來源頁碼', '學歷', '學歷來源', '經歷', '經歷來源', '政見', '政見來源', '相片路徑', '政見圖路徑', '欄位圖片', '其他欄位'];
+
 $prefix = getenv('ELASTIC_PREFIX');
 Elastic::dbQuery("/{$prefix}candidate/_mapping", 'PUT', json_encode(['properties' => [
     '登記階段' => ['type' => 'boolean'],
@@ -119,6 +168,8 @@ Elastic::dbQuery("/{$prefix}candidate/_mapping", 'PUT', json_encode(['properties
 
 $count = 0;
 $linked = 0;
+$with_bulletin = 0;
+$withdrawn = 0;
 $skipped = [];
 $seen = [];
 $fh = fopen($path, 'r');
@@ -134,6 +185,13 @@ while (($line = fgets($fh)) !== false) {
         $skipped[] = $r['識別碼'];
         continue;
     }
+    $bulletin = $bulletins[$r['識別碼']] ?? null;
+    $covered = isset($covered_races[substr($r['識別碼'], 0, strrpos($r['識別碼'], ':'))]);
+    // 只套用在縣市長、議員：地方選舉（鄉鎮市長、代表、村里長）不少縣市的名冊還沒有號次，沒號次不代表退出
+    if ($covered && !$bulletin && ($r['號次'] ?? null) === null && !in_array($kind, ['D1', 'D2', 'R1', 'R2', 'V0'], true)) {
+        $withdrawn++;
+        continue;
+    }
     $doc = [
         '代碼'       => "REG-{$year}:{$r['識別碼']}",
         '選舉代碼'   => "ELC-{$kind}-{$year}",
@@ -143,10 +201,36 @@ while (($line = fgets($fh)) !== false) {
         '縣市'       => $county,
         '姓名'       => $r['姓名'],
         '其他欄位'   => array_filter(['推薦之政黨' => $r['推薦政黨'] ?? ''], fn($v) => $v !== ''),
-        '登記階段'   => true,
+        '號次'       => $r['號次'] ?? (isset($bulletin['號次']) && ctype_digit((string) $bulletin['號次']) ? (int) $bulletin['號次'] : null),
+        '登記階段'   => !$covered,
         '登記日期'   => $r['登記日期'] ?? null,
         'note'       => ($r['備註'] ?? '') !== '' ? $r['備註'] : null,
     ];
+    if ($bulletin) {
+        // 欄位錯位時學經歷、政見會裝到別的欄位的內容，那種不採用（見 BulletinFieldHelper）
+        [$bulletin] = BulletinFieldHelper::sanitize($bulletin);
+        foreach ($BULLETIN_FIELDS as $key) {
+            $val = $bulletin[$key] ?? null;
+            if ($val === '' || $val === null || $val === []) {
+                continue;
+            }
+            if ($key === '相片路徑' || $key === '政見圖路徑') {
+                $val = $bulletin_image_url($val);
+            } elseif ($key === '欄位圖片') {
+                $val = array_map($bulletin_image_url, $val);
+            } elseif ($key === '其他欄位') {
+                // 推薦之政黨以登記名冊為準（公報的政黨欄常混進具結聲明等文字）
+                unset($val['推薦之政黨']);
+                $val = array_merge($val, $doc['其他欄位']);
+            }
+            $doc[$key] = $val;
+        }
+        if (!$has_manifesto($doc) && isset($manifesto_ocr[$r['識別碼']])) {
+            $doc['政見'] = $manifesto_ocr[$r['識別碼']];
+            $doc['政見來源'] = 'paddleocr';
+        }
+        $with_bulletin++;
+    }
     if ($is_councilor) {
         $doc['選舉類型'] = $label;
         $doc['行政區代碼'] = $county_code[$county] ?? null;
@@ -183,7 +267,10 @@ while (($line = fgets($fh)) !== false) {
         $doc['人物代碼'] = $persons[0];
         $linked++;
     }
-    Elastic::dbBulkInsert('candidate', $doc['代碼'], array_filter($doc, fn($v) => $v !== null && $v !== []));
+    // 寫入是 update（doc_as_upsert），沒帶的欄位會保留上一次的值：公報欄位與號次沒有值時明確寫 null，
+    // 不然公報重新解析後拿掉的內容（例：混進投票須知的政見）會一直留著
+    Elastic::dbBulkInsert('candidate', $doc['代碼'], array_filter($doc, fn($v) => $v !== null && $v !== [])
+        + array_fill_keys(array_merge($BULLETIN_FIELDS, ['號次']), null));
     $seen[$doc['代碼']] = true;
     $count++;
 }
@@ -210,5 +297,5 @@ if ($count > 0) {
         Elastic::dbQuery("{$index}/_delete_by_query?conflicts=proceed", 'POST', json_encode(['query' => ['ids' => ['values' => $ids]]]));
     }
 }
-error_log(sprintf('Done. 匯入 %d 位登記參選人（%d 位連到過去的參選紀錄），%d 位對不到縣市略過%s；刪除 %d 筆來源已經沒有的登記紀錄。',
-    $count, $linked, count($skipped), $skipped ? '：' . implode('、', array_slice($skipped, 0, 5)) : '', count($removed)));
+error_log(sprintf('Done. 匯入 %d 位登記參選人（%d 位連到過去的參選紀錄、%d 位有選舉公報），%d 位對不到縣市略過%s，%d 位不在公報裡也沒有號次略過；刪除 %d 筆來源已經沒有的登記紀錄。',
+    $count, $linked, $with_bulletin, count($skipped), $skipped ? '：' . implode('、', array_slice($skipped, 0, 5)) : '', $withdrawn, count($removed)));
