@@ -1125,10 +1125,18 @@ class InfoController extends MiniEngine_Controller
         }
     }
 
+    // 議會代碼 → 縣市行政區代碼（tw.openfun~ref~tw-county-org 的代碼前綴）
+    const COUNTY_GEO_CODE = [
+        'tpe' => '63000', 'nwt' => '65000', 'txg' => '66000', 'tnn' => '67000', 'khh' => '64000', 'tao' => '68000',
+        'ila' => '10002', 'hsq' => '10004', 'hsz' => '10018', 'kee' => '10017', 'mia' => '10005', 'cha' => '10007',
+        'nan' => '10008', 'yun' => '10009', 'cyq' => '10010', 'cyi' => '10020', 'pif' => '10013', 'ttt' => '10014',
+        'hua' => '10015', 'pen' => '10016', 'kin' => '09020', 'lie' => '09007',
+    ];
+
     const GRANTS_DATASET = 'https://data.openfun.tw/api/v1/datasets/tw.openfun~txn~tw-country-grants';
 
     /**
-     * 單一機關頁的獎補助：data.openfun.tw「全縣市對民間團體補（捐）助明細」，主辦機關跟機關名稱完全相同的
+     * 單一機關頁的獎補助：data.openfun.tw「全縣市對民間團體補（捐）助明細」，主辦機關代碼是這個機關的
      * 歷年總額與指定年度的明細（依金額排序）。縣市政府本身顯示整個縣市。?year=&page=
      */
     protected function fetchAgencyGrants($agency)
@@ -1141,9 +1149,11 @@ class InfoController extends MiniEngine_Controller
         $skill = 'https://data.openfun.tw/datasets/tw.openfun~txn~tw-country-grants/skill.md';
         $scope = urlencode('縣市') . '=' . urlencode($county);
         if (($agency->{'分類'} ?? '') !== '縣市政府') {
-            // 先用名稱完全比對（主辦機關是報表上的局處寫法）；之後資料集補上機關代碼再改用代碼
-            $g['units'] = [$agency->{'名稱'} ?? ''];
-            $scope .= '&' . urlencode('主辦機關') . '=' . urlencode($g['units'][0]);
+            // 用「主辦機關.代碼」查（各縣市機關組織 tw-county-org 的代碼），同一局處的各種寫法、改名前後都算進來。
+            // 機關代碼是 {議會代碼}-{代碼階層 id}，tw-county-org 是 {縣市行政區代碼}-{代碼階層 id}，後半段相同
+            $cc = $agency->{'議會代碼'};
+            $g['units'] = [self::COUNTY_GEO_CODE[$cc] . substr($agency->{'代碼'}, strlen($cc))];
+            $scope .= '&' . urlencode('主辦機關.代碼') . '=' . urlencode($g['units'][0]);
         }
         $r = CCAPI::externalQuery(self::GRANTS_DATASET . '/agg?group_by=' . urlencode('會計年度') . '&field=' . urlencode('累計撥付金額') . '&' . $scope, '這個機關歷年的獎補助總額', $skill);
         if (!isset($r->groups)) {
