@@ -2,7 +2,8 @@
 <div class="alert alert-light border mb-4"><?= htmlspecialchars(CouncilHelper::t('目前尚無本屆議員資料')) ?></div>
 <?php else: ?>
 <?php foreach ($this->councilors as $group): ?>
-<h2 class="h6 fw-semibold text-body-secondary mb-2"><?= htmlspecialchars($group['label']) ?></h2>
+<?php $group_area = current(array_filter(array_map(fn($c) => $c->{'選區範圍'} ?? null, $group['councilors'] ?? []))) ?: null; ?>
+<h2 class="h6 fw-semibold text-body-secondary mb-2"><?= htmlspecialchars($group['label']) ?><?php if ($group_area): ?><span class="fw-normal ms-1">（<?= htmlspecialchars($group_area) ?>）</span><?php endif; ?></h2>
 <?php // 不分區依政黨再分一層（見 InfoController::groupCouncilorsByDistrict()），其他分組只有一層 ?>
 <?php foreach ($group['subgroups'] ?? [['label' => null, 'note' => null, 'councilors' => $group['councilors']]] as $sub): ?>
 <?php $is_party_list = $sub['label'] !== null; ?>
@@ -39,11 +40,12 @@
           <?= info_departure_status_badge($c) ?>
         </div>
         <div class="text-body-secondary" style="font-size: 0.75rem;">
-          <?= htmlspecialchars($c->{'黨籍'} ?? '—') ?><br>
+          <?= htmlspecialchars($c->{'黨籍'} ?? '—') ?>
+          <?php // 有選區號碼的就是依選區分組，選區已經是分組標題，不重複顯示；沒有號碼的（立法委員依縣市分組）卡片仍顯示選區；不分區顯示名單排名 ?>
           <?php if ($is_party_list && ($c->{'號次'} ?? null)): ?>
-          名單第 <?= (int)$c->{'號次'} ?> 名
-          <?php else: ?>
-          <?= htmlspecialchars(info_district_label($c) ?: '—') ?><?php if ($c->{'選區範圍'} ?? null): ?>（<?= htmlspecialchars($c->{'選區範圍'}) ?>）<?php endif; ?>
+          <br>名單第 <?= (int)$c->{'號次'} ?> 名
+          <?php elseif (!$is_party_list && ($c->{'選舉區號'} ?? '') === '' && ($label = info_district_label($c)) && $label !== $group['label']): ?>
+          <br><?= htmlspecialchars($label) ?>
           <?php endif; ?>
           <?php if ($c->{'得票率'} ?? null): ?>
           <br><span class="text-primary">得票：<?= htmlspecialchars($c->{'得票率'}) ?>%</span>
