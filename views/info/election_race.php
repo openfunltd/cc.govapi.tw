@@ -21,7 +21,7 @@ $has_bulletin = (bool) array_filter($candidates, fn($c) => ($c->{'學歷'} ?? nu
   <?php if ($this->election_registration_only ?? false): ?>
   <div class="alert alert-light border small">
     目前是<strong>登記階段</strong>的名單（中選會公告的候選人登記名冊），還沒有號次、學經歷與政見；名單在資格審定後可能變動。
-    中選會公布選舉公報後，這裡會補上相片、學經歷與政見。點選姓名可以看候選人過去的參選紀錄與當時的政見。
+    中選會公布選舉公報後，這裡會補上相片、學經歷與政見。
   </div>
   <?php elseif ($candidates && !$has_bulletin): ?>
   <div class="alert alert-light border small">這場選舉還沒有整理好的選舉公報內容（學經歷、政見）。</div>
@@ -34,7 +34,7 @@ $has_bulletin = (bool) array_filter($candidates, fn($c) => ($c->{'學歷'} ?? nu
 
 <div class="row g-3 mb-4">
   <?php foreach ($candidates as $c): ?>
-  <div class="col-12<?= $has_bulletin ? ' col-xl-6' : ' col-md-6 col-lg-4' ?>">
+  <div class="col-12<?= $has_bulletin ? ' col-xl-6' : ' col-md-6 col-lg-4' ?>" id="<?= election_anchor($c) ?>" style="scroll-margin-top: 4rem;">
     <div class="card h-100 shadow-sm">
       <div class="card-body">
         <div class="d-flex gap-3 mb-2">

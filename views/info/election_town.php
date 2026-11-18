@@ -5,9 +5,9 @@ $chiefs = $this->town_chiefs ?? [];
 $reps = $this->town_reps ?? [];
 $villages = $this->town_villages ?? [];
 $incumbent = $this->election_incumbent ?? [];
-$names = function ($list) use ($incumbent) {
+$names = function ($list) use ($incumbent, $year) {
     return implode('、', array_map(fn($c) => (($c->{'號次'} ?? null) ? '<span class="text-body-secondary">' . (int) $c->{'號次'} . '.</span>' : '')
-        . election_person($c) . election_badge($c, $incumbent), $list));
+        . election_person($c, $year) . election_badge($c, $incumbent), $list));
 };
 ?>
 <div class="pt-3 pb-2">
@@ -19,7 +19,6 @@ $names = function ($list) use ($incumbent) {
     </ol>
   </nav>
   <h1 class="h3 fw-semibold mb-1">🗳 <?= htmlspecialchars($town) ?> <?= $year ?> 年選舉候選人</h1>
-  <p class="text-body-secondary mb-2">點選選區或村里看全部候選人的學經歷與政見，點選姓名看歷年參選紀錄。</p>
   <?php if ($this->election_registration_only ?? false): ?>
   <div class="alert alert-light border small">目前是<strong>登記階段</strong>的名單，還沒有號次、學經歷與政見；名單在資格審定後可能變動。</div>
   <?php endif; ?>
@@ -37,7 +36,7 @@ $names = function ($list) use ($incumbent) {
   <div class="col-6 col-md-4 col-lg-3">
     <div class="card h-100 shadow-sm"><div class="card-body p-2">
       <?php if ($c->{'號次'} ?? null): ?><div class="small text-body-secondary"><?= (int) $c->{'號次'} ?> 號</div><?php endif; ?>
-      <div class="fs-5 fw-semibold"><?= election_person($c) ?><?= election_badge($c, $incumbent) ?></div>
+      <div class="fs-5 fw-semibold"><?= election_person($c, $year) ?><?= election_badge($c, $incumbent) ?></div>
       <div class="small text-body-secondary"><?= election_party($c) ?></div>
     </div></div>
   </div>

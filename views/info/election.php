@@ -1,9 +1,21 @@
 <?php
-// 選舉指南共用：候選人姓名連結、政黨、現任／當選標籤、單一選舉頁連結
+// 選舉指南共用：候選人姓名與連結、政黨、現任／當選標籤、單一選舉頁連結
 if (!function_exists('election_person')) {
-    function election_person($c) {
-        $name = htmlspecialchars($c->{'姓名'} ?? '');
-        return ($c->{'人物代碼'} ?? null) ? '<a href="/info/candidate/' . rawurlencode($c->{'人物代碼'}) . '">' . $name . '</a>' : $name;
+    // 姓名一律純文字，右邊接「學經歷・政見」（單一選舉頁跳到這位，$year 有給才加）與「參選紀錄」（有人物代碼才有）。
+    // 第一次參選的人沒有人物代碼，以前姓名不能點，就看不到公報的學經歷與政見
+    function election_person($c, $year = null) {
+        $html = htmlspecialchars($c->{'姓名'} ?? '');
+        if ($year) {
+            $html .= ' <a class="small fw-normal text-nowrap ms-1" href="' . election_race_url($year, $c) . '#' . election_anchor($c) . '">學經歷・政見</a>';
+        }
+        if ($c->{'人物代碼'} ?? null) {
+            $html .= ' <a class="small fw-normal text-nowrap ms-1" href="/info/candidate/' . rawurlencode($c->{'人物代碼'}) . '">參選紀錄</a>';
+        }
+        return $html;
+    }
+    // 單一選舉頁上每位候選人卡片的 id：有號次用號次，沒有的用代碼雜湊
+    function election_anchor($c) {
+        return ($c->{'號次'} ?? null) ? 'c' . (int) $c->{'號次'} : 'c-' . substr(md5($c->{'代碼'} ?? ($c->{'姓名'} ?? '')), 0, 8);
     }
     function election_party($c) {
         return htmlspecialchars($c->{'其他欄位'}->{'推薦之政黨'} ?? '');
@@ -37,7 +49,7 @@ $mayors = $this->election_mayors ?? [];
 $districts = $this->election_districts ?? [];
 $incumbent = $this->election_incumbent ?? [];
 $towns = $this->election_towns ?? [];
-$person = 'election_person';
+$person = fn($c) => election_person($c, $year);
 $party = 'election_party';
 $badge = fn($c) => election_badge($c, $incumbent);
 $total = count($mayors) + array_sum(array_map('count', $districts)) + count($towns);
@@ -50,7 +62,7 @@ $total = count($mayors) + array_sum(array_map('count', $districts)) + count($tow
     </ol>
   </nav>
   <h1 class="h3 fw-semibold mb-1">🗳 <?= $year ?> 年地方選舉候選人</h1>
-  <p class="text-body-secondary mb-2"><?= htmlspecialchars($this->council_name ?? '') ?>轄區的縣市長、<?= htmlspecialchars(CouncilHelper::t('議員')) ?><?= $towns ? '、鄉鎮市長、代表與村里長' : '' ?>候選人。點選選區看全部候選人的學經歷與政見，點選姓名看歷年參選紀錄。</p>
+  <p class="text-body-secondary mb-2"><?= htmlspecialchars($this->council_name ?? '') ?>轄區的縣市長、<?= htmlspecialchars(CouncilHelper::t('議員')) ?><?= $towns ? '、鄉鎮市長、代表與村里長' : '' ?>候選人。</p>
   <?php if ($this->election_registration_only ?? false): ?>
   <div class="alert alert-light border small">
     目前是<strong>登記階段</strong>的名單（中選會公告的候選人登記名冊），還沒有號次、學經歷與政見；名單在資格審定後可能變動。
