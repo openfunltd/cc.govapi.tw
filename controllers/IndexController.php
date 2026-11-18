@@ -4,7 +4,7 @@ class IndexController extends MiniEngine_Controller
 {
     public function indexAction()
     {
-        header('Location: /about', true, 302);
+        header('Location: /info', true, 302);
         exit;
     }
 
