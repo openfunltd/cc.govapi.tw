@@ -267,10 +267,9 @@ while (($line = fgets($fh)) !== false) {
         $doc['人物代碼'] = $persons[0];
         $linked++;
     }
-    // 寫入是 update（doc_as_upsert），沒帶的欄位會保留上一次的值：公報欄位與號次沒有值時明確寫 null，
-    // 不然公報重新解析後拿掉的內容（例：混進投票須知的政見）會一直留著
-    Elastic::dbBulkInsert('candidate', $doc['代碼'], array_filter($doc, fn($v) => $v !== null && $v !== [])
-        + array_fill_keys(array_merge($BULLETIN_FIELDS, ['號次']), null));
+    // 整筆取代（index）而不是 update：update 會跟舊文件合併，連「其他欄位」這種巢狀物件裡拿掉的鍵也會留著
+    // （公報重新解析後拿掉的亂碼出生地、混進投票須知的政見）。REG- 開頭的紀錄只有這支會寫
+    Elastic::dbBulkInsert('candidate', $doc['代碼'], array_filter($doc, fn($v) => $v !== null && $v !== []), true);
     $seen[$doc['代碼']] = true;
     $count++;
 }
