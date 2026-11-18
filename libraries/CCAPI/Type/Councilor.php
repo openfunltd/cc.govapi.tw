@@ -96,6 +96,11 @@ class CCAPI_Type_Councilor extends CCAPI_Type
                 'description' => '選舉區名稱（例: 基隆市第3選舉區）',
                 'type' => 'string',
             ],
+            '選區範圍' => [
+                'es_field' => '選區範圍',
+                'description' => '選舉區包含的鄉鎮市區（例: 南港區、內湖區；只含部分村里的標「（部分）」，原住民選區例: 平地原住民）；目前只有 111 年選出的議員有',
+                'type' => 'string',
+            ],
             '選舉區號' => [
                 'es_field' => '選舉區號',
                 'description' => '選舉區號',

@@ -43,7 +43,7 @@
           <?php if ($is_party_list && ($c->{'號次'} ?? null)): ?>
           名單第 <?= (int)$c->{'號次'} ?> 名
           <?php else: ?>
-          <?= htmlspecialchars(info_district_label($c) ?: '—') ?>
+          <?= htmlspecialchars(info_district_label($c) ?: '—') ?><?php if ($c->{'選區範圍'} ?? null): ?>（<?= htmlspecialchars($c->{'選區範圍'}) ?>）<?php endif; ?>
           <?php endif; ?>
           <?php if ($c->{'得票率'} ?? null): ?>
           <br><span class="text-primary">得票：<?= htmlspecialchars($c->{'得票率'}) ?>%</span>

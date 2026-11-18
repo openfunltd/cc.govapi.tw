@@ -63,6 +63,7 @@ $index_mapping = [
         '參選學歷' => ['type' => 'keyword'],
         '選舉區號' => ['type' => 'keyword'],
         '選區別'   => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        '選區範圍' => ['type' => 'keyword'],
         '當選狀態' => ['type' => 'keyword'],
         // 2026-10-08新增：「歷屆議員」補充來源/卸任fallback原本schema很精簡
         // 查不到這個欄位，現在open-forest-scripts那邊補上候選人代碼反查CEC
@@ -148,9 +149,24 @@ if ($bom !== "\xEF\xBB\xBF") {
     rewind($fh);
 }
 
+// 議員選區包含的鄉鎮市區（選舉公報 block 的 councilor-district-area-{年}.csv）：「年|縣市|選區號碼」=> 範圍
+$district_area = [];
+foreach (glob(dirname((string) getenv('IMPORT_CANDIDATE_JSONL')) . '/councilor-district-area-*.csv') as $area_path) {
+    $year = (int) preg_replace('/\D/', '', basename($area_path));
+    $afh = fopen($area_path, 'r');
+    $headers = fgetcsv($afh);
+    while (($row = fgetcsv($afh)) !== false) {
+        $a = array_combine($headers, $row);
+        $district_area["{$year}|{$a['縣市']}|" . (int) $a['選區']] = $a['範圍'] ?: null;
+    }
+    fclose($afh);
+}
+
 $count = 0;
 $skip  = 0;
 $headers_checked = false;
+$docs = [];
+$term_year = [];  // 「議會代碼|屆次」=> [選舉年份 => 人數]
 
 while (($line = fgets($fh)) !== false) {
     $line = trim($line);
@@ -214,10 +230,29 @@ while (($line = fgets($fh)) !== false) {
         $doc[$key] = $val;
     }
 
-    Elastic::dbBulkInsert('councilor', $doc_id, $doc);
+    if (preg_match('/^ELC-T\d-(\d+)$/', $doc['選舉代碼'] ?? '', $m)) {
+        $term_year["{$cc_code}|{$term_int}"][$m[1]] = ($term_year["{$cc_code}|{$term_int}"][$m[1]] ?? 0) + 1;
+    }
+    $docs[$doc_id] = $doc;
     $count++;
 }
 fclose($fh);
+
+// 選區範圍：沒有選舉代碼、區域的紀錄（遞補、補選或其他來源的議員）用同議會同屆最多人的選舉年份、議會所在縣市
+$cc_county = array_flip(CountyCodeHelper::getMap());
+foreach ($docs as $doc_id => $doc) {
+    $year = preg_match('/^ELC-T\d-(\d+)$/', $doc['選舉代碼'] ?? '', $m) ? $m[1] : null;
+    if (!$year && isset($term_year["{$doc['議會代碼']}|{$doc['屆次']}"])) {
+        $years = $term_year["{$doc['議會代碼']}|{$doc['屆次']}"];
+        arsort($years);
+        $year = array_key_first($years);
+    }
+    $county = ($doc['區域'] ?? '') ?: ($cc_county[$doc['議會代碼']] ?? '');
+    if ($year && ($doc['選舉區號'] ?? '') !== '' && ($area = $district_area["{$year}|{$county}|" . (int) $doc['選舉區號']] ?? null)) {
+        $doc['選區範圍'] = $area;
+    }
+    Elastic::dbBulkInsert('councilor', $doc_id, $doc);
+}
 
 Elastic::dbBulkCommit('councilor');
 error_log("Done. Imported {$count} councilors, skipped {$skip}.");
