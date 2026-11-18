@@ -80,7 +80,18 @@ $sections = [
   來源檔案：
   <?php $source_url = $b->{'來源網址'} ?? null; ?>
   <?php $source_page = $b->{'來源頁碼'} ?? null; ?>
-  <?php if ($source_url): ?>
+  <?php
+  // 臺北市議會議事資訊系統的議案頁只接受 Referer 是 *.tcc.gov.tw 的連線（2026-11 起），從這裡點過去會 403；
+  // 改給議案進階查詢頁（不檢查 Referer）和系統號，讓使用者自己到議會網站查證
+  $tcc_sysn = null;
+  if ($source_url && str_starts_with($source_url, 'https://ifddoc2.tcc.gov.tw/TCCMIS_Front/DetailPage.aspx')
+      && preg_match('/[?&]SYSN=(\d+)/', $source_url, $m)) {
+      $tcc_sysn = sprintf('%05d', $m[1]);
+  }
+  ?>
+  <?php if ($tcc_sysn): ?>
+  請至<a href="https://ifddoc2.tcc.gov.tw/TCCMIS_Front/Adv_SearchInput.aspx" target="_blank" rel="noopener">臺北市議會議案進階查詢</a>以系統號 <?= htmlspecialchars($tcc_sysn) ?> 查詢
+  <?php elseif ($source_url): ?>
   <a href="<?= htmlspecialchars($source_url . ($source_page ? '#page=' . urlencode($source_page) : '')) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($b->{'來源檔案'} ?? '原始檔案') ?></a>
   <?php else: ?>
   <?= htmlspecialchars($b->{'來源檔案'} ?? '—') ?>
