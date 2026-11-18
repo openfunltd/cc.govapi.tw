@@ -1377,7 +1377,7 @@ class InfoController extends MiniEngine_Controller
     protected function loadElectionGuide($year)
     {
         $this->view->election_year = $year;
-        $fields = ['姓名', '人物代碼', '參選職位', '選舉類型', '選區別', '號次', '其他欄位', '登記階段', '登記日期', '得票數', '得票率', '當選', '選舉代碼', '鄉鎮市區', '鄉鎮市區代碼'];
+        $fields = ['姓名', '人物代碼', '參選職位', '選舉類型', '選區別', '號次', '其他欄位', '登記階段', '登記日期', '得票數', '得票率', '當選', '選舉代碼', '鄉鎮市區', '鄉鎮市區代碼', '選區範圍'];
         $fields_qs = implode('', array_map(fn($f) => '&output_fields=' . urlencode($f), $fields));
         $r = CCAPI::apiQuery('/candidates?limit=10000&' . urlencode('年份') . '=' . $year . $fields_qs, $year . ' 年選舉的候選人');
         $mayors = $districts = $towns = $town_codes = [];

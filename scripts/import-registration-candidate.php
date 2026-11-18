@@ -122,6 +122,17 @@ $year = 115;
 $bulletin_paths = getenv('IMPORT_REGISTRATION_BULLETIN_JSONL')
     ? array_map('trim', explode(',', getenv('IMPORT_REGISTRATION_BULLETIN_JSONL')))
     : array_map(fn($k) => dirname((string) getenv('IMPORT_CANDIDATE_JSONL')) . "/bulletin{$k}-{$year}.jsonl", ['', '-village', '-township']);
+// 議員選區範圍（選舉公報上印的鄉鎮市區；公報沒印的縣市用上一屆開票資料的組成）：「縣市|選區號碼」=> 範圍
+$district_area = [];
+$area_path = dirname((string) getenv('IMPORT_CANDIDATE_JSONL')) . "/councilor-district-area-{$year}.csv";
+if (file_exists($area_path) && ($fh = fopen($area_path, 'r'))) {
+    $headers = fgetcsv($fh);
+    while (($row = fgetcsv($fh)) !== false) {
+        $a = array_combine($headers, $row);
+        $district_area["{$a['縣市']}|" . (int) $a['選區']] = $a['範圍'] ?: null;
+    }
+    fclose($fh);
+}
 $has_manifesto = fn($r) => in_array($r['政見來源'] ?? '', ['text', 'manifesto-image-vision', 'cell-image-vision', 'page-image-vision', 'paddleocr'], true);
 $bulletins = [];
 $covered_races = [];  // 公報已經涵蓋的選舉：「選舉類型:選區」
@@ -235,6 +246,7 @@ while (($line = fgets($fh)) !== false) {
         $doc['選舉類型'] = $label;
         $doc['行政區代碼'] = $county_code[$county] ?? null;
         $doc['選區別'] = $district_no($rest) ?? $r['選區'];
+        $doc['選區範圍'] = preg_match('/第(\d+)選舉區/u', $doc['選區別'], $m) ? ($district_area["{$county}|" . (int) $m[1]] ?? null) : null;
     } else {
         $doc['參選職位'] = $label;
         if (in_array($kind, ['C1', 'C2'], true)) {

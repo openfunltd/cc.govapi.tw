@@ -97,7 +97,7 @@ $total = count($mayors) + array_sum(array_map('count', $districts)) + count($tow
   <?php foreach ($districts as $district => $list): ?>
   <div class="col-12 col-md-6">
     <div class="border rounded p-2 h-100">
-      <div class="fw-semibold mb-1"><a href="<?= election_race_url($year, $list[0]) ?>"><?= htmlspecialchars($district) ?></a><span class="small text-body-secondary fw-normal ms-1"><?= count($list) ?> 位</span></div>
+      <div class="fw-semibold mb-1"><a href="<?= election_race_url($year, $list[0]) ?>"><?= htmlspecialchars($district) ?></a><?php if ($list[0]->{'選區範圍'} ?? null): ?><span class="small fw-normal ms-1"><?= htmlspecialchars($list[0]->{'選區範圍'}) ?></span><?php endif; ?><span class="small text-body-secondary fw-normal ms-1"><?= count($list) ?> 位</span></div>
       <ul class="list-unstyled mb-0 small">
         <?php foreach ($list as $c): ?>
         <li><?php if ($c->{'號次'} ?? null): ?><span class="text-body-secondary"><?= (int) $c->{'號次'} ?>.</span> <?php endif; ?><?= $person($c) ?><?= $badge($c) ?> <span class="text-body-secondary"><?= $party($c) ?></span></li>

@@ -17,6 +17,7 @@ $has_bulletin = (bool) array_filter($candidates, fn($c) => ($c->{'學歷'} ?? nu
     </ol>
   </nav>
   <h1 class="h3 fw-semibold mb-1">🗳 <?= htmlspecialchars($this->race_title ?? '') ?>候選人</h1>
+  <?php if ($candidates[0]->{'選區範圍'} ?? null): ?><div class="text-body-secondary mb-1"><?= htmlspecialchars($candidates[0]->{'選區範圍'}) ?></div><?php endif; ?>
   <p class="text-body-secondary mb-2"><?= htmlspecialchars($candidates[0]->{'選舉名稱'} ?? ($year . ' 年選舉')) ?>，共 <?= count($candidates) ?> 位候選人。</p>
   <?php if ($this->election_registration_only ?? false): ?>
   <div class="alert alert-light border small">
