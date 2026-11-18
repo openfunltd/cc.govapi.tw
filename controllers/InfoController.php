@@ -217,7 +217,7 @@ class InfoController extends MiniEngine_Controller
                 if ($this->view->agency_section === 'villages') {
                     $this->loadVillagesTab($cc_code, $term_no, $sub_id2);
                 } elseif ($this->view->agency_section === 'detail') {
-                    $this->view->agency_page = in_array($sub_id2, ['tenders', 'speeches', 'news', 'budget', 'laws'], true) ? $sub_id2 : 'info';
+                    $this->view->agency_page = in_array($sub_id2, ['tenders', 'speeches', 'news', 'budget', 'grants', 'laws'], true) ? $sub_id2 : 'info';
                     $this->loadAgencyDetail($term_no, urldecode($sub_id), $this->view->agency_page, $sub_id3);
                     if ($law = $this->view->law ?? null) {
                         $this->setOg($law->LawName . '・法規', ($this->view->agency->{'名稱'} ?? '') . '的法規：' . $law->LawName . '條文與沿革');
@@ -804,6 +804,8 @@ class InfoController extends MiniEngine_Controller
             $this->loadAgencyNews($agency, $children, $is_internal ? $parent : null);
         } elseif ($page === 'budget') {
             $this->loadAgencyBudget($agency, $is_internal ? $parent : null);
+        } elseif ($page === 'grants') {
+            $this->view->agency_grants = $this->fetchAgencyGrants($agency);
         } elseif ($page === 'info') {
             $this->loadAgencyInfo($agency, $parent, $term_no);
         } elseif ($this->view->pcc_unit_id) {
@@ -1121,6 +1123,55 @@ class InfoController extends MiniEngine_Controller
             usort($versions, fn($a, $b) => strcmp($b->date, $a->date));
             $this->view->law_versions = $versions;
         }
+    }
+
+    const GRANTS_DATASET = 'https://data.openfun.tw/api/v1/datasets/tw.openfun~txn~tw-country-grants';
+
+    /**
+     * 單一機關頁的獎補助：data.openfun.tw「全縣市對民間團體補（捐）助明細」，主辦機關跟機關名稱完全相同的
+     * 歷年總額與指定年度的明細（依金額排序）。縣市政府本身顯示整個縣市。?year=&page=
+     */
+    protected function fetchAgencyGrants($agency)
+    {
+        $county = array_search($agency->{'議會代碼'} ?? '', CountyCodeHelper::getMap(), true);
+        $g = ['ok' => true, 'units' => [], 'years' => [], 'year' => null, 'records' => [], 'total' => 0, 'page' => max(1, (int) ($_GET['page'] ?? 1)), 'per_page' => 50];
+        if (!$county) {
+            return $g;
+        }
+        $skill = 'https://data.openfun.tw/datasets/tw.openfun~txn~tw-country-grants/skill.md';
+        $scope = urlencode('縣市') . '=' . urlencode($county);
+        if (($agency->{'分類'} ?? '') !== '縣市政府') {
+            // 先用名稱完全比對（主辦機關是報表上的局處寫法）；之後資料集補上機關代碼再改用代碼
+            $g['units'] = [$agency->{'名稱'} ?? ''];
+            $scope .= '&' . urlencode('主辦機關') . '=' . urlencode($g['units'][0]);
+        }
+        $r = CCAPI::externalQuery(self::GRANTS_DATASET . '/agg?group_by=' . urlencode('會計年度') . '&field=' . urlencode('累計撥付金額') . '&' . $scope, '這個機關歷年的獎補助總額', $skill);
+        if (!isset($r->groups)) {
+            $g['ok'] = false;
+            return $g;
+        }
+        foreach ($r->groups as $grp) {
+            $g['years'][(int) $grp->key] = ['count' => $grp->stats->count ?? 0, 'sum' => $grp->stats->sum ?? 0];
+        }
+        krsort($g['years']);
+        if (!$g['years']) {
+            return $g;
+        }
+        $year = (int) ($_GET['year'] ?? 0);
+        $g['year'] = isset($g['years'][$year]) ? $year : array_key_first($g['years']);
+        $r = CCAPI::externalQuery(
+            self::GRANTS_DATASET . '/records?' . $scope . '&' . urlencode('會計年度') . '=' . $g['year']
+                . '&sort=' . urlencode('累計撥付金額>') . '&per_page=' . $g['per_page'] . '&page=' . $g['page'],
+            '這個機關指定年度的獎補助明細',
+            $skill
+        );
+        if (!isset($r->records)) {
+            $g['ok'] = false;
+            return $g;
+        }
+        $g['records'] = $r->records;
+        $g['total'] = (int) ($r->total ?? 0);
+        return $g;
     }
 
     /**

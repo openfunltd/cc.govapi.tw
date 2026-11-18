@@ -28,6 +28,9 @@ $dept = $this->pcc_dept_name ?? null;
   <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'info' ? ' active' : '' ?>" href="<?= htmlspecialchars($base) ?>">基本資料</a></li>
   <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'tenders' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/tenders') ?>">標案</a></li>
   <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'budget' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/budget') ?>">預算</a></li>
+  <?php if (($a->{'議會代碼'} ?? '') !== 'ly'): ?>
+  <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'grants' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/grants') ?>">獎補助</a></li>
+  <?php endif; ?>
   <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'news' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/news') ?>">新聞公告</a></li>
   <li class="nav-item"><a class="nav-link py-1<?= ($this->agency_page ?? '') === 'speeches' ? ' active' : '' ?>" href="<?= htmlspecialchars($base . '/speeches') ?>">議會發言記錄</a></li>
   <?php if ($this->agency_law_source ?? null): ?>
@@ -43,6 +46,9 @@ $dept = $this->pcc_dept_name ?? null;
 <?php return; endif; ?>
 <?php if (($this->agency_page ?? '') === 'budget'): ?>
 <?= $this->partial('info/agency_budget', $this) ?>
+<?php return; endif; ?>
+<?php if (($this->agency_page ?? '') === 'grants'): ?>
+<?= $this->partial('info/agency_grants', $this) ?>
 <?php return; endif; ?>
 <?php if (($this->agency_page ?? '') === 'laws'): ?>
 <?= $this->partial('info/laws', $this) ?>
