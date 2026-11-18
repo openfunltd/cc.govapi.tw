@@ -71,14 +71,18 @@ function meet_speech_avatar_html($s) {
   // 「來源檔案」欄位因此是用分號接起來的多個檔名；但「來源網址」
   // 只會連到第一個檔案，兩者不一致的話，連結文字只顯示第一個檔名，
   // 另外註記總共幾份，不要把全部檔名原封不動接在同一個連結上
-  $source_files = array_filter(array_map('trim', explode(';', $meet->{'來源檔案'} ?? '')));
+  $source_files = array_values(array_filter(array_map('trim', explode(';', $meet->{'來源檔案'} ?? ''))));
   $source_file_label = $source_files[0] ?? ($meet->{'來源檔案'} ?? '原始檔案');
-  $source_file_count = count($source_files);
+  // 連結指向第一份檔案，同資料夾的算同一批；其他資料夾的（例：臺北市速記錄場次另外用來補時間、
+  // 列席名單的會議紀錄）另外列出份數
+  $source_dir = fn ($f) => str_contains($f, '/') ? substr($f, 0, strrpos($f, '/')) : '';
+  $source_file_count = count(array_filter($source_files, fn ($f) => $source_dir($f) === $source_dir($source_file_label)));
+  $other_source_counts = array_count_values(array_filter(array_map($source_dir, $source_files), fn ($d) => $d !== $source_dir($source_file_label)));
 ?>
 <p class="text-body-secondary small mb-3">
-  <?php if ($source_file_count): ?>
+  <?php if ($source_files): ?>
   原始檔案：
-  <a href="<?= htmlspecialchars($meet->{'來源網址'}) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($source_file_label) ?> →</a><?= $source_file_count > 1 ? '（共' . $source_file_count . '份檔案）' : '' ?>
+  <a href="<?= htmlspecialchars($meet->{'來源網址'}) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($source_file_label) ?> →</a><?= $source_file_count > 1 ? '（共' . $source_file_count . '份檔案）' : '' ?><?php foreach ($other_source_counts as $dir => $n): ?>、<?= htmlspecialchars($dir) ?> <?= $n ?> 份<?php endforeach; ?>
   <?php else: ?>
   <?php // 沒有檔名的來源（例：立法院議事暨公報資訊網的會議頁）顯示網站網域 ?>
   資料來源：
@@ -191,7 +195,16 @@ function meet_speech_avatar_html($s) {
     <div class="alert alert-light border">本場會議尚無速記摘要資料</div>
     <?php else: ?>
     <?php foreach ($notes as $note): ?>
-    <pre class="border rounded p-3 bg-light mb-3" style="white-space: pre-wrap; font-family: inherit;"><?= htmlspecialchars($note->{'摘要內容'} ?? '') ?></pre>
+    <pre class="border rounded p-3 bg-light mb-1" style="white-space: pre-wrap; font-family: inherit;"><?= htmlspecialchars($note->{'摘要內容'} ?? '') ?></pre>
+    <?php
+      // 速記內容可能跟逐字稿來自不同檔案（例：臺北市速記錄場次另外補上的會議紀錄），附上自己的來源
+      $note_files = array_filter(array_map('trim', explode(';', $note->{'來源檔案'} ?? '')));
+    ?>
+    <?php if (($note->{'來源網址'} ?? null) && $note_files): ?>
+    <p class="text-body-secondary small mb-3">原始檔案：<a href="<?= htmlspecialchars($note->{'來源網址'}) ?>" target="_blank" rel="noopener"><?= htmlspecialchars(reset($note_files)) ?> →</a></p>
+    <?php else: ?>
+    <div class="mb-3"></div>
+    <?php endif; ?>
     <?php endforeach; ?>
     <?php endif; ?>
   </div>
