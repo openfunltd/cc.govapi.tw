@@ -15,6 +15,8 @@
  *                                        沒設時讀 IMPORT_CANDIDATE_JSONL 同目錄的 bulletin{,-village,-township}-115.jsonl
  *   IMPORT_REGISTRATION_MANIFESTO_JSONL  政見圖辨識結果（選填，每筆有「登記識別碼」）；公報的政見沒有文字時才用。
  *                                        沒設時讀同目錄的 bulletin-manifesto-paddle-115*.jsonl（逗號分隔可指定多個）
+ *   IMPORT_REGISTRATION_FIELDS_JSONL     學經歷、相片補充檔（選填，每筆有「登記識別碼」）；公報紀錄都沒有那個欄位時才用。
+ *                                        沒設時讀同目錄的 bulletin-fields-115*.jsonl
  *
  * 登記階段還沒有候選人代碼、號次、政見：
  *   代碼：REG-{年}:{識別碼}（識別碼是「選舉類型:選區:姓名」）
@@ -135,6 +137,7 @@ if (file_exists($area_path) && ($fh = fopen($area_path, 'r'))) {
 }
 $has_manifesto = fn($r) => in_array($r['政見來源'] ?? '', ['text', 'manifesto-image-vision', 'cell-image-vision', 'page-image-vision', 'paddleocr'], true);
 $bulletins = [];
+$bulletin_all = [];   // 同一人常出現在好幾份公報（合刊、重複印），選中的那筆缺的學經歷、相片從其他筆補
 $covered_races = [];  // 公報已經涵蓋的選舉：「選舉類型:選區」
 foreach ($bulletin_paths as $bulletin_path) {
     if (!file_exists($bulletin_path)) {
@@ -150,6 +153,7 @@ foreach ($bulletin_paths as $bulletin_path) {
         if (!isset($bulletins[$id]) || (!$has_manifesto($bulletins[$id]) && $has_manifesto($b))) {
             $bulletins[$id] = $b;
         }
+        $bulletin_all[$id][] = $b;
         $covered_races[substr($id, 0, strrpos($id, ':'))] = true;
     }
     fclose($bfh);
@@ -167,6 +171,35 @@ foreach (array_merge(...array_map(fn($p) => file_exists($p) ? file($p) : [], $ma
     $m = json_decode($line, true);
     if (isset($m['登記識別碼']) && trim((string) ($m['政見'] ?? '')) !== '') {
         $manifesto_ocr[$m['登記識別碼']] = $m['政見'];
+    }
+}
+// 學經歷、相片補充檔（選填，每筆有「登記識別碼」與要補的欄位）：公報萃取漏掉、另外裁圖辨識或看圖照抄的結果，
+// 公報紀錄都沒有那個欄位時才用。沒設時讀同目錄的 bulletin-fields-115*.jsonl
+$field_supplement = [];
+$field_paths = getenv('IMPORT_REGISTRATION_FIELDS_JSONL')
+    ? array_map('trim', explode(',', getenv('IMPORT_REGISTRATION_FIELDS_JSONL')))
+    : glob(dirname((string) getenv('IMPORT_CANDIDATE_JSONL')) . "/bulletin-fields-{$year}*.jsonl");
+foreach (array_merge(...array_map(fn($p) => file_exists($p) ? file($p) : [], $field_paths ?: [])) as $line) {
+    $m = json_decode($line, true);
+    foreach (['學歷', '經歷', '相片路徑'] as $key) {
+        if (isset($m['登記識別碼']) && trim((string) ($m[$key] ?? '')) !== '' && !isset($field_supplement[$m['登記識別碼']][$key])) {
+            $field_supplement[$m['登記識別碼']][$key] = ['value' => $m[$key], 'source' => $m["{$key}來源"] ?? null];
+        }
+    }
+}
+// 學經歷、政見更正檔（選填）：公報萃取欄位錯位（學歷混進經歷與政見、經歷變成投票須知、政見拿到隔壁候選人的），
+// 依卡片格子重新取字的結果。有出現的欄位直接取代公報紀錄的值，空字串代表那格確實是空的（相片路徑空字串用在
+// 資格不符、公報不予刊登卻被配到別人卡片的人）。沒設時讀 bulletin-fix-115*.jsonl
+$field_fix = [];
+$fix_paths = getenv('IMPORT_REGISTRATION_FIX_JSONL')
+    ? array_map('trim', explode(',', getenv('IMPORT_REGISTRATION_FIX_JSONL')))
+    : glob(dirname((string) getenv('IMPORT_CANDIDATE_JSONL')) . "/bulletin-fix-{$year}*.jsonl");
+foreach (array_merge(...array_map(fn($p) => file_exists($p) ? file($p) : [], $fix_paths ?: [])) as $line) {
+    $m = json_decode($line, true);
+    foreach (['學歷', '經歷', '政見', '相片路徑'] as $key) {
+        if (isset($m['登記識別碼']) && array_key_exists($key, $m)) {
+            $field_fix[$m['登記識別碼']][$key] = ['value' => trim((string) $m[$key]), 'source' => $m["{$key}來源"] ?? null];
+        }
     }
 }
 $BULLETIN_FIELDS = ['來源', '來源PDF', '來源頁碼', '學歷', '學歷來源', '經歷', '經歷來源', '政見', '政見來源', '相片路徑', '政見圖路徑', '欄位圖片', '其他欄位'];
@@ -236,7 +269,40 @@ while (($line = fgets($fh)) !== false) {
             }
             $doc[$key] = $val;
         }
-        if (!$has_manifesto($doc) && isset($manifesto_ocr[$r['識別碼']])) {
+        foreach ($field_fix[$r['識別碼']] ?? [] as $key => $fix) {
+            unset($doc[$key], $doc["{$key}來源"]);
+            if ($fix['value'] !== '') {
+                $doc[$key] = $key === '相片路徑' ? $bulletin_image_url($fix['value']) : $fix['value'];
+                if ($fix['source']) {
+                    $doc["{$key}來源"] = $fix['source'];
+                }
+            }
+        }
+        foreach (['學歷', '經歷', '相片路徑'] as $key) {
+            // 更正檔確認過的欄位（含確認空白）不再從其他紀錄、補充檔補
+            if (isset($doc[$key]) || isset($field_fix[$r['識別碼']][$key])) {
+                continue;
+            }
+            foreach ($bulletin_all[$r['識別碼']] ?? [] as $other) {
+                [$other] = BulletinFieldHelper::sanitize($other);
+                $val = $other[$key] ?? null;
+                if (is_string($val) && trim($val) !== '') {
+                    $doc[$key] = $key === '相片路徑' ? $bulletin_image_url($val) : $val;
+                    if ($key !== '相片路徑' && isset($other["{$key}來源"])) {
+                        $doc["{$key}來源"] = $other["{$key}來源"];
+                    }
+                    break;
+                }
+            }
+            if (!isset($doc[$key]) && isset($field_supplement[$r['識別碼']][$key])) {
+                $fill = $field_supplement[$r['識別碼']][$key];
+                $doc[$key] = $key === '相片路徑' ? $bulletin_image_url($fill['value']) : $fill['value'];
+                if ($key !== '相片路徑' && $fill['source']) {
+                    $doc["{$key}來源"] = $fill['source'];
+                }
+            }
+        }
+        if (!$has_manifesto($doc) && isset($manifesto_ocr[$r['識別碼']]) && !isset($field_fix[$r['識別碼']]['政見'])) {
             $doc['政見'] = $manifesto_ocr[$r['識別碼']];
             $doc['政見來源'] = 'paddleocr';
         }
