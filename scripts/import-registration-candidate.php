@@ -17,6 +17,8 @@
  *                                        沒設時讀同目錄的 bulletin-manifesto-paddle-115*.jsonl（逗號分隔可指定多個）
  *   IMPORT_REGISTRATION_FIELDS_JSONL     學經歷、相片補充檔（選填，每筆有「登記識別碼」）；公報紀錄都沒有那個欄位時才用。
  *                                        沒設時讀同目錄的 bulletin-fields-115*.jsonl
+ *   IMPORT_REGISTRATION_QR_JSONL         政見圖 QR code 掃描結果（選填，每筆有「登記識別碼」「內容」），連結接在政見最後面。
+ *                                        沒設時讀同目錄的 bulletin-qr-115*.jsonl
  *
  * 登記階段還沒有候選人代碼、號次、政見：
  *   代碼：REG-{年}:{識別碼}（識別碼是「選舉類型:選區:姓名」）
@@ -202,6 +204,21 @@ foreach (array_merge(...array_map(fn($p) => file_exists($p) ? file($p) : [], $fi
         }
     }
 }
+// 政見圖裡掃到的 QR code（選填，每筆有「登記識別碼」與「內容」）：候選人放的粉專、完整政見連結，接在政見最後面。
+// 沒設時讀同目錄的 bulletin-qr-115*.jsonl
+$manifesto_links = [];
+$qr_paths = getenv('IMPORT_REGISTRATION_QR_JSONL')
+    ? array_map('trim', explode(',', getenv('IMPORT_REGISTRATION_QR_JSONL')))
+    : glob(dirname((string) getenv('IMPORT_CANDIDATE_JSONL')) . "/bulletin-qr-{$year}*.jsonl");
+foreach (array_merge(...array_map(fn($p) => file_exists($p) ? file($p) : [], $qr_paths ?: [])) as $line) {
+    $m = json_decode($line, true);
+    $url = trim((string) ($m['內容'] ?? ''));
+    if (!isset($m['登記識別碼']) || !preg_match('#^(https?://)?[\w.-]+\.[a-z]{2,}(/\S*)?$#i', $url)) {
+        continue;
+    }
+    $url = preg_match('#^https?://#i', $url) ? $url : "https://{$url}";
+    $manifesto_links[$m['登記識別碼']][$url] = true;
+}
 $BULLETIN_FIELDS = ['來源', '來源PDF', '來源頁碼', '學歷', '學歷來源', '經歷', '經歷來源', '政見', '政見來源', '相片路徑', '政見圖路徑', '欄位圖片', '其他欄位'];
 
 $prefix = getenv('ELASTIC_PREFIX');
@@ -305,6 +322,9 @@ while (($line = fgets($fh)) !== false) {
         if (!$has_manifesto($doc) && isset($manifesto_ocr[$r['識別碼']]) && !isset($field_fix[$r['識別碼']]['政見'])) {
             $doc['政見'] = $manifesto_ocr[$r['識別碼']];
             $doc['政見來源'] = 'paddleocr';
+        }
+        if (isset($manifesto_links[$r['識別碼']])) {
+            $doc['政見'] = trim(($doc['政見'] ?? '') . "\n\n" . implode("\n", array_keys($manifesto_links[$r['識別碼']])));
         }
         $with_bulletin++;
     }
