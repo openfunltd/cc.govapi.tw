@@ -501,6 +501,9 @@ class SwaggerController extends MiniEngine_Controller
                 $yaml .= "{$indent}{$key}: " . ($value ? 'true' : 'false') . "\n";
             } elseif (is_int($key)) {
                 $yaml .= "{$indent}- {$value}\n";
+            } elseif (is_string($value) && strpos($value, "\n") !== false) {
+                // 多行字串用雙引號（JSON 字串即合法 YAML），換行才不會被折成空白、也不用處理縮排
+                $yaml .= "{$indent}{$key}: " . json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
             } elseif (is_string($value)) {
                 // 逸脫單引號
                 $escaped = str_replace("'", "''", $value);
@@ -522,7 +525,8 @@ class SwaggerController extends MiniEngine_Controller
             'openapi' => '3.0.0',
             'info' => [
                 'title' => '地方議會 API (CCAPI)',
-                'description' => '地方議會開放資料 API。使用 {city-code}.cc.govapi.tw 存取特定縣市議會，all.cc.govapi.tw 進行跨議會查詢。',
+                'description' => '地方議會開放資料 API。使用 {city-code}.cc.govapi.tw 存取特定縣市議會，all.cc.govapi.tw 進行跨議會查詢。'
+                    . "\n\n給 AI Agent 使用的 skill 檔可以從 [{$scheme}://all{$postfix}/skill.md]({$scheme}://all{$postfix}/skill.md) 取得。",
                 'version' => '1.0.0',
             ],
             'servers' => [
