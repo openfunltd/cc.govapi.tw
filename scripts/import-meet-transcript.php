@@ -6,7 +6,8 @@
  *   php scripts/import-meet-transcript.php            # 匯入資料（只送新增／改過的，來源沒有的刪掉，見 ImportDiff）
  *   php scripts/import-meet-transcript.php --reset    # 先刪除 index 再重建並匯入
  *
- * 來源：meet_transcripts.csv（單一檔案，約523萬筆，欄位：代碼, 縣市, 場次代碼,
+ * 來源：IMPORT_MEET_TRANSCRIPT_DIR 底下各議會一份 {議會代碼}.csv（合計約568萬筆；沒設時退回
+ * 單一檔案 IMPORT_MEET_TRANSCRIPT_CSV），欄位：代碼, 縣市, 場次代碼,
  * 會議代碼, 日期, 順序, 原始標記, 姓名, 職稱, 身分類別, 對應代碼, 對應代碼類型,
  * 對應單位全名, 發言內容, 來源頁碼, 印刷頁碼, 來源網址, 來源檔案, 屆）
  * 來源網址／來源檔案：絕大多數縣市一個meet只對應一份實體檔案、這兩欄沒有值，
@@ -28,9 +29,10 @@
  *     依然是null，這不在這次修正範圍內）
  * Doc ID：代碼本身（例：tpe-8320eaa898-0）
  *
- * 效能設計：這個來源是單一大檔案（約568萬筆），每次都整份重讀（約1分鐘），但用
- * ImportDiff 逐筆比對上次寫進 ES 的內容，只送新增／改過的文件，來源已經沒有的
- * 代碼從 ES 刪掉。第一次執行（或 --reset）沒有比對狀態，會整份寫入（約60-80分鐘）。
+ * 效能設計：來源依議會分檔。議會檔、該議會的場次資料、這支程式都跟上次一樣的議會整份
+ * 跳過（ImportDiff::keepPrefix() 保留狀態），其餘議會逐筆用 ImportDiff 比對上次寫進 ES 的
+ * 內容，只送新增／改過的文件，來源已經沒有的代碼從 ES 刪掉。第一次執行（或 --reset）沒有
+ * 比對狀態，會整份寫入（約60-80分鐘）。
  */
 
 include(__DIR__ . '/../init.inc.php');
@@ -102,22 +104,19 @@ try {
     error_log("Mapping update skipped: " . $e->getMessage());
 }
 
-$csv_path = getenv('IMPORT_MEET_TRANSCRIPT_CSV') ?: (__DIR__ . '/../meet_transcripts.csv');
-if (!file_exists($csv_path)) {
-    error_log("ERROR: 找不到meet_transcripts.csv：{$csv_path}");
+// 來源：IMPORT_MEET_TRANSCRIPT_DIR（各議會一份 {議會代碼}.csv，2026-11 起）；沒設時退回單一檔案
+// IMPORT_MEET_TRANSCRIPT_CSV（舊格式）
+$csv_dir = getenv('IMPORT_MEET_TRANSCRIPT_DIR');
+if ($csv_dir && is_dir($csv_dir)) {
+    $csv_files = glob("{$csv_dir}/*.csv") ?: [];
+} else {
+    $csv_files = [getenv('IMPORT_MEET_TRANSCRIPT_CSV') ?: (__DIR__ . '/../meet_transcripts.csv')];
+}
+$csv_files = array_filter($csv_files, 'file_exists');
+if (!$csv_files) {
+    error_log("ERROR: 找不到逐字稿來源檔：" . ($csv_dir ?: getenv('IMPORT_MEET_TRANSCRIPT_CSV')));
     exit(1);
 }
-
-$fh = fopen($csv_path, 'r');
-$headers = fgetcsv($fh);
-
-$unknown = array_diff($headers, $known_source_keys);
-if ($unknown) {
-    error_log("ERROR: 來源檔案出現未知欄位：" . implode(', ', $unknown));
-    error_log("請先在 import-meet-transcript.php 的 index_mapping 和 \$known_source_keys 補上對應設定。");
-    exit(1);
-}
-
 
 $county_to_cc_code = CountyCodeHelper::getMap();
 
@@ -126,74 +125,117 @@ $count = 0;
 $errors = 0;
 $malformed = 0;
 
-while (true) {
-    $pos = ftell($fh);
-    if (($row = fgetcsv($fh)) === false) {
-        break;
-    }
-    if (count($row) !== count($headers)) {
-        // 發言內容以反斜線結尾時，預設跳脫字元會把結尾的 \" 當成跳脫的引號，連下一列一起吃掉；
-        // 退回這一列開頭，不用跳脫字元重讀
-        fseek($fh, $pos);
-        $row = fgetcsv($fh, 0, ',', '"', '');
-    }
-    if (count($row) !== count($headers)) {
-        $malformed++;
-        continue;
-    }
-    $data = array_combine($headers, $row);
+// 檔案層級跳過：議會檔本身、該議會的場次資料（屆／會期代碼從這裡補）、這支匯入程式都跟上次
+// 一樣，就整份不讀，ImportDiff 狀態裡這個議會的文件原樣保留
+$file_state_path = __DIR__ . '/../.import-state/' . getenv('ELASTIC_PREFIX') . 'meet_transcript-files.json';
+$file_state = (!$reset && file_exists($file_state_path)) ? (json_decode(file_get_contents($file_state_path), true) ?: []) : [];
+$new_file_state = [];
+$script_md5 = md5_file(__FILE__);
 
-    foreach ($data as $k => $v) {
-        if (is_string($v) && !mb_check_encoding($v, 'UTF-8')) {
-            $data[$k] = mb_scrub($v, 'UTF-8');
+foreach ($csv_files as $csv_path) {
+    $council = basename($csv_path, '.csv');
+    $per_council = (bool) preg_match('/^[a-z]{3}$/', $council);
+    $stat = stat($csv_path);
+    $signature = $per_council
+        ? implode(':', [$stat['mtime'], $stat['size'], SittingContext::signature("{$council}-"), $script_md5])
+        : null;
+    if ($per_council && ($file_state[$council] ?? null) === $signature) {
+        $kept = $diff->keepPrefix("{$council}-");
+        if ($kept > 0) {
+            error_log("{$council}.csv 沒有變動，沿用 {$kept} 筆");
+            $new_file_state[$council] = $signature;
+            continue;
         }
     }
 
-    $doc = $data;
-
-    if (isset($doc['日期']) && trim($doc['日期']) === '') {
-        $doc['日期'] = null;
+    $fh = fopen($csv_path, 'r');
+    $headers = fgetcsv($fh);
+    $unknown = array_diff($headers, $known_source_keys);
+    if ($unknown) {
+        error_log("ERROR: 來源檔案出現未知欄位：" . implode(', ', $unknown));
+        error_log("請先在 import-meet-transcript.php 的 index_mapping 和 \$known_source_keys 補上對應設定。");
+        exit(1);
     }
-    foreach (['場次代碼', '會議代碼', '姓名', '職稱', '對應代碼', '對應代碼類型', '對應單位全名', '來源頁碼', '印刷頁碼', '來源網址', '來源檔案', '屆'] as $f) {
-        if (isset($doc[$f]) && trim($doc[$f]) === '') {
-            $doc[$f] = null;
+
+    while (true) {
+        $pos = ftell($fh);
+        if (($row = fgetcsv($fh)) === false) {
+            break;
+        }
+        if (count($row) !== count($headers)) {
+            // 發言內容以反斜線結尾時，預設跳脫字元會把結尾的 \" 當成跳脫的引號，連下一列一起吃掉；
+            // 退回這一列開頭，不用跳脫字元重讀
+            fseek($fh, $pos);
+            $row = fgetcsv($fh, 0, ',', '"', '');
+        }
+        if (count($row) !== count($headers)) {
+            $malformed++;
+            continue;
+        }
+        $data = array_combine($headers, $row);
+
+        foreach ($data as $k => $v) {
+            if (is_string($v) && !mb_check_encoding($v, 'UTF-8')) {
+                $data[$k] = mb_scrub($v, 'UTF-8');
+            }
+        }
+
+        $doc = $data;
+
+        if (isset($doc['日期']) && trim($doc['日期']) === '') {
+            $doc['日期'] = null;
+        }
+        foreach (['場次代碼', '會議代碼', '姓名', '職稱', '對應代碼', '對應代碼類型', '對應單位全名', '來源頁碼', '印刷頁碼', '來源網址', '來源檔案', '屆'] as $f) {
+            if (isset($doc[$f]) && trim($doc[$f]) === '') {
+                $doc[$f] = null;
+            }
+        }
+        if (isset($doc['順序']) && $doc['順序'] !== '') {
+            $doc['順序'] = (int)$doc['順序'];
+        }
+
+        $doc['議會代碼'] = $county_to_cc_code[$data['縣市']] ?? null;
+
+        $context = SittingContext::get($doc['場次代碼']);
+        // 來源CSV本身的「屆」有值（目前只有臺北市會提供）就直接採用，不依賴
+        // 場次代碼能不能查到sitting——否則退回原本查sitting index的做法
+        if ($doc['屆'] === null) {
+            $doc['屆'] = $context['屆'];
+        } else {
+            $doc['屆'] = (int)$doc['屆'];
+        }
+        $doc['會期代碼'] = $context['會期代碼'];
+        $doc['年'] = $doc['日期'] ? (int)substr($doc['日期'], 0, 4) : null;
+
+        $doc_id = $data['代碼'];
+        if ($diff->unchanged($doc_id, $doc)) {
+            continue;
+        }
+
+        try {
+            Elastic::dbBulkInsert('meet_transcript', $doc_id, $doc, true);
+            $count++;
+            if ($count % 10000 === 0) {
+                error_log("Imported {$count} meet_transcripts...");
+            }
+        } catch (Exception $e) {
+            error_log("ERROR on {$doc_id}: " . $e->getMessage());
+            $errors++;
         }
     }
-    if (isset($doc['順序']) && $doc['順序'] !== '') {
-        $doc['順序'] = (int)$doc['順序'];
-    }
-
-    $doc['議會代碼'] = $county_to_cc_code[$data['縣市']] ?? null;
-
-    $context = SittingContext::get($doc['場次代碼']);
-    // 來源CSV本身的「屆」有值（目前只有臺北市會提供）就直接採用，不依賴
-    // 場次代碼能不能查到sitting——否則退回原本查sitting index的做法
-    if ($doc['屆'] === null) {
-        $doc['屆'] = $context['屆'];
-    } else {
-        $doc['屆'] = (int)$doc['屆'];
-    }
-    $doc['會期代碼'] = $context['會期代碼'];
-    $doc['年'] = $doc['日期'] ? (int)substr($doc['日期'], 0, 4) : null;
-
-    $doc_id = $data['代碼'];
-    if ($diff->unchanged($doc_id, $doc)) {
-        continue;
-    }
-
-    try {
-        Elastic::dbBulkInsert('meet_transcript', $doc_id, $doc, true);
-        $count++;
-        if ($count % 10000 === 0) {
-            error_log("Imported {$count} meet_transcripts...");
-        }
-    } catch (Exception $e) {
-        error_log("ERROR on {$doc_id}: " . $e->getMessage());
-        $errors++;
+    fclose($fh);
+    if ($per_council) {
+        $new_file_state[$council] = $signature;
     }
 }
 
-fclose($fh);
 Elastic::dbBulkCommit('meet_transcript');
+$failed = Elastic::$_failed_ids['meet_transcript'] ?? [];
 $diff->finish();
+// 有寫入失敗的文件時，它所在的議會檔下次不能整份跳過（要重送失敗的那幾筆）
+foreach (array_keys($failed) as $failed_id) {
+    unset($new_file_state[strstr((string) $failed_id, '-', true)]);
+}
+file_put_contents("{$file_state_path}.tmp", json_encode($new_file_state, JSON_PRETTY_PRINT));
+rename("{$file_state_path}.tmp", $file_state_path);
 error_log("Done. Imported: {$count}, Errors: {$errors}, 欄位數異常跳過: {$malformed}");

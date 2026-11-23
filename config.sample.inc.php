@@ -37,6 +37,7 @@ putenv('IMPORT_MEET_CSV=');           // meet.csv 路徑，預設 {project}/meet
 putenv('IMPORT_MEET_NOTE_CSV=');      // meet_notes.csv 路徑，預設 {project}/meet_notes.csv
 putenv('IMPORT_MEET_TRANSCRIPT_CSV=');// meet_transcripts.csv 路徑，預設
                                        // {project}/meet_transcripts.csv
+putenv('IMPORT_MEET_TRANSCRIPT_DIR=');// 各議會一份 {議會代碼}.csv 的資料夾，有設時優先於 IMPORT_MEET_TRANSCRIPT_CSV
 putenv('IMPORT_CANDIDATE_JSONL=');    // bulletin.jsonl 路徑，預設 {project}/bulletin.jsonl
 putenv('IMPORT_CANDIDATE_VILLAGE_JSONL=');  // 村里長選舉公報萃取結果 jsonl 路徑（import-village-candidate.php，選填，可用逗號列多個）
 putenv('IMPORT_CANDIDATE_TOWNSHIP_JSONL=');  // 鄉鎮市長、代表選舉公報萃取結果 jsonl 路徑（import-township-candidate.php，選填，可用逗號列多個）

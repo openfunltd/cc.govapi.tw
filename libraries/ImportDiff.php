@@ -102,6 +102,25 @@ class ImportDiff
     }
 
     /**
+     * 來源檔這次沒變、整份跳過時用：把上次狀態裡代碼以 $prefix 開頭的文件原樣保留（當成這次也
+     * 看到了，不送、也不會被當成來源已經沒有而刪掉）。回傳保留的筆數；沒有舊狀態時回傳 0，
+     * 呼叫端要改成整份讀
+     */
+    public function keepPrefix($prefix)
+    {
+        if (!$this->has_old) {
+            return 0;
+        }
+        $stmt = $this->db->prepare("INSERT OR IGNORE INTO docs SELECT id, hash FROM old.docs WHERE id >= ? AND id < ?");
+        // 用範圍比對代替 LIKE（代碼裡可能有 _、%），$prefix 最後一個字元加一當上界
+        $upper = substr($prefix, 0, -1) . chr(ord(substr($prefix, -1)) + 1);
+        $stmt->execute([$prefix, $upper]);
+        $kept = $stmt->rowCount();
+        $this->skipped += $kept;
+        return $kept;
+    }
+
+    /**
      * 呼叫前先 Elastic::dbBulkCommit()。刪掉來源已經沒有的文件，再把這次的狀態存起來
      */
     public function finish()

@@ -21,6 +21,20 @@ class SittingContext
         return self::$map[$code] ?? ['屆' => null, '會期代碼' => null];
     }
 
+    /**
+     * 代碼以 $prefix 開頭（例：tpe-）的場次的屆／會期代碼雜湊，給匯入判斷「這個議會的
+     * 衍生欄位會不會變」：場次資料沒變、來源檔也沒變，就可以整份跳過
+     */
+    public static function signature($prefix)
+    {
+        if (self::$map === null) {
+            self::load();
+        }
+        $part = array_filter(self::$map, fn($code) => str_starts_with($code, $prefix), ARRAY_FILTER_USE_KEY);
+        ksort($part);
+        return md5(json_encode($part));
+    }
+
     protected static function load()
     {
         self::$map = [];

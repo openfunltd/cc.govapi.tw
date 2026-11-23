@@ -144,7 +144,7 @@ $jobs = [
     // import-meet-transcript.php內部沒有做檔案層級跳過機制——這裡的watch簽章只決定
     // 「要不要整份重跑」，一旦判定要跑就是每次都整份重讀重寫（靠ES upsert語意保證安全）
     'meet_transcript' => [
-        'watch'  => [getenv('IMPORT_MEET_TRANSCRIPT_CSV') ?: ($dir . '/../meet_transcripts.csv')],
+        'watch'  => [getenv('IMPORT_MEET_TRANSCRIPT_DIR') ?: getenv('IMPORT_MEET_TRANSCRIPT_CSV') ?: ($dir . '/../meet_transcripts.csv')],
         'import' => ["{$php_bin} {$dir}/import-meet-transcript.php"],
     ],
     'candidate' => [
