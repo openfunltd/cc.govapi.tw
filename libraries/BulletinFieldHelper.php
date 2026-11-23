@@ -12,11 +12,63 @@ class BulletinFieldHelper
     const PARTIES = ['中國國民黨', '國民黨', '民主進步黨', '民進黨', '台灣民眾黨', '臺灣民眾黨', '時代力量', '親民黨',
         '新黨', '台灣團結聯盟', '臺灣團結聯盟', '無黨團結聯盟', '台灣基進', '綠黨', '無', '無黨籍', '無黨籍及未經政黨推薦'];
 
+    // 公報卡片的「候選人之具結情形」整段文字：版面窄時被切成好幾行混進學經歷、政見
+    const DECLARATIONS = ['候選人之具結情形☑候選人聲明確未在大陸地區設有戶籍(含大陸地區居民身分證及定居證)或領用大陸地區護照',
+        '具結事項☑候選人聲明確不具中華民國以外國家國籍'];
+    // 印在公報頁面上的反賄選標語
+    const SLOGANS = ['賄選人士必貪污。', '賄選人士必貪污', '民主ㄟ頭家，選票嘸通賣', '檢舉賄選要勇敢，政治清明有期盼', '全民動起來，反賄為將來'];
+
+    /**
+     * 去掉混進學經歷、政見的具結情形片段與反賄選標語，學歷尾端整段重複經歷的去掉
+     */
+    public static function clean(array $record): array
+    {
+        $norm = fn($s) => strtr(preg_replace('/[\s\x{3000}□]+/u', '', $s), ['户' => '戶', '（' => '(', '）' => ')', '☐' => '☑']);
+        $decl = array_map($norm, self::DECLARATIONS);
+        $is_fragment = function ($line) use ($norm, $decl) {
+            $flat = str_replace('☑', '', $norm($line));
+            if (mb_strlen($flat) < 3) {
+                return false;
+            }
+            foreach ($decl as $d) {
+                if (mb_strpos(str_replace('☑', '', $d), $flat) !== false) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        foreach (['學歷', '經歷', '政見'] as $field) {
+            if (!is_string($record[$field] ?? null) || $record[$field] === '') {
+                continue;
+            }
+            $text = $record[$field];
+            if ($field === '政見') {
+                $text = str_replace(self::SLOGANS, '', $text);
+            }
+            $lines = array_filter(explode("\n", $text), fn($l) => !$is_fragment($l));
+            $record[$field] = trim(implode("\n", $lines));
+        }
+        // 學歷欄把經歷整段也收進來（學歷最後幾行就是經歷）
+        $edu = explode("\n", (string) ($record['學歷'] ?? ''));
+        $exp = array_values(array_filter(explode("\n", (string) ($record['經歷'] ?? '')), fn($l) => mb_strlen(trim($l)) > 3));
+        if ($exp && count($edu) > count($exp) && array_slice($edu, -count($exp)) === $exp) {
+            $record['學歷'] = trim(implode("\n", array_slice($edu, 0, -count($exp))));
+        }
+        return $record;
+    }
+
     /**
      * 回傳去掉可疑欄位（連同「X來源」）的紀錄，與被去掉的欄位名
      */
     public static function sanitize(array $record): array
     {
+        $record = self::clean($record);
+        // 直書欄位的基本資料每個字中間有換行（「民\n國\n60\n年…」「臺\n灣\n省…」），這幾個欄位本身不含空白
+        foreach (['出生年月日', '出生地', '性別', '推薦之政黨'] as $key) {
+            if (is_string($record['其他欄位'][$key] ?? null)) {
+                $record['其他欄位'][$key] = str_replace('⼥', '女', preg_replace('/[\s\x{3000}]+/u', '', $record['其他欄位'][$key]));
+            }
+        }
         $dropped = [];
         foreach (['學歷', '經歷', '政見'] as $field) {
             $text = (string) ($record[$field] ?? '');

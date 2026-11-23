@@ -19,6 +19,8 @@
  *                                        沒設時讀同目錄的 bulletin-fields-115*.jsonl
  *   IMPORT_REGISTRATION_QR_JSONL         政見圖 QR code 掃描結果（選填，每筆有「登記識別碼」「內容」），連結接在政見最後面。
  *                                        沒設時讀同目錄的 bulletin-qr-115*.jsonl
+ *   IMPORT_REGISTRATION_BASIC_JSONL      基本資料補充檔（選填，每筆有「登記識別碼」與「出生年月日」「性別」「出生地」），
+ *                                        有值的欄位取代公報紀錄的。沒設時讀同目錄的 bulletin-basic-115*.jsonl
  *
  * 登記階段還沒有候選人代碼、號次、政見：
  *   代碼：REG-{年}:{識別碼}（識別碼是「選舉類型:選區:姓名」）
@@ -219,6 +221,36 @@ foreach (array_merge(...array_map(fn($p) => file_exists($p) ? file($p) : [], $qr
     $url = preg_match('#^https?://#i', $url) ? $url : "https://{$url}";
     $manifesto_links[$m['登記識別碼']][$url] = true;
 }
+// 基本資料補充檔（選填）：公報萃取漏掉或抓錯的出生年月日、性別、出生地，有值的欄位取代公報紀錄的。
+// 沒設時讀同目錄的 bulletin-basic-115*.jsonl
+$basic_fix = [];
+$basic_paths = getenv('IMPORT_REGISTRATION_BASIC_JSONL')
+    ? array_map('trim', explode(',', getenv('IMPORT_REGISTRATION_BASIC_JSONL')))
+    : glob(dirname((string) getenv('IMPORT_CANDIDATE_JSONL')) . "/bulletin-basic-{$year}*.jsonl");
+foreach (array_merge(...array_map(fn($p) => file_exists($p) ? file($p) : [], $basic_paths ?: [])) as $line) {
+    $m = json_decode($line, true);
+    foreach (['出生年月日', '性別', '出生地'] as $key) {
+        if (isset($m['登記識別碼']) && trim((string) ($m[$key] ?? '')) !== '') {
+            $basic_fix[$m['登記識別碼']][$key] = trim($m[$key]);
+        }
+    }
+}
+// 公報的基本資料有的拆成三欄，有的是一整段「出生年月日：…\n性別：…\n出生地：…」（基本資料），統一拆成三欄；
+// 性別有些公報用的是長得一樣的康熙部首「⼥」
+$split_basic = function (array $extra) {
+    if (isset($extra['基本資料'])) {
+        foreach (['出生年月日', '性別', '出生地'] as $key) {
+            if (!isset($extra[$key]) && preg_match("/{$key}[：:]\s*(\S+)/u", $extra['基本資料'], $m)) {
+                $extra[$key] = $m[1];
+            }
+        }
+        unset($extra['基本資料']);
+    }
+    if (isset($extra['性別'])) {
+        $extra['性別'] = str_replace('⼥', '女', $extra['性別']);
+    }
+    return $extra;
+};
 $BULLETIN_FIELDS = ['來源', '來源PDF', '來源頁碼', '學歷', '學歷來源', '經歷', '經歷來源', '政見', '政見來源', '相片路徑', '政見圖路徑', '欄位圖片', '其他欄位'];
 
 $prefix = getenv('ELASTIC_PREFIX');
@@ -282,7 +314,7 @@ while (($line = fgets($fh)) !== false) {
             } elseif ($key === '其他欄位') {
                 // 推薦之政黨以登記名冊為準（公報的政黨欄常混進具結聲明等文字）
                 unset($val['推薦之政黨']);
-                $val = array_merge($val, $doc['其他欄位']);
+                $val = array_merge($split_basic($val), $doc['其他欄位']);
             }
             $doc[$key] = $val;
         }
@@ -322,6 +354,9 @@ while (($line = fgets($fh)) !== false) {
         if (!$has_manifesto($doc) && isset($manifesto_ocr[$r['識別碼']]) && !isset($field_fix[$r['識別碼']]['政見'])) {
             $doc['政見'] = $manifesto_ocr[$r['識別碼']];
             $doc['政見來源'] = 'paddleocr';
+        }
+        if (isset($basic_fix[$r['識別碼']])) {
+            $doc['其他欄位'] = array_merge($doc['其他欄位'], $basic_fix[$r['識別碼']]);
         }
         if (isset($manifesto_links[$r['識別碼']])) {
             $doc['政見'] = trim(($doc['政見'] ?? '') . "\n\n" . implode("\n", array_keys($manifesto_links[$r['識別碼']])));
