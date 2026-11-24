@@ -2,8 +2,20 @@
 
 class CollectionController extends MiniEngine_Controller
 {
+    // 已退役（如 speech）或打錯的型別直接回 404，不要進 view 才噴 Undefined array key
+    protected function notFoundType($type)
+    {
+        header('HTTP/1.1 404 Not Found', true, 404);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo '找不到資料型別：' . $type;
+        return $this->noview();
+    }
+
     public function listAction($type, $tab = null)
     {
+        if (!array_key_exists($type, TypeHelper::getTypeConfig())) {
+            return $this->notFoundType($type);
+        }
         $this->view->type = $type;
         $this->view->features = TypeHelper::getCollectionFeatures($type);
         if (!$tab) {
@@ -35,6 +47,9 @@ class CollectionController extends MiniEngine_Controller
 
     public function itemAction($type, $id, $tab = null)
     {
+        if (!array_key_exists($type, TypeHelper::getTypeConfig())) {
+            return $this->notFoundType($type);
+        }
         $this->view->type = $type;
         $this->view->id = $id;
         $this->view->data = TypeHelper::getDataByID($type, $id);

@@ -277,6 +277,37 @@ class TypeHelper
                     'data' => '候選人資料',
                 ],
             ],
+            'declaration' => [
+                'name' => '財產申報',
+                'icon' => 'fas fa-fw fa-file-invoice-dollar',
+                'cols' => [
+                    'all' => [
+                        '議會代碼',
+                        '姓名',
+                        '申報日',
+                        '種類',
+                        '申報類別',
+                    ],
+                    'single' => [
+                        '姓名',
+                        '申報日',
+                        '種類',
+                        '申報類別',
+                    ],
+                ],
+                'default_aggs' => [
+                    'all' => [
+                        '議會代碼',
+                        '種類',
+                    ],
+                    'single' => [
+                        '種類',
+                    ],
+                ],
+                'item_features' => [
+                    'data' => '財產申報資料',
+                ],
+            ],
             'meet' => [
                 'name' => '會議',
                 'icon' => 'fas fa-fw fa-people-group',
