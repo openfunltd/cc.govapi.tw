@@ -26,7 +26,8 @@ class Elastic
             throw new Exception("error: " . $content);
         }
         if (property_exists($obj, 'error') and $obj->error) {
-            file_put_contents('error.data', $data);
+            // 除錯用：把出錯的 query 留在 /tmp（程式目錄對網頁使用者不可寫，以前寫 error.data 在 cwd 會噴 Permission denied）
+            @file_put_contents('/tmp/cc-api-elastic-error.data', $data);
             throw new Exception("error: " . json_encode($obj, JSON_UNESCAPED_UNICODE));
         }
         curl_close($curl);
@@ -61,7 +62,7 @@ class Elastic
                         continue;
                     }
                     self::$_failed_ids[$mapping][$result->_id] = true;
-                    file_put_contents('error.data', self::$_db_bulk_pool[$mapping]);
+                    @file_put_contents('/tmp/cc-api-elastic-error.data', self::$_db_bulk_pool[$mapping]);
                     print_r($result);
                     continue;
                 }

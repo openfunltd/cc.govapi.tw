@@ -314,6 +314,13 @@ class CCAPI_SearchAction
     public static function getItem($type, $ids, $sub, $query_string, $cc_code = null)
     {
         $id = implode('-', $ids);
+        if ($id === '') {
+            // /meet/ 這種沒給 id 的網址：以前會打 ES 的 /_doc/ 變 405 當 500，和找不到資料一樣處理
+            $records = new StdClass;
+            $records->error = true;
+            $records->message = '找不到資料';
+            return $records;
+        }
         $id = rawurlencode($id);
         $obj = Elastic::dbQuery("/{prefix}{$type}/_doc/{$id}", 'GET');
         if ($obj->found === false) {
