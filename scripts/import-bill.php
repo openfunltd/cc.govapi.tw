@@ -266,9 +266,8 @@ while (($line = fgets($fh)) !== false) {
     $cc_code_fixes = ['pin' => 'pif', 'kmt' => 'kin'];
     $cc_code = $cc_code_fixes[$cc_code] ?? $cc_code;
 
-    // 2026-10-05起優先使用來源直接提供的「屆」欄位（mixed-tw.gov-議會-議案的
-    // compute_bill_structured_extras() 解析「大會/會期」文字時就已經算出來，不用
-    // 再靠檔名猜）；來源沒有這個值（舊資料、或這份文件本身就沒有掛會期上下文）
+    // 2026-10-05起優先使用來源直接提供的「屆」欄位（上游解析「大會/會期」文字時
+    // 就已經算出來，不用再靠檔名猜）；來源沒有這個值（舊資料、或這份文件本身就沒有掛會期上下文）
     // 才退而求其次從「來源檔案」檔名解析，解析不到就不寫入這個欄位
     $term = ($record['屆'] ?? '') !== '' ? (int)$record['屆'] : extract_term_from_filename($record['來源檔案'] ?? '');
 

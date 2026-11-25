@@ -25,7 +25,7 @@
  * Doc ID：代碼本身（來源已保證唯一）
  *
  * 這個 type 是 sitting_agenda／speech／舊 transcript pipeline 整個 retire 之後的
- * 取代方案（見 pure-tw.gov-議會-議事日程/PLAN.md 步驟32~43 的設計討論），一個 meet
+ * 取代方案，一個 meet
  * 底下再拆 meet_note（速記摘要）／meet_transcript（逐字稿），視內容夠不夠格分類。
  */
 
@@ -61,9 +61,8 @@ $index_mapping = [
         '開始時間'   => ['type' => 'keyword'],
         '結束時間'   => ['type' => 'keyword'],
         // 列席機關/職稱/姓名，目前只有臺北市/基隆市/宜蘭縣有實作抽取
-        // （見open-forest-scripts lib.php extract_attendee_roster()的
-        // 說明：其餘縣市來源文件的列席欄位大多只寫「XX處長等N人」，抓
-        // 不到完整姓名），其餘縣市固定空陣列
+        // （其餘縣市來源文件的列席欄位大多只寫「XX處長等N人」，抓不到
+        // 完整姓名），其餘縣市固定空陣列
         '列席名單'   => ['type' => 'nested', 'dynamic' => true],
         // 衍生欄位
         '議會代碼'   => ['type' => 'keyword'],

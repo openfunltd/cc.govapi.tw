@@ -53,8 +53,7 @@ function info_district_label($record) {
 }
 
 // 非直接當選（遞補、補選當選）時顯示提示 badge，一般當選或資料缺漏（較舊資料）不顯示；
-// 「原任者姓名」等3個欄位查得到時（見mixed-tw.gov-議會-議員資料/crawl.php的
-// apply_succession_info()）加上hover提示告訴使用者「取代了誰/何時/為什麼」，
+// 「原任者姓名」等3個欄位查得到時加上hover提示告訴使用者「取代了誰/何時/為什麼」，
 // 查不到（通常是較舊、議員異動還沒人工核實到的紀錄）就只顯示badge文字不加提示
 function info_election_status_badge($record) {
     $status = $record->{'當選狀態'} ?? '';
@@ -75,7 +74,7 @@ function info_election_status_badge($record) {
     return $html;
 }
 
-// 卸任狀態提示（PLAN-20261005-reporter.md B1項目）：「現況」查無異動記錄時
+// 卸任狀態提示：「現況」查無異動記錄時
 // 上游一律回傳「在任」或空字串（較舊資料沒有這個欄位），兩種都不顯示badge；
 // 「狀態不明」是CEC當選名單反查出「MOI/歷屆議員都查無此人」但還沒人工核實
 // 原因的候選名單，跟已確認的「已卸任」用不同顏色區分，避免使用者誤以為
@@ -102,8 +101,7 @@ function info_departure_status_badge($record) {
     return $html;
 }
 
-// 遞補/補選當選、已卸任/狀態不明的詳細資訊區塊（PLAN-20261005-reporter.md
-// B1項目）：上面兩個badge的詳細資訊原本只能靠mouse hover title屬性看到，
+// 遞補/補選當選、已卸任/狀態不明的詳細資訊區塊：上面兩個badge的詳細資訊原本只能靠mouse hover title屬性看到，
 // 使用者回饋這樣太不明顯，要求在個人頁簡歷上方直接條列顯示，不需要hover
 // 才看得到——這個function回傳的區塊就是給councilor_profile.php放在簡歷
 // 之前用的，跟上面兩個badge函式顯示同一份資料，只是呈現方式不同（badge
@@ -184,7 +182,7 @@ function info_candidate_text_ok($source) {
 
 // 候選人學歷/經歷/政見欄位的共用渲染：可用文字時顯示文字；有對應的欄位圖片時
 // （只有上面說的三種 AI 視覺辨識來源才會有，文字層本身的記錄這個欄位一定是空的，
-// 見 crawl.php 的說明)，多顯示一個「查看原圖」切換鈕（跟 .ocr-toggle-btn 的
+// 見上游說明)，多顯示一個「查看原圖」切換鈕（跟 .ocr-toggle-btn 的
 // click delegation配對，見本檔案下面的 <script>），方便使用者核對辨識文字跟
 // 原圖是否一致。$fallback_image_field 只有「政見」會傳（政見圖路徑），沒有可用
 // 文字時退回顯示整欄政見圖片，或顯示「無資料」；學歷/經歷沒有這個fallback，

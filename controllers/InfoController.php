@@ -428,7 +428,7 @@ class InfoController extends MiniEngine_Controller
                 // 得票數.jsonl目前只回溯到111年，見PLAN.md這次調查記錄），較舊屆次
                 // 這三個欄位在candidate record上會是null——這裡不能無條件覆蓋，
                 // 否則議員record自己原本就有的得票數（來自vote.csv，回溯年份廣得多，
-                // 見mixed-tw.gov-議會-議員資料/crawl.php的enrich_councilor_from_cec()）
+                // 上游議員資料另外從中選會資料補上的）
                 // 會被這個null蓋掉，列表頁反而從「有筆數、沒有率」退化成「完全沒有」
                 if (isset($cand->{'得票數'})) {
                     $c->{'得票數'} = $cand->{'得票數'};
@@ -2402,7 +2402,7 @@ class InfoController extends MiniEngine_Controller
 
     /**
      * 候選人歷年參選頁：用「人物代碼」查出同一人歷次參選紀錄（candidate 的
-     * 人物代碼是從 mixed-tw.gov.cec.data-選舉資料庫/person.jsonl 衍生，見
+     * 人物代碼是從中選會選舉資料庫的人物分組衍生，見
      * import-candidate.php 說明，涵蓋落選的人；候選人資料只回溯到民國98年，
      * 更早期的參選紀錄查不到）。每筆參選都附上同選區得票比較表。
      */
@@ -2487,8 +2487,7 @@ class InfoController extends MiniEngine_Controller
      * （舊版這裡原本還提到一個理由：查councilor存不存在會被議員中途離職資料消失
      * 誤判成沒當選，實測案例是李彥秀111年台北市議員選舉最高票當選、任內離職，
      * 當時councilor資料完全沒有這筆記錄——這個根本問題已經在2026-10-07修好了
-     * （見PLAN-20261005-reporter.md B1項目：mixed-tw.gov-議會-議員資料/crawl.php
-     * 新增了反查CEC當選名單的fallback，現在查得到這筆記錄、而且現況會正確
+     * （上游議員資料新增了反查CEC當選名單的fallback，現在查得到這筆記錄、而且現況會正確
      * 顯示「已卸任」），但這裡還是維持原本的寫法，單純因為沒有理由為了省略
      * 一個已經不是bug的workaround而多繞一次API）。
      */

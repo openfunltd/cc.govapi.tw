@@ -325,12 +325,11 @@ class SwaggerController extends MiniEngine_Controller
      * 自動掃描產生，跟 swagger.yaml 用同一份 type 定義，兩者不會脫節。
      */
     /**
-     * 格式依循 ~/work/openfun-data-portal/docs/api-skill-standard.md 這份跨服務標準
-     * （data.openfun.tw portal 要能直接 proxy 各服務自己的 /skill.md，不能依賴外部
-     * knowledge repo 補資訊），必要段落：開頭（含 slug）／開始之前（Base URL、認證、
-     * Device Authorization Grant 固定範本、禁止 WebFetch 警告）／業務警告／端點與查詢
-     * 說明／快速參考表。認證測 Bearer Token 的部分是 data.openfun.tw 統一核發、由
-     * nginx gateway 驗證（見 OpenFunAPIHelper 那次整合），不是 ccapi 自己的認證系統。
+     * 格式依循 data.openfun.tw 各服務共用的 skill 文件格式（portal 會直接轉發各服務自己的
+     * /skill.md，所以內容要完整、不能依賴其他文件補資訊），必要段落：開頭（含 slug）／
+     * 開始之前（Base URL、認證、Device Authorization Grant 固定範本、禁止 WebFetch 警告）／
+     * 業務警告／端點與查詢說明／快速參考表。Bearer Token 由 data.openfun.tw 統一核發並在
+     * API 入口驗證，不是 ccapi 自己的認證系統。
      */
     protected function generateSkillMd(): string
     {
