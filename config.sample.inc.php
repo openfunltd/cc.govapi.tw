@@ -15,6 +15,15 @@ putenv('ENV=production');
 // 只有伺服器內部呼叫會帶，不會透過任何頁面/log 外流給瀏覽器端
 putenv('CCAPI_TOKEN=');
 
+// 向量（embedding）index，只有跑 scripts/build-vectors.php 的主機需要，網站本身不用（見 libraries/VectorIndex.php）
+putenv('VEC_ELASTIC_URL=');           // 向量 index 所在的 ES URL（可以跟 ELASTIC_URL 不同台）
+putenv('VEC_ELASTIC_USER=');          // 要有 VEC_ELASTIC_PREFIX 開頭 index 的寫入與建立權限
+putenv('VEC_ELASTIC_PASSWORD=');
+putenv('VEC_ELASTIC_PREFIX=cc-vec_'); // index 前綴，例如 cc-vec_bill-bge-m3-v1，alias cc-vec_bill
+putenv('VEC_EMBED_URLS=http://localhost:11434');  // 相容 ollama /api/embed 的服務（要有 bge-m3），多台用逗號分隔
+putenv('VEC_EMBED_API_KEY=');         // embedding 服務需要的話放這裡（Authorization: Bearer），不需要就留空
+putenv('VEC_STORE_DIR=');             // 本地向量備份（SQLite）放哪，預設 {project}/.import-state
+
 // 匯入資料來源路徑（可指定絕對路徑，供不同主機使用）
 putenv('IMPORT_COUNCIL_CSV=');        // 議會.csv 路徑，預設 {project}/議會.csv
 putenv('IMPORT_TERM_CSV=');           // 屆.csv 路徑，預設 {project}/屆.csv

@@ -433,6 +433,40 @@ class SwaggerController extends MiniEngine_Controller
             $md .= $this->generateSkillSection($entity, $class_name);
         }
 
+        $md .= "## 語意搜尋（向量索引）\n\n";
+        $md .= "逐字稿、會議紀錄摘要、議案另外切成段落、用 `bge-m3` 算成 1024 維向量（cosine），放在歐噴的 Elasticsearch 唯讀代理 "
+             . "`https://elastic-ccvec.api.openfun.dev`。適合「找跟某個問題意思相近的質詢／議案」這種關鍵字比對不到的查詢；"
+             . "要精確篩選、統計還是用上面的 API。\n\n";
+        $md .= "- **一定要帶 data.openfun.tw 的 Token**（`Authorization: Bearer {token}`），不接受匿名查詢，未帶回 401。取得方式同上方「開始之前」\n";
+        $md .= "- 查詢語法就是 Elasticsearch 原生 `_search`；kNN 子句寫 `query_text`，代理會用 `bge-m3` 轉成向量，**不用也不要自己算向量**\n";
+        $md .= "- 只能讀，不支援寫入\n\n";
+        $md .= "| Index（alias） | 內容 | 一段的來源單位 |\n|------|------|------|\n";
+        $md .= "| `cc-vec_meet_transcript` | 逐字稿：同一場會議的發言依順序接起來（每句前面有發言人標記），切成約 600 字、重疊 100 字的段落 | 一場會議 |\n";
+        $md .= "| `cc-vec_meet_note` | 會議紀錄摘要 | 一份摘要 |\n";
+        $md .= "| `cc-vec_bill` | 議案：案由、說明、辦法、審查意見、議決接起來切段 | 一筆議案 |\n";
+        $md .= "| `cc-vec_all` | 以上三個一起查 | |\n\n";
+        $md .= "段落欄位（`vec` 不會出現在 `_source`）：\n";
+        $md .= "- `類型`（meet_transcript／meet_note／bill）、`來源代碼`（同一來源單位的段落共用，可以拿來 `collapse`）、`段號`\n";
+        $md .= "- `議會代碼`、`縣市`、`屆`、`日期`、`會議代碼`、`場次代碼`（議案沒有日期、場次）\n";
+        $md .= "- `標題`：這段的脈絡（議會、屆、會議或議案），`內容`：段落文字\n";
+        $md .= "- `API路徑`：回這個 API 拿完整資料的路徑，接在 `https://all{$postfix}` 後面（逐字稿指向整場會議 `/api/meet/{會議代碼}`）\n";
+        $md .= "- 逐字稿另有 `逐字稿代碼`（這段涵蓋的逐句代碼，可用 `/api/meet_transcript/{代碼}` 查單句）、`發言人`（所有發言者姓名，含官員）、"
+             . "`發言議員`（其中對應到議員的姓名）、`起始順序`、`結束順序`\n";
+        $md .= "- 議案另有 `提案人`、`連署人`（姓名）\n";
+        $md .= "- `議員代碼`、`人物代碼`：這段裡發言的議員（逐字稿）或提案、連署的議員（議案）。`人物代碼` 跨屆、跨議會不變，"
+             . "可以用來篩選某位議員、或依人分組，再用 `/api/councilors?人物代碼=…` 查議員資料\n\n";
+        $md .= "**問「哪些議員談過某議題、立場是什麼」的建議做法**：kNN 只回最相近的前 k 段，大議題不會列完整。"
+             . "要完整名單時，先用上面的列表 API 做關鍵字搜尋（例 `/api/meet_transcripts?q=社會住宅&身分類別=議員&agg=姓名`），"
+             . "再用語意搜尋補沒提到關鍵字的段落；可以在 kNN 的 `filter` 加 `{\"exists\": {\"field\": \"發言議員\"}}` 只找有議員發言的段落，"
+             . "結果依 `人物代碼` 分組後，讀各段 `內容`（每句前面有發言人標記）歸納各議員的立場。\n\n";
+        $md .= "```bash\n# 跟「國小學生書包太重」意思相近的台北市議會質詢，同一場會議只取最相近的一段\n"
+             . "curl https://elastic-ccvec.api.openfun.dev/cc-vec_meet_transcript/_search \\\n"
+             . "  -H \"Authorization: Bearer YOUR_TOKEN\" -H \"Content-Type: application/json\" \\\n"
+             . "  -d '{\"size\": 10, \"_source\": [\"標題\", \"內容\", \"發言人\", \"API路徑\"],\n"
+             . "       \"knn\": {\"field\": \"vec\", \"query_text\": \"國小學生書包太重\", \"k\": 50, \"num_candidates\": 300,\n"
+             . "               \"filter\": {\"term\": {\"議會代碼\": \"tpe\"}}},\n"
+             . "       \"collapse\": {\"field\": \"來源代碼\"}}'\n```\n\n";
+
         $md .= "## 快速參考\n\n";
         $md .= "| 項目 | 說明 |\n|------|------|\n";
         $md .= "| Base URL | `{$scheme}://{$host}/api` |\n";
@@ -441,6 +475,7 @@ class SwaggerController extends MiniEngine_Controller
         $md .= "| 子網域 | `{議會代碼}{$postfix}` 只查該議會；`all{$postfix}` 跨議會查詢，未知議會代碼回傳 404 |\n";
         $md .= "| 背景知識 | `{$scheme}://{$host}/knowledge.md`（議會/議員等詞的精確定義，避免跟國會搞混） |\n";
         $md .= "| 全文搜尋 | `q=` 參數，中文自動片語比對；命中時多回傳 `{欄位}:highlight` |\n";
+        $md .= "| 語意搜尋 | `https://elastic-ccvec.api.openfun.dev/cc-vec_{meet_transcript,meet_note,bill,all}/_search`，kNN 寫 `query_text`，**必須帶 Token** |\n";
 
         return $md;
     }
