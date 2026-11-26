@@ -58,6 +58,26 @@ $index_mapping = [
         '會議代碼' => ['type' => 'keyword'],
         '提案人結構' => ['type' => 'nested', 'dynamic' => true],
         '連署人結構' => ['type' => 'nested', 'dynamic' => true],
+        // 處理進度：各階段（一讀、委員會審查、大會決議、發文…）的日期、會次、結果
+        '處理進度' => ['type' => 'nested', 'properties' => [
+            '階段' => ['type' => 'keyword'],
+            '日期' => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+            '會次' => ['type' => 'keyword'],
+            '結果' => ['type' => 'text'],
+        ]],
+        // 機關回覆：市府／縣府對議案的辦理情形，一案可以有多次
+        '機關回覆' => ['type' => 'nested', 'properties' => [
+            '日期' => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
+            '機關' => ['type' => 'keyword'],
+            '文號' => ['type' => 'keyword'],
+            '內容' => ['type' => 'text'],
+            '狀態' => ['type' => 'keyword'],
+            '附件' => ['type' => 'object', 'enabled' => false],
+        ]],
+        '辦理狀態' => ['type' => 'keyword'], // 已結案／辦理中／無法辦理
+        '辦理狀態原文' => ['type' => 'keyword'],
+        '主辦機關' => ['type' => 'text', 'fields' => ['keyword' => ['type' => 'keyword']]],
+        '最新回覆日期' => ['type' => 'date', 'format' => 'yyyy-MM-dd'],
         // 衍生欄位
         '議會代碼' => ['type' => 'keyword'],
         '屆'       => ['type' => 'integer'],
@@ -68,6 +88,7 @@ $known_source_keys = [
     '代碼', '縣市', '類別', '案號', '提案單位', '提案人', '連署人',
     '案由', '說明', '辦法', '審查意見', '議決', '來源檔案', '來源頁碼', '來源網址', '備註',
     '屆', '會議代碼', '提案人結構', '連署人結構',
+    '處理進度', '機關回覆', '辦理狀態', '辦理狀態原文', '主辦機關', '最新回覆日期',
 ];
 
 if ($reset) {
@@ -279,6 +300,11 @@ while (($line = fgets($fh)) !== false) {
     foreach ($record as $key => $val) {
         if ($key === '屆') continue; // 已經在上面處理過（優先用來源值，備援用檔名猜測），避免原始字串值蓋掉正確的整數值
         if ($val === '' || $val === null) continue;
+        if (in_array($key, ['處理進度', '機關回覆'], true)) {
+            // 沒有日期的階段日期是空字串，date 欄位不收空字串，拿掉空值
+            $val = array_map(fn($item) => array_filter($item, fn($v) => $v !== '' && $v !== []), $val);
+            if (!$val) continue;
+        }
         $doc[$key] = $val;
     }
     if ($names = proposer_names($doc)) {

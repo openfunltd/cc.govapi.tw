@@ -76,6 +76,54 @@ $sections = [
 </div>
 <?php endforeach; ?>
 
+<?php $progress = $b->{'處理進度'} ?? []; ?>
+<?php if ($progress): ?>
+<div class="card shadow-sm mb-3">
+  <div class="card-header py-2"><strong class="small">處理進度</strong></div>
+  <ul class="list-group list-group-flush small">
+    <?php foreach ($progress as $p): ?>
+    <li class="list-group-item py-2">
+      <span class="text-body-secondary me-2"><?= htmlspecialchars($p->{'日期'} ?? '') ?></span>
+      <strong><?= htmlspecialchars($p->{'階段'} ?? '') ?></strong>
+      <?php if ($p->{'會次'} ?? null): ?>
+      <span class="text-body-secondary">（<?= htmlspecialchars($p->{'會次'}) ?>）</span>
+      <?php endif; ?>
+      <?php if ($p->{'結果'} ?? null): ?>
+      <div style="white-space: pre-wrap;"><?= htmlspecialchars($p->{'結果'}) ?></div>
+      <?php endif; ?>
+    </li>
+    <?php endforeach; ?>
+  </ul>
+</div>
+<?php endif; ?>
+
+<?php $replies = $b->{'機關回覆'} ?? []; ?>
+<?php if ($replies): ?>
+<div class="card shadow-sm mb-3">
+  <div class="card-header py-2">
+    <strong class="small">機關回覆</strong>
+    <?php if ($b->{'辦理狀態原文'} ?? null): ?>
+    <span class="badge <?= ($b->{'辦理狀態'} ?? '') === '已結案' ? 'bg-success' : 'bg-warning text-dark' ?> ms-1"><?= htmlspecialchars($b->{'辦理狀態原文'}) ?></span>
+    <?php endif; ?>
+  </div>
+  <ul class="list-group list-group-flush small">
+    <?php foreach ($replies as $r): ?>
+    <li class="list-group-item py-2">
+      <div class="text-body-secondary">
+        <?= htmlspecialchars(implode('・', array_filter([$r->{'日期'} ?? '', $r->{'機關'} ?? '', $r->{'文號'} ?? '', $r->{'狀態'} ?? '']))) ?>
+      </div>
+      <?php if ($r->{'內容'} ?? null): ?>
+      <div style="white-space: pre-wrap;"><?= htmlspecialchars($r->{'內容'}) ?></div>
+      <?php endif; ?>
+      <?php foreach ($r->{'附件'} ?? [] as $f): ?>
+      <div><a href="<?= htmlspecialchars($f->{'網址'} ?? '') ?>" target="_blank" rel="noopener"><?= htmlspecialchars(($f->{'名稱'} ?? '') ?: '附件') ?></a></div>
+      <?php endforeach; ?>
+    </li>
+    <?php endforeach; ?>
+  </ul>
+</div>
+<?php endif; ?>
+
 <p class="text-body-secondary small">
   來源檔案：
   <?php $source_url = $b->{'來源網址'} ?? null; ?>

@@ -55,6 +55,16 @@ class CCAPI_Type_Bill extends CCAPI_Type
                 'description' => '提案議員姓名，多人聯合提案時任一位符合即可（政府提案時通常是空的）',
                 'type' => 'string',
             ],
+            '辦理狀態' => [
+                'es_field' => '辦理狀態',
+                'description' => '機關辦理狀態：已結案、辦理中、無法辦理（只有議案系統有回覆狀態的議會有這個欄位，原始用詞在「辦理狀態原文」）',
+                'type' => 'string',
+            ],
+            '主辦機關' => [
+                'es_field' => '主辦機關.keyword',
+                'description' => '負責回覆或辦理的機關（例: 交通局；多個機關以頓號分隔）',
+                'type' => 'string',
+            ],
         ];
     }
 

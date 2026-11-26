@@ -363,6 +363,7 @@
                 <li><code>議會代碼</code>、<code>屆</code>、<code>類別</code>、<code>案號</code></li>
                 <li><code>提案單位</code>、<code>提案人</code>、<code>連署人</code></li>
                 <li><code>案由</code>、<code>說明</code>、<code>辦法</code>、<code>審查意見</code>、<code>議決</code></li>
+                <li><code>處理進度</code>、<code>機關回覆</code>、<code>辦理狀態</code>、<code>主辦機關</code>（部分議會）</li>
               </ul>
             </div>
             <div class="col-md-6">

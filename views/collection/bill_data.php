@@ -24,14 +24,15 @@
                     '代碼', '議會代碼', '屆', '縣市', '類別', '案號',
                     '提案單位', '提案人', '連署人',
                     '案由', '說明', '辦法', '審查意見', '議決', '備註',
+                    '辦理狀態原文', '主辦機關', '最新回覆日期', '處理進度', '機關回覆',
                     '來源檔案', '來源頁碼',
                 ];
                 foreach ($fields as $f):
-                    if (!isset($d->{$f}) || $d->{$f} === '' || $d->{$f} === null) continue;
+                    if (!isset($d->{$f}) || $d->{$f} === '' || $d->{$f} === null || $d->{$f} === []) continue;
                 ?>
                 <tr>
                     <th width="140"><?= $this->escape($f) ?></th>
-                    <td style="white-space: pre-wrap;"><?= $this->escape($d->{$f}) ?></td>
+                    <td style="white-space: pre-wrap;"><?= $this->escape(is_array($d->{$f}) ? json_encode($d->{$f}, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) : $d->{$f}) ?></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
