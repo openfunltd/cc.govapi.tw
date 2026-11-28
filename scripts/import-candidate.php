@@ -209,7 +209,23 @@ foreach (array_filter(array_map('trim', explode(',', (string) getenv('IMPORT_CAN
 }
 // 欄位補充檔（選填，IMPORT_CANDIDATE_FIELD_SUPPLEMENT_JSONL）：公報萃取欄位錯位、漏抓的候選人，見 BulletinFieldHelper
 $field_supplement = BulletinFieldHelper::loadFieldSupplement();
-$apply_supplement = function ($doc) use ($manifesto_supplement, $field_supplement) {
+// 中選會候選人名冊（IMPORT_CANDIDATE_ELECTED_SOURCE_CSV）的出生日期：公報沒抓到出生年月日的候選人用它補，
+// 只收有月日的（早期資料只有年份，月日是 00，不採用）
+$cec_birth = [];
+$cec_path = (string) getenv('IMPORT_CANDIDATE_ELECTED_SOURCE_CSV');
+if ($cec_path !== '' && file_exists($cec_path)) {
+    $cfh = fopen($cec_path, 'r');
+    $cheaders = fgetcsv($cfh);
+    $code_idx = array_search('候選人代碼', $cheaders, true);
+    $birth_idx = array_search('出生日期', $cheaders, true);
+    while ($code_idx !== false && $birth_idx !== false && ($row = fgetcsv($cfh)) !== false) {
+        if (count($row) === count($cheaders) && preg_match('/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/', $row[$birth_idx])) {
+            $cec_birth[$row[$code_idx]] = $row[$birth_idx];
+        }
+    }
+    fclose($cfh);
+}
+$apply_supplement = function ($doc) use ($manifesto_supplement, $field_supplement, $cec_birth) {
     $usable = ['text', 'manifesto-image-vision', 'cell-image-vision', 'page-image-vision', 'paddleocr'];
     $sup = $manifesto_supplement[$doc['候選人代碼'] ?? ''] ?? null;
     if ($sup && (!in_array($doc['政見來源'] ?? '', $usable, true) || trim((string) ($doc['政見'] ?? '')) === '')) {
@@ -217,6 +233,10 @@ $apply_supplement = function ($doc) use ($manifesto_supplement, $field_supplemen
         $doc['政見來源'] = $sup['政見來源'] ?? 'paddleocr';
     }
     $doc = BulletinFieldHelper::applyFieldSupplement($doc, $field_supplement[$doc['候選人代碼'] ?? ''] ?? null);
+    $birth = $cec_birth[$doc['候選人代碼'] ?? ''] ?? null;
+    if ($birth && empty($doc['其他欄位']['出生年月日']) && empty($doc['其他欄位']['出生日期'])) {
+        $doc['其他欄位']['出生日期'] = $birth;
+    }
     return $doc;
 };
 if (!file_exists($jsonl_path)) {
