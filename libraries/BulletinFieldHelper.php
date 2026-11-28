@@ -115,4 +115,55 @@ class BulletinFieldHelper
         }
         return $flat;
     }
+
+    /**
+     * 欄位補充檔（IMPORT_CANDIDATE_FIELD_SUPPLEMENT_JSONL，逗號分隔）：對照公報頁面重新照抄的結果，
+     * 每行 {候選人代碼, 學歷?, 經歷?, 政見?, 出生年月日?, 性別?, 出生地?, 來源?}，同一代碼多行時後面的蓋前面的
+     */
+    public static function loadFieldSupplement(): array
+    {
+        $supplement = [];
+        foreach (array_filter(array_map('trim', explode(',', (string) getenv('IMPORT_CANDIDATE_FIELD_SUPPLEMENT_JSONL')))) as $path) {
+            if (!file_exists($path)) {
+                error_log("WARNING: 找不到欄位補充檔（IMPORT_CANDIDATE_FIELD_SUPPLEMENT_JSONL）：{$path}");
+                continue;
+            }
+            foreach (file($path) as $line) {
+                $d = json_decode($line, true);
+                if (!empty($d['候選人代碼'])) {
+                    $supplement[$d['候選人代碼']] = array_merge($supplement[$d['候選人代碼']] ?? [], $d);
+                }
+            }
+        }
+        return $supplement;
+    }
+
+    /**
+     * 套用欄位補充：有的欄位直接取代原本的值；值是空字串代表公報上那一格確實是空的，原本的值（多半是錯位裝進來的
+     * 別欄文字）拿掉。出生年月日、性別、出生地放進「其他欄位」
+     */
+    public static function applyFieldSupplement(array $doc, ?array $fix): array
+    {
+        if (!$fix) {
+            return $doc;
+        }
+        foreach (['學歷', '經歷', '政見'] as $field) {
+            if (!array_key_exists($field, $fix)) {
+                continue;
+            }
+            $value = trim((string) $fix[$field]);
+            if ($value === '') {
+                unset($doc[$field], $doc[$field . '來源']);
+            } else {
+                $doc[$field] = $value;
+                $doc[$field . '來源'] = $fix['來源'] ?? 'page-image-vision';
+            }
+        }
+        foreach (['出生年月日', '性別', '出生地'] as $field) {
+            if (trim((string) ($fix[$field] ?? '')) !== '') {
+                $doc['其他欄位'][$field] = trim($fix[$field]);
+            }
+        }
+        return $doc;
+    }
 }

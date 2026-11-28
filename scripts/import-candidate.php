@@ -207,13 +207,16 @@ foreach (array_filter(array_map('trim', explode(',', (string) getenv('IMPORT_CAN
         }
     }
 }
-$apply_supplement = function ($doc) use ($manifesto_supplement) {
+// 欄位補充檔（選填，IMPORT_CANDIDATE_FIELD_SUPPLEMENT_JSONL）：公報萃取欄位錯位、漏抓的候選人，見 BulletinFieldHelper
+$field_supplement = BulletinFieldHelper::loadFieldSupplement();
+$apply_supplement = function ($doc) use ($manifesto_supplement, $field_supplement) {
     $usable = ['text', 'manifesto-image-vision', 'cell-image-vision', 'page-image-vision', 'paddleocr'];
     $sup = $manifesto_supplement[$doc['候選人代碼'] ?? ''] ?? null;
     if ($sup && (!in_array($doc['政見來源'] ?? '', $usable, true) || trim((string) ($doc['政見'] ?? '')) === '')) {
         $doc['政見'] = $sup['政見'];
         $doc['政見來源'] = $sup['政見來源'] ?? 'paddleocr';
     }
+    $doc = BulletinFieldHelper::applyFieldSupplement($doc, $field_supplement[$doc['候選人代碼'] ?? ''] ?? null);
     return $doc;
 };
 if (!file_exists($jsonl_path)) {

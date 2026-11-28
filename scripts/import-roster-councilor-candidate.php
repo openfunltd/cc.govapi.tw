@@ -62,7 +62,7 @@ $existing = [];
 foreach (['ELC-T1-', 'ELC-T2-', 'BEL-T1-', 'BEL-T2-'] as $p) {
     $r = Elastic::dbQuery("/{$prefix}candidate/_search", 'POST', json_encode([
         'size' => 10000, '_source' => false, 'query' => ['bool' => [
-            'filter' => [['prefix' => ['候選人代碼' => $p]]],
+            'filter' => [['prefix' => ['候選人代碼' => $p]], ['exists' => ['field' => 'extract_method']]],
             'should' => [['exists' => ['field' => '學歷來源']], ['exists' => ['field' => '經歷來源']], ['exists' => ['field' => '政見來源']]],
             'minimum_should_match' => 1,
         ]],
@@ -222,6 +222,14 @@ foreach ($early as $code => $d) {
         $candidates[$code]['欄位圖片'] = array_map($image_url, $d['欄位圖片']);
     }
     $candidates[$code]['其他欄位'] = array_merge(array_filter($d['其他欄位'] ?? [], fn($v) => $v !== ''), $candidates[$code]['其他欄位']);
+}
+
+// 欄位補充檔（選填，IMPORT_CANDIDATE_FIELD_SUPPLEMENT_JSONL）：對照公報頁面重新照抄的結果，見 BulletinFieldHelper
+$field_supplement = BulletinFieldHelper::loadFieldSupplement();
+foreach ($candidates as $code => $c) {
+    if (isset($field_supplement[$code])) {
+        $candidates[$code] = BulletinFieldHelper::applyFieldSupplement($c, $field_supplement[$code]);
+    }
 }
 
 $added = [];

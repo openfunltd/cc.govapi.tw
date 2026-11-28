@@ -254,6 +254,14 @@ foreach (array_filter(array_map('trim', explode(',', (string) getenv('IMPORT_CAN
     }
 }
 
+// 欄位補充檔（選填，IMPORT_CANDIDATE_FIELD_SUPPLEMENT_JSONL）：公報萃取欄位錯位、漏抓的候選人，見 BulletinFieldHelper
+$field_supplement = BulletinFieldHelper::loadFieldSupplement();
+foreach ($candidates as $code => $c) {
+    if (isset($field_supplement[$code])) {
+        $candidates[$code] = BulletinFieldHelper::applyFieldSupplement($c, $field_supplement[$code]);
+    }
+}
+
 // 同一場選舉同一選區內計算得票率、排名
 $races = [];
 foreach ($candidates as $code => $c) {
